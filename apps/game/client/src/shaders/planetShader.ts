@@ -93,7 +93,7 @@ export const planetFragmentShader = `
     vec3 slimyNormal = paintNormal(smoothPaintNormal, smoothLocalNormal, flowA, flowB);
     vec3 lightDir = normalize(vec3(200.0, 300.0, 100.0));
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    float terrainDiff = max(dot(vNormal, lightDir), 0.0);
+    float terrainDiff = max(dot(vSmoothNormal, lightDir), 0.0);
     float paintDiff = max(dot(slimyNormal, lightDir), 0.0);
     float specular = pow(
       max(dot(reflect(-lightDir, slimyNormal), viewDir), 0.0),

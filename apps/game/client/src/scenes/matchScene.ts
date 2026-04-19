@@ -20,6 +20,7 @@ import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
 import { createWaterMaterial } from "../materials/waterMaterial.ts";
 import {
   getTerrainHeight,
+  getTerrainNormal,
   getTerrainRadius,
   getBiome,
 } from "@splat/simulation/terrain/planetTerrain.ts";
@@ -374,9 +375,10 @@ export class MatchScene {
 
       const radius = getTerrainRadius(nx, ny, nz, GAME_CONFIG);
       posAttr.setXYZ(i, nx * radius, ny * radius, nz * radius);
-      smoothNormals[i * 3] = nx;
-      smoothNormals[i * 3 + 1] = ny;
-      smoothNormals[i * 3 + 2] = nz;
+      const terrainNormal = getTerrainNormal(nx, ny, nz, GAME_CONFIG);
+      smoothNormals[i * 3] = terrainNormal.nx;
+      smoothNormals[i * 3 + 1] = terrainNormal.ny;
+      smoothNormals[i * 3 + 2] = terrainNormal.nz;
 
       // Spherical UVs from undisplaced normal — must match stampShader.ts
       const theta = Math.acos(Math.max(-1, Math.min(1, -ny)));

@@ -37,6 +37,8 @@ export interface TerrainConfig {
     octaves: number;
     lacunarity: number;
     persistence: number;
+    heightSmoothingStrength?: number;
+    heightSmoothingSampleAngle?: number;
     waterLevel: number;
     snowLevel: number;
     sandBand: number;
@@ -123,7 +125,7 @@ function fbm(
  * Returns the signed terrain displacement at a point on the unit sphere.
  * Positive = above base radius, negative = below (ocean floor).
  */
-export function getTerrainHeight(nx: number, ny: number, nz: number, cfg: TerrainConfig): number {
+function rawTerrainHeight(nx: number, ny: number, nz: number, cfg: TerrainConfig): number {
   const t = cfg.terrain;
   const sx = nx * t.frequency + t.seed;
   const sy = ny * t.frequency + t.seed * 1.7;
@@ -132,6 +134,70 @@ export function getTerrainHeight(nx: number, ny: number, nz: number, cfg: Terrai
   const n = fbm(sx, sy, sz, t.octaves, t.lacunarity, t.persistence);
   // Map [0,1] noise to [-amplitude, +amplitude]
   return (n * 2 - 1) * t.baseAmplitude;
+}
+
+function normalizeVec(x: number, y: number, z: number): { x: number; y: number; z: number } {
+  const len = Math.sqrt(x * x + y * y + z * z);
+  if (len < 1e-8) return { x: 0, y: 1, z: 0 };
+  return { x: x / len, y: y / len, z: z / len };
+}
+
+function tangentFrame(
+  nx: number,
+  ny: number,
+  nz: number,
+): {
+  tx: number;
+  ty: number;
+  tz: number;
+  bx: number;
+  by: number;
+  bz: number;
+} {
+  let tx = Math.abs(ny) < 0.99 ? nz : 0;
+  let ty = Math.abs(ny) < 0.99 ? 0 : -nz;
+  let tz = Math.abs(ny) < 0.99 ? -nx : ny;
+  const tLen = Math.sqrt(tx * tx + ty * ty + tz * tz);
+  tx /= tLen;
+  ty /= tLen;
+  tz /= tLen;
+
+  return {
+    tx,
+    ty,
+    tz,
+    bx: ny * tz - nz * ty,
+    by: nz * tx - nx * tz,
+    bz: nx * ty - ny * tx,
+  };
+}
+
+/**
+ * Returns the signed terrain displacement at a point on the unit sphere.
+ * Positive = above base radius, negative = below (ocean floor).
+ */
+export function getTerrainHeight(nx: number, ny: number, nz: number, cfg: TerrainConfig): number {
+  const center = rawTerrainHeight(nx, ny, nz, cfg);
+  const smoothingStrength = cfg.terrain.heightSmoothingStrength ?? 0;
+  if (smoothingStrength <= 0) return center;
+
+  const offset = cfg.terrain.heightSmoothingSampleAngle ?? 0.03;
+  const { tx, ty, tz, bx, by, bz } = tangentFrame(nx, ny, nz);
+  let total = center * 2;
+  const samples = [
+    normalizeVec(nx + tx * offset, ny + ty * offset, nz + tz * offset),
+    normalizeVec(nx - tx * offset, ny - ty * offset, nz - tz * offset),
+    normalizeVec(nx + bx * offset, ny + by * offset, nz + bz * offset),
+    normalizeVec(nx - bx * offset, ny - by * offset, nz - bz * offset),
+    normalizeVec(nx + (tx + bx) * offset, ny + (ty + by) * offset, nz + (tz + bz) * offset),
+    normalizeVec(nx - (tx + bx) * offset, ny - (ty + by) * offset, nz - (tz + bz) * offset),
+  ];
+
+  for (const sample of samples) {
+    total += rawTerrainHeight(sample.x, sample.y, sample.z, cfg);
+  }
+
+  return center + (total / (samples.length + 2) - center) * Math.min(1, smoothingStrength);
 }
 
 /**

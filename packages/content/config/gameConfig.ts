@@ -124,6 +124,8 @@ export const GAME_CONFIG = {
     octaves: 5,
     lacunarity: 2.2,
     persistence: 0.45,
+    heightSmoothingStrength: 0.45,
+    heightSmoothingSampleAngle: 0.035,
     waterLevel: -3.0,
     snowLevel: 9.0,
     sandBand: 1.5,
