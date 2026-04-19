@@ -125,6 +125,12 @@ export class ClientRuntimeState {
     }
   }
 
+  clear(): void {
+    this.localPlayer = null;
+    this.pendingInputs.length = 0;
+    this.remoteSnapshots.clear();
+  }
+
   recordLocalInput(input: InputMessage, planetPaint: Map<string, SimPlanetPaintState>): void {
     if (!this.localPlayer) return;
     this.pendingInputs.push(input);

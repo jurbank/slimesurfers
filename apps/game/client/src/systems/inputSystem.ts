@@ -32,9 +32,13 @@ export class InputSystem {
 
     const requestPointerCapture = (target: EventTarget | null): void => {
       if (this.pointerLocked) return;
+      if (!canvas.isConnected || canvas.ownerDocument !== document) return;
       const element = target instanceof Element ? target : null;
       if (element?.closest("input, button, textarea, select, a, label")) return;
-      void canvas.requestPointerLock();
+      void canvas.requestPointerLock().catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "WrongDocumentError") return;
+        console.warn("[input] pointer lock request failed", err);
+      });
       canvas.focus();
     };
 
@@ -71,9 +75,6 @@ export class InputSystem {
     });
     document.addEventListener("pointerlockchange", () => {
       this.pointerLocked = document.pointerLockElement === canvas;
-    });
-    document.addEventListener("pointerlockerror", () => {
-      console.warn("[input] pointer lock request failed");
     });
     document.addEventListener("mousemove", (e) => {
       if (!this.pointerLocked) return;

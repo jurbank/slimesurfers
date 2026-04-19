@@ -366,6 +366,16 @@ export class MatchScene {
     }
   }
 
+  private clearPlayerEntities(): void {
+    this.localPlayer?.dispose(this.render.scene);
+    this.localPlayer = null;
+    for (const player of this.remotePlayers.values()) {
+      player.dispose(this.render.scene);
+    }
+    this.remotePlayers.clear();
+    this.playerColors.clear();
+  }
+
   private ensureLocalPlayer(slimeColor: number): void {
     if (this.localPlayer) return;
     this.localPlayer = new LocalPlayer(this.render.scene, slimeColor);
@@ -448,6 +458,8 @@ export class MatchScene {
         this.leaderboard.update(message, this.connection.sessionId);
       },
       onDisconnect: () => {
+        this.clearPlayerEntities();
+        this.runtime.clear();
         this.paint.clear();
         this.clearPlanetPaint();
         this.pickups.clear();
