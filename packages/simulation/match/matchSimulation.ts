@@ -1,0 +1,356 @@
+import { FFA_MODE, type GameModeDefinition } from "@splat/content/modes/gameModes.ts";
+import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
+import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
+import type { InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
+import type {
+  LeaderboardEntry,
+  LeaderboardMessage,
+  PaintStampMessage,
+  SnapshotMessage,
+} from "@splat/protocol/network/serverMessages.ts";
+import { rechargePlayerSlime, tickProjectiles, tryFireProjectile } from "../combat/projectiles.ts";
+import {
+  collectWeaponPickup,
+  createWeaponPickups,
+  tickWeaponPickups,
+} from "../combat/weaponPickups.ts";
+import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
+import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { createStampBuckets } from "../paint/paintDetection.ts";
+import { createTerritoryCells } from "../paint/territoryGrid.ts";
+import {
+  NO_TEAM_ID,
+  PlayerMovementState,
+  PlayerSwimState,
+  type SimMatchState,
+  type SimPlanetPaintState,
+  type SimPlayerState,
+} from "./simState.ts";
+
+const TICK_MS = 1000 / NETWORK_CONFIG.simulation.tickRateHz;
+const SNAPSHOT_EVERY =
+  NETWORK_CONFIG.simulation.tickRateHz / NETWORK_CONFIG.simulation.snapshotRateHz;
+const LEADERBOARD_EVERY =
+  NETWORK_CONFIG.simulation.tickRateHz / NETWORK_CONFIG.simulation.leaderboardRateHz;
+
+// Maximum dt per input step - prevents physics abuse from large client-supplied deltas.
+const MAX_INPUT_DT = 2 / NETWORK_CONFIG.simulation.tickRateHz;
+
+const PLANETS: PlanetData[] = PLANET_POSITIONS.map((p) => ({
+  id: p.id,
+  center: { x: p.x, y: p.y, z: p.z },
+  radius: GAME_CONFIG.planet.radius,
+}));
+
+// Used when no client input has arrived for a player this tick.
+const IDLE_INPUT: InputMessage = {
+  seq: 0,
+  keys: 0,
+  aimDir: { x: 0, y: 0, z: 1 },
+  dt: TICK_MS / 1000,
+};
+
+export interface TickResult {
+  shouldBroadcastLeaderboard: boolean;
+  shouldBroadcastMatchPhase: boolean;
+  shouldBroadcastSnapshot: boolean;
+}
+
+function createSimPlanetState(planetId: string): SimPlanetPaintState {
+  return {
+    planetId,
+    territoryRows: GAME_CONFIG.paint.territoryRows,
+    territoryCols: GAME_CONFIG.paint.territoryCols,
+    cells: createTerritoryCells(GAME_CONFIG.paint.territoryRows, GAME_CONFIG.paint.territoryCols),
+    stamps: [],
+    stampBuckets: createStampBuckets(
+      GAME_CONFIG.paint.territoryRows,
+      GAME_CONFIG.paint.territoryCols,
+    ),
+  };
+}
+
+function createSimMatchState(): SimMatchState {
+  return {
+    players: new Map(),
+    planets: new Map(
+      PLANET_POSITIONS.map((planet) => [planet.id, createSimPlanetState(planet.id)]),
+    ),
+    projectiles: new Map(),
+    pickups: createWeaponPickups(GAME_CONFIG),
+    matchPhase: MatchPhase.Active,
+    matchTimer: GAME_CONFIG.match.durationSeconds,
+    paintSeq: 0,
+    scores: new Map(),
+    elapsedMs: 0,
+    nextProjectileId: 0,
+  };
+}
+
+function createSimPlayer(
+  sessionId: string,
+  playerIndex: number,
+  name: string | undefined,
+  maxPlayers: number,
+  mode: GameModeDefinition,
+): SimPlayerState {
+  const slot = mode.assignPlayerSlot(playerIndex);
+  const spawnPlanetId = mode.selectSpawnPlanet(playerIndex);
+  const planetPos =
+    PLANET_POSITIONS.find((planet) => planet.id === spawnPlanetId) ?? PLANET_POSITIONS[0]!;
+  const angle = (playerIndex / Math.max(1, maxPlayers)) * Math.PI * 2;
+  const spread = GAME_CONFIG.planet.radius * 0.15;
+
+  return {
+    sessionId,
+    name:
+      typeof name === "string" && name.trim().length > 0
+        ? name.trim().slice(0, 20)
+        : `Player ${playerIndex + 1}`,
+    teamId: slot.teamId,
+    paintGroupId: slot.paintGroupId,
+    paletteIndex: slot.paletteIndex,
+    slimeColor: mode.palette[slot.paletteIndex] ?? mode.palette[0] ?? 0xffffff,
+    pos: {
+      x: planetPos.x + Math.cos(angle) * spread,
+      y: planetPos.y + getTerrainRadius(0, 1, 0, GAME_CONFIG) + GAME_CONFIG.player.collisionRadius,
+      z: planetPos.z + Math.sin(angle) * spread,
+    },
+    vel: { x: 0, y: 0, z: 0 },
+    rot: { x: 0, y: 0, z: 0, w: 1 },
+    planetId: planetPos.id,
+    spawnPlanetId: planetPos.id,
+    movementState: PlayerMovementState.Idle,
+    swimState: PlayerSwimState.None,
+    inputSeq: 0,
+    equippedWeaponId: DEFAULT_WEAPON_ID,
+    health: GAME_CONFIG.player.maxHealth,
+    slimeLevel: GAME_CONFIG.slime.maxLevel,
+    paintScore: 0,
+    killCount: 0,
+    deathCount: 0,
+    respawnTimer: 0,
+    lastFireTimeMs: -1000,
+  };
+}
+
+export class MatchSimulation {
+  readonly mode: GameModeDefinition;
+  private readonly simState: SimMatchState;
+  private readonly inputQueues = new Map<string, InputMessage[]>();
+  private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
+  private readonly pendingPaintStamps: PaintStampMessage[] = [];
+  private playerCount = 0;
+  private tickCount = 0;
+
+  constructor(mode: GameModeDefinition = FFA_MODE) {
+    this.mode = mode;
+    this.simState = createSimMatchState();
+  }
+
+  get players(): ReadonlyMap<string, SimPlayerState> {
+    return this.simState.players;
+  }
+
+  get matchState(): SimMatchState {
+    return this.simState;
+  }
+
+  get tickIntervalMs(): number {
+    return TICK_MS;
+  }
+
+  get maxPlayers(): number {
+    return NETWORK_CONFIG.rooms.maxPlayers;
+  }
+
+  addPlayer(sessionId: string, name?: string): SimPlayerState {
+    const player = createSimPlayer(sessionId, this.playerCount++, name, this.maxPlayers, this.mode);
+    this.simState.players.set(sessionId, player);
+    this.inputQueues.set(sessionId, []);
+    return player;
+  }
+
+  removePlayer(sessionId: string): void {
+    this.simState.players.delete(sessionId);
+    this.inputQueues.delete(sessionId);
+  }
+
+  getRecentPaintStamps(): readonly PaintStampMessage[] {
+    const messages: PaintStampMessage[] = [];
+    this.recentPaintStamps.forEach((planetMessages) => {
+      messages.push(...planetMessages);
+    });
+    messages.sort((a, b) => a.seq - b.seq);
+    return messages;
+  }
+
+  drainPaintStampMessages(): PaintStampMessage[] {
+    return this.pendingPaintStamps.splice(0, this.pendingPaintStamps.length);
+  }
+
+  private recordPaintStamp(message: PaintStampMessage): void {
+    this.pendingPaintStamps.push(message);
+
+    const planetMessages = this.recentPaintStamps.get(message.planetId) ?? [];
+    planetMessages.push(message);
+    if (planetMessages.length > GAME_CONFIG.paint.maxVisualStampsPerPlanet) {
+      planetMessages.splice(0, planetMessages.length - GAME_CONFIG.paint.maxVisualStampsPerPlanet);
+    }
+    this.recentPaintStamps.set(message.planetId, planetMessages);
+  }
+
+  recordInput(sessionId: string, msg: InputMessage): void {
+    const player = this.simState.players.get(sessionId);
+    const queue = this.inputQueues.get(sessionId);
+    if (!player || !queue) return;
+
+    if (msg.seq <= player.inputSeq) return;
+
+    const queuedTailSeq = queue[queue.length - 1]?.seq ?? player.inputSeq;
+    if (msg.seq <= queuedTailSeq) return;
+
+    queue.push(msg);
+    if (queue.length > NETWORK_CONFIG.input.maxBufferedInputs) {
+      queue.splice(0, queue.length - NETWORK_CONFIG.input.maxBufferedInputs);
+    }
+  }
+
+  tick(dtMs: number): TickResult {
+    this.tickCount++;
+    const serverDtSec = dtMs / 1000;
+    let shouldBroadcastMatchPhase = false;
+    this.simState.elapsedMs += dtMs;
+
+    if (this.simState.matchPhase === MatchPhase.Active) {
+      const nextTimer = Math.max(0, this.simState.matchTimer - serverDtSec);
+      shouldBroadcastMatchPhase = nextTimer !== this.simState.matchTimer && nextTimer === 0;
+      this.simState.matchTimer = nextTimer;
+      if (this.simState.matchTimer === 0) {
+        this.simState.matchPhase = MatchPhase.Ended;
+      }
+    }
+
+    tickWeaponPickups(this.simState, serverDtSec);
+
+    this.simState.players.forEach((player, sessionId) => {
+      const queue = this.inputQueues.get(sessionId);
+      if (queue && queue.length > 0) {
+        let processedNowMs = this.simState.elapsedMs - dtMs;
+        for (const input of queue) {
+          const inputDtSec = Math.min(input.dt, MAX_INPUT_DT);
+          processedNowMs += inputDtSec * 1000;
+          stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+          collectWeaponPickup(this.simState, player, GAME_CONFIG);
+          rechargePlayerSlime(this.simState, player, inputDtSec, processedNowMs, GAME_CONFIG);
+          tryFireProjectile(this.simState, player, input, processedNowMs, GAME_CONFIG);
+        }
+        player.inputSeq = queue[queue.length - 1]!.seq;
+        queue.length = 0;
+      } else {
+        stepPlayer(player, IDLE_INPUT, serverDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+        collectWeaponPickup(this.simState, player, GAME_CONFIG);
+        rechargePlayerSlime(
+          this.simState,
+          player,
+          serverDtSec,
+          this.simState.elapsedMs,
+          GAME_CONFIG,
+        );
+      }
+    });
+
+    const paintStamps = tickProjectiles(this.simState, dtMs, PLANETS, GAME_CONFIG);
+    for (const stamp of paintStamps) {
+      this.recordPaintStamp(stamp);
+    }
+
+    return {
+      shouldBroadcastMatchPhase,
+      shouldBroadcastSnapshot: this.tickCount % SNAPSHOT_EVERY === 0,
+      shouldBroadcastLeaderboard: this.tickCount % LEADERBOARD_EVERY === 0,
+    };
+  }
+
+  buildSnapshotMessage(): SnapshotMessage {
+    const players: SnapshotMessage["players"] = [];
+    this.simState.players.forEach((player) => {
+      players.push({
+        sessionId: player.sessionId,
+        pos: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
+        vel: { x: player.vel.x, y: player.vel.y, z: player.vel.z },
+        rot: { x: player.rot.x, y: player.rot.y, z: player.rot.z, w: player.rot.w },
+        planetId: player.planetId,
+        paintGroupId: player.paintGroupId,
+        movementState: player.movementState,
+        swimState: player.swimState,
+        equippedWeaponId: player.equippedWeaponId,
+        health: player.health,
+        slimeLevel: player.slimeLevel,
+        respawnTimer: player.respawnTimer,
+        inputSeq: player.inputSeq,
+      });
+    });
+
+    const projectiles: SnapshotMessage["projectiles"] = [];
+    this.simState.projectiles.forEach((projectile) => {
+      projectiles.push({
+        id: projectile.id,
+        ownerId: projectile.ownerId,
+        weaponId: projectile.weaponId,
+        paintGroupId: projectile.paintGroupId,
+        pos: { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z },
+        vel: { x: projectile.vel.x, y: projectile.vel.y, z: projectile.vel.z },
+        planetId: projectile.planetId,
+        lifeMs: projectile.lifeMs,
+      });
+    });
+
+    const pickups: SnapshotMessage["pickups"] = [];
+    this.simState.pickups.forEach((pickup) => {
+      if (!pickup.active) return;
+      pickups.push({
+        id: pickup.id,
+        weaponId: pickup.weaponId,
+        planetId: pickup.planetId,
+        pos: { x: pickup.pos.x, y: pickup.pos.y, z: pickup.pos.z },
+      });
+    });
+
+    return { tick: this.tickCount, players, projectiles, pickups };
+  }
+
+  buildLeaderboardMessage(): LeaderboardMessage {
+    const entries: LeaderboardEntry[] = [];
+    this.simState.players.forEach((player) => {
+      entries.push({
+        sessionId: player.sessionId,
+        name: player.name,
+        teamId: player.teamId,
+        paintGroupId: player.paintGroupId,
+        slimeColor: player.slimeColor,
+        paintScore: player.paintScore,
+        killCount: player.killCount,
+        deathCount: player.deathCount,
+      });
+    });
+    entries.sort(
+      (a, b) =>
+        b.paintScore - a.paintScore ||
+        b.killCount - a.killCount ||
+        a.deathCount - b.deathCount ||
+        a.name.localeCompare(b.name),
+    );
+
+    const teamScores = Array.from({ length: this.mode.teamCount }, () => 0);
+    for (const entry of entries) {
+      if (this.mode.isTeamBased && entry.teamId !== NO_TEAM_ID) {
+        teamScores[entry.teamId] = (teamScores[entry.teamId] ?? 0) + entry.paintScore;
+      }
+    }
+
+    return { entries, teamScores };
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@splat/simulation",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./match/matchSimulation.ts": "./match/matchSimulation.ts",
+    "./match/simState.ts": "./match/simState.ts",
+    "./movement/simulatedMovement.ts": "./movement/simulatedMovement.ts",
+    "./paint/paintDetection.ts": "./paint/paintDetection.ts",
+    "./paint/stampPaint.ts": "./paint/stampPaint.ts",
+    "./paint/territoryGrid.ts": "./paint/territoryGrid.ts",
+    "./terrain/planetTerrain.ts": "./terrain/planetTerrain.ts"
+  },
+  "dependencies": {
+    "@colyseus/schema": "catalog:",
+    "@splat/content": "workspace:*",
+    "@splat/protocol": "workspace:*"
+  }
+}

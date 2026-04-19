@@ -1,0 +1,16 @@
+{
+  "name": "@splat/game-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "catalog:",
+    "@splat/content": "workspace:*",
+    "@splat/protocol": "workspace:*",
+    "@splat/simulation": "workspace:*",
+    "@types/three": "catalog:",
+    "three": "catalog:"
+  }
+}

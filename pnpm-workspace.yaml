@@ -1,0 +1,33 @@
+packages:
+  - apps/*
+  - apps/game/*
+  - packages/*
+  - tools/*
+
+catalog:
+  "@colyseus/core": ^0.17.0
+  "@colyseus/schema": ^4.0.7
+  "@colyseus/sdk": ^0.17.0
+  "@colyseus/ws-transport": ^0.17.0
+  "@types/express": ^5.0.0
+  express: ^5.0.0
+  "@types/node": ^24
+  "@types/three": ^0.183.1
+  three: ^0.183.2
+  tsx: ^4.0.0
+  typescript: ^5
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+
+catalogMode: prefer
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"

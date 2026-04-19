@@ -1,0 +1,21 @@
+{
+  "name": "@splat/game-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@colyseus/core": "catalog:",
+    "@colyseus/schema": "catalog:",
+    "@colyseus/ws-transport": "catalog:",
+    "@splat/content": "workspace:*",
+    "@splat/protocol": "workspace:*",
+    "@splat/simulation": "workspace:*",
+    "express": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}

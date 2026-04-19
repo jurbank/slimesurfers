@@ -1,0 +1,19 @@
+{
+  "name": "@splat/protocol",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./network/clientMessages.ts": "./network/clientMessages.ts",
+    "./network/matchPhase.ts": "./network/matchPhase.ts",
+    "./network/messageTypes.ts": "./network/messageTypes.ts",
+    "./network/serverMessages.ts": "./network/serverMessages.ts",
+    "./network/weaponIds.ts": "./network/weaponIds.ts",
+    "./schemas/gameState.ts": "./schemas/gameState.ts",
+    "./schemas/paintedState.ts": "./schemas/paintedState.ts",
+    "./schemas/playerState.ts": "./schemas/playerState.ts",
+    "./schemas/projectileState.ts": "./schemas/projectileState.ts"
+  },
+  "dependencies": {
+    "@colyseus/schema": "catalog:"
+  }
+}

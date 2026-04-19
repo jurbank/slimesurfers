@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(vp install:*)",
+      "Bash(vp check:*)",
+      "Bash(vp info:*)",
+      "Bash(xargs wc:*)",
+      "Bash(xargs -I{} bash -c 'echo \"export {};\" > \"{}\"')",
+      "Bash(grep -r \"class Room\" C:/Projects/j/jam2/node_modules/.pnpm/@colyseus+core*/node_modules/@colyseus/core/build/Room.d.ts)",
+      "Bash(grep -E \"\\(setState|state:|RoomOptions\\)\" C:/Projects/j/jam2/node_modules/.pnpm/@colyseus+core*/node_modules/@colyseus/core/build/Room.d.ts)",
+      "Bash(grep -E \"ExtractRoomState|RoomOptions\" C:/Projects/j/jam2/node_modules/.pnpm/@colyseus+core*/node_modules/@colyseus/core/build/Room.d.ts)",
+      "Bash(grep:*)",
+      "Bash(wc -l /c/Projects/j/jam2/apps/game/client/src/**/*.ts /c/Projects/j/jam2/apps/game/server/src/**/*.ts)",
+      "Bash(ls \"C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\node_modules\")",
+      "Bash(ls C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\apps\\\\\\\\game\\\\\\\\server\\\\\\\\node_modules\\\\\\\\@colyseus:*)",
+      "Bash(vp test:*)",
+      "Bash(find \"C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\" -name \"*.js\" -path \"*/colyseus/sdk/*\")",
+      "Bash(find \"C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\" -name \"*.mjs\" -path \"*colyseus*sdk*\")",
+      "Bash(cat:*)",
+      "Bash(find \"C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\node_modules\\\\\\\\.pnpm\" -name \"*.mjs\" -path \"*colyseus*sdk*\")",
+      "Bash(find:*)",
+      "Bash(ls C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\apps\\\\\\\\game\\\\\\\\server\\\\\\\\node_modules\\\\\\\\@colyseus\\\\\\\\core:*)",
+      "Bash(ls C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\apps\\\\\\\\game\\\\\\\\server\\\\\\\\node_modules\\\\\\\\@colyseus\\\\\\\\core\\\\\\\\build:*)",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@splat/content",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./combat/weaponDefs.ts": "./combat/weaponDefs.ts",
+    "./config/gameConfig.ts": "./config/gameConfig.ts",
+    "./config/networkConfig.ts": "./config/networkConfig.ts",
+    "./modes/gameModes.ts": "./modes/gameModes.ts"
+  },
+  "dependencies": {
+    "@splat/protocol": "workspace:*"
+  }
+}
