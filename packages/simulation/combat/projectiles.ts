@@ -82,6 +82,12 @@ function distance(a: Vec3Data, b: Vec3Data): number {
   return length(sub(a, b));
 }
 
+function assign(target: Vec3Data, source: Vec3Data): void {
+  target.x = source.x;
+  target.y = source.y;
+  target.z = source.z;
+}
+
 function dot(a: Vec3Data, b: Vec3Data): number {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -270,6 +276,50 @@ function applySplashDamage(
   });
 }
 
+function getBlastFallbackDirection(player: SimPlayerState, planets: PlanetData[]): SimVec3 {
+  let nearestPlanet: PlanetData | undefined;
+  let nearestDistance = Infinity;
+  for (const planet of planets) {
+    const playerDistance = distance(player.pos, planet.center);
+    if (playerDistance < nearestDistance) {
+      nearestDistance = playerDistance;
+      nearestPlanet = planet;
+    }
+  }
+
+  if (!nearestPlanet) return { x: 0, y: 1, z: 0 };
+  return normalize(sub(player.pos, nearestPlanet.center));
+}
+
+function applyBlastImpulse(
+  simState: SimMatchState,
+  impactPos: Vec3Data,
+  blastRadius: number,
+  blastImpulse: number,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): void {
+  if (blastRadius <= 0 || blastImpulse <= 0) return;
+
+  simState.players.forEach((player) => {
+    if (player.movementState === PlayerMovementState.Dead) return;
+
+    const hitDistance = blastRadius + cfg.player.collisionRadius;
+    const playerDistance = distance(player.pos, impactPos);
+    if (playerDistance > hitDistance) return;
+
+    const falloff = 1 - playerDistance / hitDistance;
+    const blastDir =
+      playerDistance > 1e-4
+        ? normalize(sub(player.pos, impactPos))
+        : getBlastFallbackDirection(player, planets);
+    assign(player.vel, add(player.vel, scale(blastDir, blastImpulse * falloff)));
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.swimState = PlayerSwimState.None;
+  });
+}
+
 function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: CombatConfig): void {
   const planet = planets.find((candidate) => candidate.id === player.spawnPlanetId) ?? planets[0];
   if (!planet) return;
@@ -412,6 +462,14 @@ export function tickProjectiles(
         cfg,
         splashExclusions,
       );
+      applyBlastImpulse(
+        simState,
+        impactPos,
+        weapon.splashRadius,
+        weapon.blastImpulse,
+        planets,
+        cfg,
+      );
 
       // Use nearest planet so impact paint always lands on the right surface
       // regardless of which planet the shooter fired from.
@@ -462,6 +520,14 @@ export function tickProjectiles(
             weapon.splashDamage,
             cfg,
             new Set<string>(),
+          );
+          applyBlastImpulse(
+            simState,
+            impactPos,
+            weapon.splashRadius,
+            weapon.blastImpulse,
+            planets,
+            cfg,
           );
           removedIds.push(projectileId);
           hit = true;

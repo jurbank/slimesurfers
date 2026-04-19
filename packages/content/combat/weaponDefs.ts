@@ -19,6 +19,7 @@ export interface WeaponDefinition {
   directDamage: number;
   splashDamage: number;
   splashRadius: number;
+  blastImpulse: number;
   paintRadiusMultiplier: number;
   projectileColor: number;
   pickupColor: number;
@@ -53,6 +54,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     directDamage: 34,
     splashDamage: 0,
     splashRadius: 0,
+    blastImpulse: 0,
     paintRadiusMultiplier: 1,
     projectileColor: 0x9df8ff,
     pickupColor: 0x3fe7ff,
@@ -69,6 +71,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     directDamage: 100,
     splashDamage: 45,
     splashRadius: 3.4,
+    blastImpulse: 40,
     paintRadiusMultiplier: 2.4,
     projectileColor: 0xffd36b,
     pickupColor: 0xff9b3d,
@@ -85,6 +88,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     directDamage: 100,
     splashDamage: 0,
     splashRadius: 0,
+    blastImpulse: 0,
     paintRadiusMultiplier: 0.8,
     projectileColor: 0xff5262,
     pickupColor: 0xb63542,

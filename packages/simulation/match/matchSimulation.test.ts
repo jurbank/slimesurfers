@@ -486,6 +486,48 @@ describe("MatchSimulation", () => {
     expect(target.health).toBe(0);
     expect(target.movementState).toBe(PlayerMovementState.Dead);
     expect(nearby.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
+    expect(nearby.movementState).toBe(PlayerMovementState.Airborne);
+    expect(Math.hypot(nearby.vel.x, nearby.vel.y, nearby.vel.z)).toBeGreaterThan(0);
+  });
+
+  it("launches the shooter when a bazooka blast hits the ground underneath them", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const bazooka = getWeaponDefinition(WeaponId.Bazooka);
+    const normal = { x: 0, y: 1, z: 0 };
+    const surfaceRadius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+    const planet = PLANET_POSITIONS[0]!;
+    shooter.pos = {
+      x: planet.x,
+      y: planet.y + surfaceRadius + GAME_CONFIG.player.collisionRadius,
+      z: planet.z,
+    };
+    shooter.vel = { x: 0, y: 0, z: 0 };
+    shooter.planetId = planet.id;
+    shooter.movementState = PlayerMovementState.Idle;
+
+    const impactSpeed = 3 / (simulation.tickIntervalMs / 1000);
+    simulation.matchState.projectiles.set("rocket-jump-test", {
+      id: "rocket-jump-test",
+      ownerId: shooter.sessionId,
+      weaponId: WeaponId.Bazooka,
+      paintGroupId: shooter.paintGroupId,
+      pos: {
+        x: shooter.pos.x,
+        y: shooter.pos.y + 2,
+        z: shooter.pos.z,
+      },
+      vel: { x: 0, y: -impactSpeed, z: 0 },
+      planetId: "",
+      lifeMs: bazooka.projectileLifetimeMs,
+    });
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(simulation.matchState.projectiles.size).toBe(0);
+    expect(shooter.movementState).toBe(PlayerMovementState.Airborne);
+    expect(shooter.planetId).toBe("");
+    expect(shooter.vel.y).toBeGreaterThan(0);
   });
 
   it("applies paint when an airborne projectile hits a planet surface", () => {
