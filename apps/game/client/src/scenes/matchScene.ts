@@ -14,6 +14,7 @@ import { RemotePlayer } from "../entities/player/remotePlayer.ts";
 import { ClientRuntimeState } from "../network/runtimeState.ts";
 import { CombatHud } from "../ui/CombatHud.ts";
 import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
+import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
 import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
 import { createWaterMaterial } from "../materials/waterMaterial.ts";
@@ -57,6 +58,7 @@ export class MatchScene {
   private readonly runtime: ClientRuntimeState;
   private readonly combatHud: CombatHud;
   private readonly leaderboard: LeaderboardOverlay;
+  private readonly pauseMenu: PauseMenuOverlay;
 
   private localPlayer: LocalPlayer | null = null;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
@@ -76,6 +78,19 @@ export class MatchScene {
   private readonly resolvedAimDir = new THREE.Vector3();
 
   private debugLines: THREE.LineSegments | null = null;
+
+  private setPaused(paused: boolean): void {
+    if (paused === this.pauseMenu.isVisible()) return;
+
+    if (paused) {
+      this.pauseMenu.show();
+      this.input.setEnabled(false);
+      return;
+    }
+
+    this.pauseMenu.hide();
+    this.input.setEnabled(true);
+  }
 
   private getAimPoint(localSessionId: string, weaponId: WeaponId): THREE.Vector3 {
     this.camera.camera.getWorldDirection(this.crosshairRayDir).normalize();
@@ -224,6 +239,10 @@ export class MatchScene {
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
     this.leaderboard = new LeaderboardOverlay();
+    this.pauseMenu = new PauseMenuOverlay();
+    this.pauseMenu.onResume(() => this.setPaused(false));
+    this.pauseMenu.onToggle(() => this.setPaused(!this.pauseMenu.isVisible()));
+    this.input.onPointerLockExit(() => this.setPaused(true));
     for (const p of PLANET_POSITIONS) {
       this.planetPaint.set(p.id, {
         planetId: p.id,
@@ -535,6 +554,7 @@ export class MatchScene {
         this.projectiles.clear();
         this.lastLocalHealth = null;
         this.combatHud.clear();
+        this.setPaused(false);
         this.onDisconnectCb?.();
       },
     });

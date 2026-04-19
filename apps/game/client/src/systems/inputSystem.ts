@@ -10,6 +10,8 @@ export class InputSystem {
   private pointerLocked = false;
   private firePressed = false;
   private actionPressed = false;
+  private enabled = true;
+  private onPointerLockExitCb: (() => void) | null = null;
 
   // Persistent orientation tracking.
   private readonly _localRotation = new THREE.Quaternion(0, 0, 0, 1);
@@ -31,6 +33,7 @@ export class InputSystem {
     canvas.style.outline = "none";
 
     const requestPointerCapture = (target: EventTarget | null): void => {
+      if (!this.enabled) return;
       if (this.pointerLocked) return;
       if (!canvas.isConnected || canvas.ownerDocument !== document) return;
       const element = target instanceof Element ? target : null;
@@ -43,6 +46,7 @@ export class InputSystem {
     };
 
     const handleKeyDown = (e: KeyboardEvent): void => {
+      if (!this.enabled) return;
       if (MOVEMENT_KEYS.has(e.code)) {
         this.keysDown.add(e.code);
         if (e.code === "KeyE" && !e.repeat) {
@@ -53,6 +57,7 @@ export class InputSystem {
     };
 
     const handleKeyUp = (e: KeyboardEvent): void => {
+      if (!this.enabled) return;
       if (MOVEMENT_KEYS.has(e.code)) {
         this.keysDown.delete(e.code);
         e.preventDefault();
@@ -68,22 +73,29 @@ export class InputSystem {
 
     canvas.addEventListener("pointerdown", (e) => requestPointerCapture(e.target));
     canvas.addEventListener("pointerdown", (e) => {
+      if (!this.enabled) return;
       if (e.button === 0) this.firePressed = true;
     });
     window.addEventListener("pointerup", (e) => {
       if (e.button === 0) this.firePressed = false;
     });
     document.addEventListener("pointerlockchange", () => {
+      const wasPointerLocked = this.pointerLocked;
       this.pointerLocked = document.pointerLockElement === canvas;
+      if (wasPointerLocked && !this.pointerLocked && this.enabled) {
+        this.onPointerLockExitCb?.();
+      }
     });
     document.addEventListener("mousemove", (e) => {
-      if (!this.pointerLocked) return;
+      if (!this.enabled || !this.pointerLocked) return;
       this.mouseX -= e.movementX * 0.003;
       this.mouseY -= e.movementY * 0.003;
     });
   }
 
   buildKeyBits(): number {
+    if (!this.enabled) return 0;
+
     const actionBit = this.actionPressed ? InputKey.Submerge : 0;
     this.actionPressed = false;
 
@@ -150,5 +162,21 @@ export class InputSystem {
    */
   getLocalRotation(): THREE.Quaternion {
     return this._localRotation.clone();
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (enabled) return;
+
+    this.keysDown.clear();
+    this.firePressed = false;
+    this.actionPressed = false;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  onPointerLockExit(callback: () => void): void {
+    this.onPointerLockExitCb = callback;
   }
 }
