@@ -18,6 +18,8 @@ interface PlayerTransformState {
 /** A remote player's mesh — position updated from server snapshots. */
 export class RemotePlayer {
   readonly mesh: THREE.Group;
+  private readonly liveMesh: THREE.Group;
+  private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
   private readonly disturbance: THREE.Mesh;
   private readonly up = new THREE.Vector3(0, 1, 0);
@@ -25,6 +27,8 @@ export class RemotePlayer {
   constructor(scene: THREE.Scene, slimeColor: number) {
     const rig = createPlayerMesh(slimeColor);
     this.mesh = rig.group;
+    this.liveMesh = rig.liveMesh;
+    this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
     this.disturbance = new THREE.Mesh(
       new THREE.SphereGeometry(0.38, 16, 12),
@@ -44,14 +48,20 @@ export class RemotePlayer {
   update(state: PlayerTransformState): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
-    this.updateWeapon(state.equippedWeaponId);
     this.up.set(0, 1, 0).applyQuaternion(this.mesh.quaternion).normalize();
 
     if (state.movementState === PlayerMovementState.Dead) {
-      this.mesh.visible = false;
+      this.mesh.visible = true;
+      this.liveMesh.visible = false;
+      this.deadMesh.visible = true;
+      this.weaponMesh.visible = false;
       this.disturbance.visible = false;
       return;
     }
+
+    this.liveMesh.visible = true;
+    this.deadMesh.visible = false;
+    this.updateWeapon(state.equippedWeaponId);
 
     if (state.swimState === PlayerSwimState.None) {
       this.mesh.visible = true;
@@ -71,6 +81,10 @@ export class RemotePlayer {
   dispose(scene: THREE.Scene): void {
     scene.remove(this.mesh);
     scene.remove(this.disturbance);
+  }
+
+  isAimTargetVisible(): boolean {
+    return this.mesh.visible && this.liveMesh.visible;
   }
 
   private updateWeapon(weaponId: WeaponId): void {

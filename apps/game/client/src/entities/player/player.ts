@@ -4,12 +4,13 @@ import {
   getWeaponDefinition,
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
-import { PlayerSwimState } from "@splat/simulation/match/simState.ts";
+import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
+  movementState: number;
   swimState: number;
   equippedWeaponId: WeaponId;
 }
@@ -17,6 +18,8 @@ interface PlayerTransformState {
 /** The local player's mesh — driven by server state, camera follows this. */
 export class LocalPlayer {
   readonly mesh: THREE.Group;
+  private readonly liveMesh: THREE.Group;
+  private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
   private readonly materials: THREE.Material[] = [];
   private readonly up = new THREE.Vector3(0, 1, 0);
@@ -31,8 +34,10 @@ export class LocalPlayer {
   constructor(scene: THREE.Scene, slimeColor: number) {
     const rig = createPlayerMesh(slimeColor);
     this.mesh = rig.group;
+    this.liveMesh = rig.liveMesh;
+    this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
-    this.mesh.traverse((child) => {
+    this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
       else this.materials.push(child.material);
@@ -51,6 +56,18 @@ export class LocalPlayer {
     } else {
       this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
     }
+
+    if (state.movementState === PlayerMovementState.Dead) {
+      this.liveMesh.visible = false;
+      this.deadMesh.visible = true;
+      this.weaponMesh.visible = false;
+      this.mesh.scale.set(1, 1, 1);
+      this.setOpacity(1);
+      return;
+    }
+
+    this.liveMesh.visible = true;
+    this.deadMesh.visible = false;
     this.updateWeapon(state.equippedWeaponId, aimDir);
 
     if (state.swimState === PlayerSwimState.None) {

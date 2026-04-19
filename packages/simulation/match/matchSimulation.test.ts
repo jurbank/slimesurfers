@@ -488,6 +488,11 @@ describe("MatchSimulation", () => {
     expect(nearby.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
     expect(nearby.movementState).toBe(PlayerMovementState.Airborne);
     expect(Math.hypot(nearby.vel.x, nearby.vel.y, nearby.vel.z)).toBeGreaterThan(0);
+    expect(
+      simulation
+        .getRecentPaintStamps()
+        .filter((stamp) => stamp.paintGroupId === shooter.paintGroupId).length,
+    ).toBeGreaterThanOrEqual(GAME_CONFIG.paint.deathBurstStampCount);
   });
 
   it("launches the shooter when a bazooka blast hits the ground underneath them", () => {

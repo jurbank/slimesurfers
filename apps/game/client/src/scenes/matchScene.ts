@@ -101,7 +101,7 @@ export class MatchScene {
 
     for (const [sessionId, remotePlayer] of this.remotePlayers) {
       if (sessionId === localSessionId) continue;
-      if (!remotePlayer.mesh.visible) continue;
+      if (!remotePlayer.isAimTargetVisible()) continue;
 
       this.aimToPlayer.copy(remotePlayer.mesh.position).sub(this.camera.camera.position);
       const centerDistance = this.aimToPlayer.dot(this.crosshairRayDir);

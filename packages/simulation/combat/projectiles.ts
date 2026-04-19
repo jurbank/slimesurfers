@@ -35,6 +35,9 @@ export interface CombatConfig {
   };
   paint: {
     impactStampRadius: number;
+    deathBurstStampCount: number;
+    deathBurstSpreadRadius: number;
+    deathBurstRadiusMultiplier: number;
   };
   respawn: {
     durationSeconds: number;
@@ -90,6 +93,14 @@ function assign(target: Vec3Data, source: Vec3Data): void {
 
 function dot(a: Vec3Data, b: Vec3Data): number {
   return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function cross(a: Vec3Data, b: Vec3Data): SimVec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -230,17 +241,84 @@ function getProjectileWeapon(projectile: SimProjectileState) {
   return getWeaponDefinition(projectile.weaponId);
 }
 
+function getNearestPlanet(point: Vec3Data, planets: PlanetData[]): PlanetData | undefined {
+  let nearestPlanet: PlanetData | undefined;
+  let nearestDist = Infinity;
+  for (const planet of planets) {
+    const d = distance(point, planet.center);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearestPlanet = planet;
+    }
+  }
+  return nearestPlanet;
+}
+
+function getPlayerPlanet(player: SimPlayerState, planets: PlanetData[]): PlanetData | undefined {
+  return (
+    planets.find((planet) => planet.id === player.planetId) ?? getNearestPlanet(player.pos, planets)
+  );
+}
+
+function addDeathBurstPaint(
+  simState: SimMatchState,
+  paintStamps: PaintStampMessage[],
+  defeated: SimPlayerState,
+  owner: SimPlayerState | undefined,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): void {
+  if (!owner || cfg.paint.deathBurstStampCount <= 0) return;
+
+  const planet = getPlayerPlanet(defeated, planets);
+  if (!planet) return;
+
+  const planetState = simState.planets.get(planet.id);
+  if (!planetState) return;
+
+  const fromCenter = sub(defeated.pos, planet.center);
+  const normal = normalize(fromCenter);
+  const tangentSeed = Math.abs(normal.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  const tangentA = normalize(cross(tangentSeed, normal));
+  const tangentB = normalize(cross(normal, tangentA));
+  const count = Math.floor(cfg.paint.deathBurstStampCount);
+
+  for (let i = 0; i < count; i++) {
+    const isCenter = i === 0;
+    const angle = (i / Math.max(1, count - 1)) * Math.PI * 2;
+    const spread = isCenter ? 0 : cfg.paint.deathBurstSpreadRadius;
+    const surfaceDir = normalize(
+      add(
+        normal,
+        scale(
+          add(scale(tangentA, Math.cos(angle)), scale(tangentB, Math.sin(angle))),
+          spread / cfg.planet.radius,
+        ),
+      ),
+    );
+    const surfaceRadius = getTerrainRadius(surfaceDir.x, surfaceDir.y, surfaceDir.z, cfg);
+    const stamp = applyPaintImpact(simState, planetState, {
+      planetId: planet.id,
+      pos: add(planet.center, scale(surfaceDir, surfaceRadius)),
+      paintGroupId: owner.paintGroupId,
+      slimeColor: owner.slimeColor,
+      radiusMultiplier: cfg.paint.deathBurstRadiusMultiplier,
+    });
+    if (stamp) paintStamps.push(stamp);
+  }
+}
+
 function applyDamage(
   player: SimPlayerState,
   owner: SimPlayerState | undefined,
   damage: number,
   cfg: CombatConfig,
-): void {
-  if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return;
+): boolean {
+  if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return false;
 
   player.swimState = PlayerSwimState.None;
   player.health = Math.max(0, player.health - damage);
-  if (player.health > 0) return;
+  if (player.health > 0) return false;
 
   player.movementState = PlayerMovementState.Dead;
   player.respawnTimer = cfg.respawn.durationSeconds;
@@ -248,15 +326,18 @@ function applyDamage(
   if (owner) {
     owner.killCount++;
   }
+  return true;
 }
 
 function applySplashDamage(
   simState: SimMatchState,
+  paintStamps: PaintStampMessage[],
   owner: SimPlayerState | undefined,
   ownerId: string,
   impactPos: Vec3Data,
   splashRadius: number,
   splashDamage: number,
+  planets: PlanetData[],
   cfg: CombatConfig,
   excludedPlayerIds: Set<string>,
 ): void {
@@ -272,7 +353,13 @@ function applySplashDamage(
     if (playerDistance > hitDistance) return;
 
     const damageScale = 1 - playerDistance / hitDistance;
-    applyDamage(player, owner, Math.max(1, Math.round(splashDamage * damageScale)), cfg);
+    const killed = applyDamage(
+      player,
+      owner,
+      Math.max(1, Math.round(splashDamage * damageScale)),
+      cfg,
+    );
+    if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
   });
 }
 
@@ -450,15 +537,18 @@ export function tickProjectiles(
       const impactPos = closestPointOnSegment(player.pos, startPos, projectile.pos);
       if (distance(impactPos, player.pos) > hitDistance) return;
 
-      applyDamage(player, owner, weapon.directDamage, cfg);
+      const killed = applyDamage(player, owner, weapon.directDamage, cfg);
+      if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
       const splashExclusions = new Set<string>([player.sessionId]);
       applySplashDamage(
         simState,
+        paintStamps,
         owner,
         projectile.ownerId,
         impactPos,
         weapon.splashRadius,
         weapon.splashDamage,
+        planets,
         cfg,
         splashExclusions,
       );
@@ -513,11 +603,13 @@ export function tickProjectiles(
           }
           applySplashDamage(
             simState,
+            paintStamps,
             owner,
             projectile.ownerId,
             impactPos,
             weapon.splashRadius,
             weapon.splashDamage,
+            planets,
             cfg,
             new Set<string>(),
           );
