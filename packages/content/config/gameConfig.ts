@@ -31,6 +31,7 @@ export const GAME_CONFIG = {
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
     standingHeight: 1.0,
+    projectileMuzzleHeight: 1.5,
     maxHealth: 100,
     projectileDamage: 34,
   },

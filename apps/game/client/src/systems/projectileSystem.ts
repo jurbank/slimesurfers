@@ -5,6 +5,7 @@ import type { ProjectileSnapshot } from "@splat/protocol/network/serverMessages.
 // Cap how far we extrapolate past the last snapshot to avoid wild predictions
 // if the server stops sending (e.g. the projectile was destroyed).
 const MAX_EXTRAPOLATION_MS = 300;
+const CORRECTION_RATE = 18;
 
 interface ProjectileState {
   mesh: THREE.Mesh;
@@ -16,6 +17,10 @@ interface ProjectileState {
   vy: number;
   vz: number;
   receivedAtMs: number;
+  visualX: number;
+  visualY: number;
+  visualZ: number;
+  lastUpdatedAtMs: number;
 }
 
 export class ProjectileSystem {
@@ -30,6 +35,10 @@ export class ProjectileSystem {
     let state = this.projectiles.get(id);
     const weapon = getWeaponDefinition(projectile.weaponId);
     if (!state) {
+      const ageSec = Math.max(0, weapon.projectileLifetimeMs - projectile.lifeMs) / 1000;
+      const visualX = projectile.pos.x - projectile.vel.x * ageSec;
+      const visualY = projectile.pos.y - projectile.vel.y * ageSec;
+      const visualZ = projectile.pos.z - projectile.vel.z * ageSec;
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(weapon.projectileCollisionRadius, 12, 12),
         new THREE.MeshLambertMaterial({
@@ -38,6 +47,7 @@ export class ProjectileSystem {
           emissiveIntensity: 0.35,
         }),
       );
+      mesh.position.set(visualX, visualY, visualZ);
       this.scene.add(mesh);
       state = {
         mesh,
@@ -48,6 +58,10 @@ export class ProjectileSystem {
         vy: projectile.vel.y,
         vz: projectile.vel.z,
         receivedAtMs: nowMs,
+        visualX,
+        visualY,
+        visualZ,
+        lastUpdatedAtMs: nowMs,
       };
       this.projectiles.set(id, state);
     } else {
@@ -70,12 +84,25 @@ export class ProjectileSystem {
   /** Call once per frame to extrapolate projectile positions. */
   update(nowMs: number): void {
     for (const state of this.projectiles.values()) {
-      const dtSec = Math.min(nowMs - state.receivedAtMs, MAX_EXTRAPOLATION_MS) / 1000;
-      state.mesh.position.set(
-        state.px + state.vx * dtSec,
-        state.py + state.vy * dtSec,
-        state.pz + state.vz * dtSec,
+      const frameDtSec = Math.max(
+        0,
+        Math.min(nowMs - state.lastUpdatedAtMs, MAX_EXTRAPOLATION_MS) / 1000,
       );
+      const extrapolationDtSec =
+        Math.max(0, Math.min(nowMs - state.receivedAtMs, MAX_EXTRAPOLATION_MS)) / 1000;
+      const targetX = state.px + state.vx * extrapolationDtSec;
+      const targetY = state.py + state.vy * extrapolationDtSec;
+      const targetZ = state.pz + state.vz * extrapolationDtSec;
+      const predictedX = state.visualX + state.vx * frameDtSec;
+      const predictedY = state.visualY + state.vy * frameDtSec;
+      const predictedZ = state.visualZ + state.vz * frameDtSec;
+      const correction = 1 - Math.exp(-CORRECTION_RATE * frameDtSec);
+
+      state.visualX = predictedX + (targetX - predictedX) * correction;
+      state.visualY = predictedY + (targetY - predictedY) * correction;
+      state.visualZ = predictedZ + (targetZ - predictedZ) * correction;
+      state.lastUpdatedAtMs = nowMs;
+      state.mesh.position.set(state.visualX, state.visualY, state.visualZ);
     }
   }
 

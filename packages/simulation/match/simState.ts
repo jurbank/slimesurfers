@@ -49,6 +49,7 @@ export interface SimProjectileState {
   vel: SimVec3;
   planetId: string;
   lifeMs: number;
+  spawnTimeMs?: number;
 }
 
 export interface SimWeaponPickupState {

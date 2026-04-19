@@ -23,6 +23,7 @@ import {
 export interface CombatConfig {
   player: {
     collisionRadius: number;
+    projectileMuzzleHeight: number;
     maxHealth: number;
   };
   slime: {
@@ -81,8 +82,118 @@ function distance(a: Vec3Data, b: Vec3Data): number {
   return length(sub(a, b));
 }
 
+function dot(a: Vec3Data, b: Vec3Data): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function closestPointOnSegment(point: Vec3Data, start: Vec3Data, end: Vec3Data): SimVec3 {
+  const segment = sub(end, start);
+  const segmentLengthSq = dot(segment, segment);
+  if (segmentLengthSq < 1e-8) return { x: start.x, y: start.y, z: start.z };
+
+  const t = clamp(dot(sub(point, start), segment) / segmentLengthSq, 0, 1);
+  return add(start, scale(segment, t));
+}
+
+function terrainClearance(
+  point: Vec3Data,
+  planet: PlanetData,
+  projectileRadius: number,
+  cfg: CombatConfig,
+): number {
+  const fromCenter = sub(point, planet.center);
+  const dist = length(fromCenter);
+  if (dist < 1e-8) return -Infinity;
+
+  const normal = scale(fromCenter, 1 / dist);
+  return dist - getTerrainRadius(normal.x, normal.y, normal.z, cfg) - projectileRadius;
+}
+
+function pointOnSegment(start: Vec3Data, end: Vec3Data, t: number): SimVec3 {
+  return {
+    x: start.x + (end.x - start.x) * t,
+    y: start.y + (end.y - start.y) * t,
+    z: start.z + (end.z - start.z) * t,
+  };
+}
+
+function findTerrainImpactOnSegment(
+  start: Vec3Data,
+  end: Vec3Data,
+  planet: PlanetData,
+  projectileRadius: number,
+  cfg: CombatConfig,
+): SimVec3 | null {
+  const segmentLength = distance(start, end);
+  if (segmentLength < 1e-8) return null;
+
+  let previousT = 0;
+  let previousClearance = terrainClearance(start, planet, projectileRadius, cfg);
+  if (previousClearance <= 0) {
+    const endClearance = terrainClearance(end, planet, projectileRadius, cfg);
+    return endClearance < previousClearance ? { x: start.x, y: start.y, z: start.z } : null;
+  }
+
+  const stepDistance = Math.max(0.15, projectileRadius * 0.5);
+  const steps = Math.max(1, Math.ceil(segmentLength / stepDistance));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const sample = pointOnSegment(start, end, t);
+    const sampleClearance = terrainClearance(sample, planet, projectileRadius, cfg);
+    if (sampleClearance <= 0) {
+      let lo = previousT;
+      let hi = t;
+      for (let j = 0; j < 8; j++) {
+        const mid = (lo + hi) * 0.5;
+        const midPoint = pointOnSegment(start, end, mid);
+        if (terrainClearance(midPoint, planet, projectileRadius, cfg) <= 0) {
+          hi = mid;
+        } else {
+          lo = mid;
+        }
+      }
+      return pointOnSegment(start, end, hi);
+    }
+
+    previousT = t;
+  }
+
+  return null;
+}
+
+function isFiniteVec3(point: Vec3Data | undefined): point is Vec3Data {
+  return (
+    point !== undefined &&
+    Number.isFinite(point.x) &&
+    Number.isFinite(point.y) &&
+    Number.isFinite(point.z)
+  );
+}
+
+function getProjectileMuzzlePosition(
+  player: SimPlayerState,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): SimVec3 {
+  let planet = planets.find((candidate) => candidate.id === player.planetId);
+  if (!planet) {
+    let nearestDistance = Infinity;
+    for (const candidate of planets) {
+      const candidateDistance = distance(player.pos, candidate.center);
+      if (candidateDistance < nearestDistance) {
+        nearestDistance = candidateDistance;
+        planet = candidate;
+      }
+    }
+  }
+  if (!planet) return { x: player.pos.x, y: player.pos.y, z: player.pos.z };
+
+  const up = normalize(sub(player.pos, planet.center));
+  return add(player.pos, scale(up, cfg.player.projectileMuzzleHeight));
 }
 
 function getSlimeRechargeRate(
@@ -204,6 +315,7 @@ export function tryFireProjectile(
   player: SimPlayerState,
   input: InputMessage,
   nowMs: number,
+  planets: PlanetData[],
   cfg: CombatConfig,
 ): void {
   if ((input.keys & InputKey.Fire) === 0) return;
@@ -217,17 +329,20 @@ export function tryFireProjectile(
   if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return;
   if (player.slimeLevel < weapon.slimeCost) return;
 
-  const aim = normalize(input.aimDir);
-  const spawnOffset = cfg.player.collisionRadius + weapon.projectileCollisionRadius + 0.1;
+  const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
+  const aim = isFiniteVec3(input.aimPoint)
+    ? normalize(sub(input.aimPoint, muzzlePos))
+    : normalize(input.aimDir);
   const projectile: SimProjectileState = {
     id: `projectile-${simState.nextProjectileId++}`,
     ownerId: player.sessionId,
     weaponId: weapon.id,
     paintGroupId: player.paintGroupId,
-    pos: add(player.pos, scale(aim, spawnOffset)),
+    pos: muzzlePos,
     vel: scale(aim, weapon.projectileSpeed),
     planetId: player.planetId,
     lifeMs: weapon.projectileLifetimeMs,
+    spawnTimeMs: nowMs,
   };
   simState.projectiles.set(projectile.id, projectile);
   player.slimeLevel = clamp(player.slimeLevel - weapon.slimeCost, 0, cfg.slime.maxLevel);
@@ -253,8 +368,13 @@ export function tickProjectiles(
   simState.projectiles.forEach((projectile, projectileId) => {
     const owner = simState.players.get(projectile.ownerId);
     const weapon = getProjectileWeapon(projectile);
-    projectile.lifeMs = Math.max(0, projectile.lifeMs - dtMs);
-    projectile.pos = add(projectile.pos, scale(projectile.vel, dtMs / 1000));
+    const projectileDtMs =
+      projectile.spawnTimeMs === undefined
+        ? dtMs
+        : clamp(simState.elapsedMs - projectile.spawnTimeMs, 0, dtMs);
+    const startPos = { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z };
+    projectile.lifeMs = Math.max(0, projectile.lifeMs - projectileDtMs);
+    projectile.pos = add(projectile.pos, scale(projectile.vel, projectileDtMs / 1000));
     if (projectile.lifeMs === 0) {
       removedIds.push(projectileId);
       return;
@@ -277,7 +397,8 @@ export function tickProjectiles(
       if (player.sessionId === projectile.ownerId) return;
       if (player.movementState === PlayerMovementState.Dead) return;
       const hitDistance = cfg.player.collisionRadius + weapon.projectileCollisionRadius;
-      if (distance(projectile.pos, player.pos) > hitDistance) return;
+      const impactPos = closestPointOnSegment(player.pos, startPos, projectile.pos);
+      if (distance(impactPos, player.pos) > hitDistance) return;
 
       applyDamage(player, owner, weapon.directDamage, cfg);
       const splashExclusions = new Set<string>([player.sessionId]);
@@ -285,7 +406,7 @@ export function tickProjectiles(
         simState,
         owner,
         projectile.ownerId,
-        projectile.pos,
+        impactPos,
         weapon.splashRadius,
         weapon.splashDamage,
         cfg,
@@ -299,7 +420,7 @@ export function tickProjectiles(
         if (planetState) {
           const stamp = applyPaintImpact(simState, planetState, {
             planetId: nearestPlanet.id,
-            pos: projectile.pos,
+            pos: impactPos,
             paintGroupId: projectile.paintGroupId,
             slimeColor: owner?.slimeColor ?? 0xffffff,
             radiusMultiplier: weapon.paintRadiusMultiplier,
@@ -313,29 +434,19 @@ export function tickProjectiles(
 
     if (!hit) {
       for (const planet of planets) {
-        const projDir = normalize(sub(projectile.pos, planet.center));
-        const surfaceRadius = getTerrainRadius(projDir.x, projDir.y, projDir.z, cfg);
-        if (
-          distance(projectile.pos, planet.center) <=
-          surfaceRadius + weapon.projectileCollisionRadius
-        ) {
-          // Only count as a surface hit if the projectile is moving toward the
-          // planet center. A projectile that spawns just outside the surface
-          // while moving outward has a negative dot product here and is skipped,
-          // preventing an immediate false collision on the first tick.
-          const toCenter = sub(planet.center, projectile.pos);
-          const approachingPlanet =
-            projectile.vel.x * toCenter.x +
-              projectile.vel.y * toCenter.y +
-              projectile.vel.z * toCenter.z >
-            0;
-          if (!approachingPlanet) continue;
-
+        const impactPos = findTerrainImpactOnSegment(
+          startPos,
+          projectile.pos,
+          planet,
+          weapon.projectileCollisionRadius,
+          cfg,
+        );
+        if (impactPos) {
           const planetState = simState.planets.get(planet.id);
           if (planetState) {
             const stamp = applyPaintImpact(simState, planetState, {
               planetId: planet.id,
-              pos: projectile.pos,
+              pos: impactPos,
               paintGroupId: projectile.paintGroupId,
               slimeColor: owner?.slimeColor ?? 0xffffff,
               radiusMultiplier: weapon.paintRadiusMultiplier,
@@ -346,7 +457,7 @@ export function tickProjectiles(
             simState,
             owner,
             projectile.ownerId,
-            projectile.pos,
+            impactPos,
             weapon.splashRadius,
             weapon.splashDamage,
             cfg,

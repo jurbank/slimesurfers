@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import type { SnapshotMessage } from "@splat/protocol/network/serverMessages.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
@@ -31,6 +31,7 @@ import { PlayerMovementState, type SimPlanetPaintState } from "@splat/simulation
 
 const PLANET_CENTERS = PLANET_POSITIONS.map((p) => new THREE.Vector3(p.x, p.y, p.z));
 const FALLBACK_PLAYER_COLOR = 0xffffff;
+const CROSSHAIR_AIM_DISTANCE = 500;
 
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
   let nearest = PLANET_CENTERS[0];
@@ -68,8 +69,76 @@ export class MatchScene {
 
   private onDisconnectCb: (() => void) | null = null;
   private lastAimDir: { x: number; y: number; z: number } = { x: 0, y: 0, z: 1 };
+  private readonly crosshairRayDir = new THREE.Vector3();
+  private readonly aimPoint = new THREE.Vector3();
+  private readonly aimToPlayer = new THREE.Vector3();
+  private readonly terrainSample = new THREE.Vector3();
+  private readonly resolvedAimDir = new THREE.Vector3();
 
   private debugLines: THREE.LineSegments | null = null;
+
+  private getAimPoint(localSessionId: string, weaponId: WeaponId): THREE.Vector3 {
+    this.camera.camera.getWorldDirection(this.crosshairRayDir).normalize();
+    this.aimPoint
+      .copy(this.camera.camera.position)
+      .addScaledVector(this.crosshairRayDir, CROSSHAIR_AIM_DISTANCE);
+
+    let closestHitDistance = this.getTerrainHitDistance(CROSSHAIR_AIM_DISTANCE);
+    if (closestHitDistance !== null) {
+      this.aimPoint
+        .copy(this.camera.camera.position)
+        .addScaledVector(this.crosshairRayDir, closestHitDistance);
+    } else {
+      closestHitDistance = CROSSHAIR_AIM_DISTANCE;
+    }
+
+    const weapon = getWeaponDefinition(weaponId);
+    const playerHitRadius = Math.max(
+      GAME_CONFIG.player.collisionRadius + weapon.projectileCollisionRadius,
+      GAME_CONFIG.player.collisionRadius * 1.2,
+    );
+    const playerHitRadiusSq = playerHitRadius * playerHitRadius;
+
+    for (const [sessionId, remotePlayer] of this.remotePlayers) {
+      if (sessionId === localSessionId) continue;
+      if (!remotePlayer.mesh.visible) continue;
+
+      this.aimToPlayer.copy(remotePlayer.mesh.position).sub(this.camera.camera.position);
+      const centerDistance = this.aimToPlayer.dot(this.crosshairRayDir);
+      if (centerDistance <= 0 || centerDistance >= closestHitDistance) continue;
+
+      const missDistanceSq = this.aimToPlayer.lengthSq() - centerDistance * centerDistance;
+      if (missDistanceSq > playerHitRadiusSq) continue;
+
+      const entryDistance = centerDistance - Math.sqrt(playerHitRadiusSq - missDistanceSq);
+      if (entryDistance <= 0 || entryDistance >= closestHitDistance) continue;
+
+      closestHitDistance = entryDistance;
+      this.aimPoint
+        .copy(this.camera.camera.position)
+        .addScaledVector(this.crosshairRayDir, entryDistance);
+    }
+
+    return this.aimPoint;
+  }
+
+  private getTerrainHitDistance(maxDistance: number): number | null {
+    const stepDistance = Math.max(0.5, GAME_CONFIG.player.collisionRadius);
+    for (let d = stepDistance; d < maxDistance; d += stepDistance) {
+      this.terrainSample.copy(this.camera.camera.position).addScaledVector(this.crosshairRayDir, d);
+      const planetCenter = nearestPlanetCenter(this.terrainSample);
+      const dx = this.terrainSample.x - planetCenter.x;
+      const dy = this.terrainSample.y - planetCenter.y;
+      const dz = this.terrainSample.z - planetCenter.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist < 1e-6) return d;
+
+      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, GAME_CONFIG);
+      if (dist <= surfaceRadius) return d;
+    }
+
+    return null;
+  }
 
   private updateDebugLines(): void {
     if (!GAME_CONFIG.debug.showPaintColliders) {
@@ -510,9 +579,25 @@ export class MatchScene {
 
       // aimDir for this frame comes from the previous frame's camera position.
       // Camera is updated after prediction so it always follows the latest state.
-      const aimDir = this.lastAimDir;
+      const aimPoint = this.getAimPoint(localSessionId, localState.equippedWeaponId);
+      this.resolvedAimDir.copy(aimPoint).sub(playerPos);
+      let aimDir = this.lastAimDir;
+      if (this.resolvedAimDir.lengthSq() > 1e-6) {
+        this.resolvedAimDir.normalize();
+        aimDir = {
+          x: this.resolvedAimDir.x,
+          y: this.resolvedAimDir.y,
+          z: this.resolvedAimDir.z,
+        };
+      }
 
-      const input = { seq: ++inputSeq, keys: this.input.buildKeyBits(), aimDir, dt };
+      const input = {
+        seq: ++inputSeq,
+        keys: this.input.buildKeyBits(),
+        aimDir,
+        aimPoint: { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z },
+        dt,
+      };
       this.connection.sendInput(input);
       this.runtime.recordLocalInput(input, this.planetPaint);
 

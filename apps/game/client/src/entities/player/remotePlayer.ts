@@ -4,12 +4,13 @@ import {
   getWeaponDefinition,
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
-import { PlayerSwimState } from "@splat/simulation/match/simState.ts";
+import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
+  movementState: number;
   swimState: number;
   equippedWeaponId: WeaponId;
 }
@@ -45,6 +46,12 @@ export class RemotePlayer {
     this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
     this.updateWeapon(state.equippedWeaponId);
     this.up.set(0, 1, 0).applyQuaternion(this.mesh.quaternion).normalize();
+
+    if (state.movementState === PlayerMovementState.Dead) {
+      this.mesh.visible = false;
+      this.disturbance.visible = false;
+      return;
+    }
 
     if (state.swimState === PlayerSwimState.None) {
       this.mesh.visible = true;

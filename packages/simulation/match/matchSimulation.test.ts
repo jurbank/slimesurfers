@@ -56,6 +56,20 @@ function surfacePointForCell(
   };
 }
 
+function expectedMuzzlePos(player: { pos: { x: number; y: number; z: number }; planetId: string }) {
+  const planet =
+    PLANET_POSITIONS.find((entry) => entry.id === player.planetId) ?? PLANET_POSITIONS[0]!;
+  const dx = player.pos.x - planet.x;
+  const dy = player.pos.y - planet.y;
+  const dz = player.pos.z - planet.z;
+  const len = Math.hypot(dx, dy, dz);
+  return {
+    x: player.pos.x + (dx / len) * GAME_CONFIG.player.projectileMuzzleHeight,
+    y: player.pos.y + (dy / len) * GAME_CONFIG.player.projectileMuzzleHeight,
+    z: player.pos.z + (dz / len) * GAME_CONFIG.player.projectileMuzzleHeight,
+  };
+}
+
 function paintPlayerSurface(
   simulation: MatchSimulation,
   sessionId: string,
@@ -218,7 +232,7 @@ describe("MatchSimulation", () => {
 
   it("spawns authoritative projectiles when fire input is processed", () => {
     const simulation = new MatchSimulation();
-    simulation.addPlayer("session-1", "Alpha");
+    const shooter = simulation.addPlayer("session-1", "Alpha");
 
     simulation.recordInput("session-1", {
       seq: 1,
@@ -230,14 +244,82 @@ describe("MatchSimulation", () => {
 
     expect(simulation.matchState.projectiles.size).toBe(1);
     const projectile = Array.from(simulation.matchState.projectiles.values())[0];
+    const muzzlePos = expectedMuzzlePos(shooter);
     expect(projectile?.ownerId).toBe("session-1");
+    expect(projectile?.pos.x).toBeCloseTo(muzzlePos.x, 5);
+    expect(projectile?.pos.y).toBeCloseTo(muzzlePos.y, 5);
+    expect(projectile?.pos.z).toBeCloseTo(muzzlePos.z, 5);
+  });
+
+  it("aims authoritative projectiles from the muzzle toward the supplied aim point", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const machineGun = getWeaponDefinition(WeaponId.MachineGun);
+    const muzzlePos = expectedMuzzlePos(shooter);
+    const aimPoint = { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z + 10 };
+
+    simulation.recordInput("session-1", {
+      seq: 1,
+      keys: InputKey.Fire,
+      aimDir: { x: 1, y: 0, z: 0 },
+      aimPoint,
+      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+    });
+    simulation.tick(simulation.tickIntervalMs);
+
+    const projectile = Array.from(simulation.matchState.projectiles.values())[0];
+    const expectedAim = {
+      x: aimPoint.x - projectile!.pos.x,
+      y: aimPoint.y - projectile!.pos.y,
+      z: aimPoint.z - projectile!.pos.z,
+    };
+    const expectedAimLength = Math.hypot(expectedAim.x, expectedAim.y, expectedAim.z);
+    expect(projectile?.vel.x).toBeCloseTo(
+      (expectedAim.x / expectedAimLength) * machineGun.projectileSpeed,
+      5,
+    );
+    expect(projectile?.vel.y).toBeCloseTo(
+      (expectedAim.y / expectedAimLength) * machineGun.projectileSpeed,
+      5,
+    );
+    expect(projectile?.vel.z).toBeCloseTo(
+      (expectedAim.z / expectedAimLength) * machineGun.projectileSpeed,
+      5,
+    );
+  });
+
+  it("hits a target that is very close to the shooter", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+    const machineGun = getWeaponDefinition(WeaponId.MachineGun);
+
+    target.pos = {
+      x: shooter.pos.x + GAME_CONFIG.player.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    target.vel = { x: 0, y: 0, z: 0 };
+    target.planetId = shooter.planetId;
+
+    simulation.recordInput("session-1", {
+      seq: 1,
+      keys: InputKey.Fire,
+      aimDir: { x: 1, y: 0, z: 0 },
+      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+    });
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(target.health).toBe(GAME_CONFIG.player.maxHealth - machineGun.directDamage);
+    expect(simulation.matchState.projectiles.size).toBe(0);
   });
 
   it("consumes slime on accepted shots and rejects firing without enough slime", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
-    const machineGun = getWeaponDefinition(WeaponId.MachineGun);
-    shooter.slimeLevel = machineGun.slimeCost;
+    const bazooka = getWeaponDefinition(WeaponId.Bazooka);
+    shooter.equippedWeaponId = WeaponId.Bazooka;
+    shooter.slimeLevel = bazooka.slimeCost;
 
     simulation.recordInput("session-1", {
       seq: 1,
@@ -262,7 +344,7 @@ describe("MatchSimulation", () => {
     simulation.tick(simulation.tickIntervalMs);
 
     expect(simulation.matchState.nextProjectileId).toBe(1);
-    expect(shooter.slimeLevel).toBeLessThan(machineGun.slimeCost);
+    expect(shooter.slimeLevel).toBeLessThan(bazooka.slimeCost);
   });
 
   it("pops a submerged player out and fires on the same tick", () => {
@@ -413,6 +495,7 @@ describe("MatchSimulation", () => {
     const planetId = "planet-0";
     const targetNormal = surfaceNormalForCell(5, 0);
     const targetPoint = surfacePointForCell(planetId, 5, 0);
+    const impactSpeed = 6 / (simulation.tickIntervalMs / 1000);
     // Projectile is airborne (planetId = "") so the launch-planet skip does not
     // apply, and the surface collision is detected as it enters planet-0.
     simulation.matchState.projectiles.set("surface-test", {
@@ -426,9 +509,9 @@ describe("MatchSimulation", () => {
         z: targetPoint.z + targetNormal.z * 5,
       },
       vel: {
-        x: -targetNormal.x * GAME_CONFIG.projectile.speed,
-        y: -targetNormal.y * GAME_CONFIG.projectile.speed,
-        z: -targetNormal.z * GAME_CONFIG.projectile.speed,
+        x: -targetNormal.x * impactSpeed,
+        y: -targetNormal.y * impactSpeed,
+        z: -targetNormal.z * impactSpeed,
       },
       planetId: "",
       lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
@@ -442,6 +525,51 @@ describe("MatchSimulation", () => {
     );
     expect(simulation.matchState.scores.get(shooter.paintGroupId.toString()) ?? 0).toBeGreaterThan(
       0,
+    );
+  });
+
+  it("sweeps projectile terrain collision across curved surface chords", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const machineGun = getWeaponDefinition(WeaponId.MachineGun);
+    const planet = PLANET_POSITIONS[0]!;
+    const startNormal = { x: 0, y: 1, z: 0 };
+    const endAngle = 0.45;
+    const endNormal = { x: 0, y: Math.cos(endAngle), z: Math.sin(endAngle) };
+    const startRadius = getTerrainRadius(startNormal.x, startNormal.y, startNormal.z, GAME_CONFIG);
+    const endRadius = getTerrainRadius(endNormal.x, endNormal.y, endNormal.z, GAME_CONFIG);
+    const start = {
+      x: planet.x + startNormal.x * (startRadius + 2),
+      y: planet.y + startNormal.y * (startRadius + 2),
+      z: planet.z + startNormal.z * (startRadius + 2),
+    };
+    const end = {
+      x: planet.x + endNormal.x * (endRadius + 2),
+      y: planet.y + endNormal.y * (endRadius + 2),
+      z: planet.z + endNormal.z * (endRadius + 2),
+    };
+    const tickSeconds = simulation.tickIntervalMs / 1000;
+
+    simulation.matchState.projectiles.set("surface-chord-test", {
+      id: "surface-chord-test",
+      ownerId: shooter.sessionId,
+      weaponId: WeaponId.MachineGun,
+      paintGroupId: shooter.paintGroupId,
+      pos: start,
+      vel: {
+        x: (end.x - start.x) / tickSeconds,
+        y: (end.y - start.y) / tickSeconds,
+        z: (end.z - start.z) / tickSeconds,
+      },
+      planetId: "",
+      lifeMs: machineGun.projectileLifetimeMs,
+    });
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(simulation.matchState.projectiles.size).toBe(0);
+    expect(simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === planet.id)).toBe(
+      true,
     );
   });
 

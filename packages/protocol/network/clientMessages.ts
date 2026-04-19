@@ -53,9 +53,14 @@ export interface InputMessage {
   keys: InputKeys;
   /**
    * Normalised aim direction in world space.
-   * Used by the server when spawning a projectile on Fire.
+   * Fallback used by the server when spawning a projectile on Fire.
    */
   aimDir: Vec3Data;
+  /**
+   * Optional world-space point selected by the camera crosshair.
+   * The authoritative server fires from its own muzzle position toward this point.
+   */
+  aimPoint?: Vec3Data;
   /**
    * Delta-time for this tick in seconds.
    * Lets the server run the same integrator step the client predicted.

@@ -245,7 +245,7 @@ export class MatchSimulation {
           stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, processedNowMs, GAME_CONFIG);
-          tryFireProjectile(this.simState, player, input, processedNowMs, GAME_CONFIG);
+          tryFireProjectile(this.simState, player, input, processedNowMs, PLANETS, GAME_CONFIG);
         }
         player.inputSeq = queue[queue.length - 1]!.seq;
         queue.length = 0;
