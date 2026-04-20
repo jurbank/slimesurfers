@@ -48,9 +48,16 @@ This state is **not** part of the prediction/reconciliation loop. It is never re
 - A player is grounded when `planetId !== ""`.
 - Surface movement is tangent to the current planet surface.
 - `aimDir` is projected onto the tangent plane to establish forward.
-- Movement input sets horizontal velocity directly to `moveSpeed` in the tangent basis.
-- With no movement input, grounded velocity decays through friction.
-- After movement, the player is parallel-transported to the new surface normal and snapped back to `planet.radius + collisionRadius`.
+- Normal grounded movement is direct combat control: movement input sets tangent velocity, and no input zeros tangent velocity.
+- Ski mode is toggled with `E` while on painted slime and is represented by `swimState !== None`.
+- Friendly ski mode uses `SwimmingMoving` while movement keys are held so remote players see only a subtle disturbance indicator, and `SwimmingHidden` when no movement keys are held so remote players see nothing.
+- Enemy ski mode uses `SkiVisible` so remote players see the skier and board.
+- In ski mode, movement input accelerates tangent velocity without discarding traversal momentum.
+- In ski mode, anchor input (space) is the Carve action: it crouches the player, keeps them held to terrain, and applies extra downward gravity.
+- In ski mode, forward plus Carve boosts the player along the forward tangent direction. This is uncapped in the current test build.
+- In ski mode with no movement input, grounded velocity decays through friction.
+- Gravity applies before integration. Terrain contact resolves penetration, removes inward velocity, and keeps the player grounded. If ski mode is active, anchor is released, and the free-moved position is above the surface beyond snap distance while moving away from contact, the player becomes airborne.
+- Airborne players render visibly even if ski mode is still active from a slime launch.
 - If aiming, the player rotation is rebuilt from tangent axes so the player faces along the tangent-projected aim direction.
 
 ### Surface State (Slime/Paint)
@@ -58,19 +65,19 @@ This state is **not** part of the prediction/reconciliation loop. It is never re
 Movement parameters dynamically adjust based on the surface grid underneath the player. During the `stepPlayer` tick, the simulation queries the planet's surface map at the player's current position to apply modifiers before calculating velocity.
 
 - **Grid Lookup:** The simulation maps the player's 3D position to the local surface grid of `planetId` to determine the current terrain state (Neutral, Friendly Slime, Enemy Slime).
-- **Friendly Slime (Swim Action):** - Base `moveSpeed` and acceleration are multiplied.
-  - The `collisionRadius` and hitbox height are reduced to simulate submerging into the surface.
-- **Enemy Slime:** - Base `moveSpeed` is severely dampened.
-  - Jumping is explicitly disabled.
+- **Friendly Slime (Ski Mode):** - `E` toggles ski traversal. Ski mode multiplies movement speed, unlocks W+Space ground boost, shows only a disturbance while moving, and fully hides/recharges the player when no movement keys are held.
+- **Enemy Slime:** - Normal movement speed is reduced. Ski mode remains available and preserves momentum, but the player stays visible and only gets passive slime recharge.
 - **Prediction:** The client predicts these movement modifiers using its locally replicated slime grid. If the server's authoritative slime grid differs from the client's (e.g., due to a recent un-replicated projectile splash), the client's predicted velocity will be wrong and will be corrected during the next snapshot reconciliation.
 
 ### Airborne
 
 - A player is airborne when `planetId === ""`.
 - Gravity pulls toward the nearest planet center.
+- Holding Carve in air increases gravity for a faster dive.
+- Holding forward plus Carve in air adds limited forward thrust while the dive gravity remains active.
 - Extra acceleration is applied if the player drifts beyond `arenaReturnDistance`.
 - Landing happens after integration when the player is within snap distance and moving toward the planet.
-- Jumping clears `planetId`, applies impulse along the surface normal, and enters `Airborne`.
+- Players enter `Airborne` only through simulation state that clears `planetId`; releasing anchor allows terrain velocity to launch them off the surface.
 
 ## Invariants
 

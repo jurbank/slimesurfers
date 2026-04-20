@@ -27,6 +27,9 @@ export const GAME_CONFIG = {
   player: {
     moveSpeed: 8,
     jumpImpulse: 18,
+    boostAcceleration: 24,
+    airBoostAcceleration: 10,
+    anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
@@ -68,9 +71,8 @@ export const GAME_CONFIG = {
     deathBurstRadiusMultiplier: 3.4,
     projectileStampRadiusMultiplier: 1,
     collisionAlphaThreshold: 0.2,
-    friendlySpeedMultiplier: 3.8,
-    enemySpeedMultiplier: 0.3,
-    swimSpeedMultiplier: 5.2,
+    enemySpeedMultiplier: 0.7,
+    swimSpeedMultiplier: 2.2,
     swimDisturbanceMinSpeed: 1.5,
     maxVisualStampsPerPlanet: 1024,
     // -- Rendering (Client Only) --
@@ -121,7 +123,7 @@ export const GAME_CONFIG = {
     seed: 42,
     baseAmplitude: 24.0,
     frequency: 1.4,
-    octaves: 5,
+    octaves: 3,
     lacunarity: 2.2,
     persistence: 0.45,
     heightSmoothingStrength: 0.45,

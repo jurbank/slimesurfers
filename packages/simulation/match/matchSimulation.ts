@@ -18,7 +18,7 @@ import {
 } from "../combat/weaponPickups.ts";
 import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
-import { createStampBuckets } from "../paint/paintDetection.ts";
+import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
 import {
   NO_TEAM_ID,
@@ -72,8 +72,56 @@ function createSimPlanetState(planetId: string): SimPlanetPaintState {
   };
 }
 
-function createSimMatchState(): SimMatchState {
-  return {
+function seedTestPaint(simState: SimMatchState): void {
+  const planet = simState.planets.get("planet-0");
+  if (!planet) return;
+
+  const stamps = [
+    {
+      paintGroupId: 0,
+      color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      nx: 0,
+      ny: 1,
+      nz: 0,
+      radius: 1.15,
+      seq: ++simState.paintSeq,
+    },
+    {
+      paintGroupId: 1,
+      color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      nx: 0,
+      ny: -1,
+      nz: 0,
+      radius: 1.15,
+      seq: ++simState.paintSeq,
+    },
+    {
+      paintGroupId: 1,
+      color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      nx: 0.55,
+      ny: 0.55,
+      nz: 0.62,
+      radius: 0.55,
+      seq: ++simState.paintSeq,
+    },
+    {
+      paintGroupId: 0,
+      color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      nx: -0.5,
+      ny: -0.45,
+      nz: -0.74,
+      radius: 0.55,
+      seq: ++simState.paintSeq,
+    },
+  ] as const;
+
+  for (const stamp of stamps) {
+    appendPaintStamp(planet, stamp);
+  }
+}
+
+function createSimMatchState(seedPaint: boolean): SimMatchState {
+  const simState: SimMatchState = {
     players: new Map(),
     planets: new Map(
       PLANET_POSITIONS.map((planet) => [planet.id, createSimPlanetState(planet.id)]),
@@ -87,6 +135,14 @@ function createSimMatchState(): SimMatchState {
     elapsedMs: 0,
     nextProjectileId: 0,
   };
+  if (seedPaint) {
+    seedTestPaint(simState);
+  }
+  return simState;
+}
+
+export interface MatchSimulationOptions {
+  seedTestPaint?: boolean;
 }
 
 function createSimPlayer(
@@ -124,6 +180,7 @@ function createSimPlayer(
     spawnPlanetId: planetPos.id,
     movementState: PlayerMovementState.Idle,
     swimState: PlayerSwimState.None,
+    isCarving: false,
     inputSeq: 0,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     health: GAME_CONFIG.player.maxHealth,
@@ -145,9 +202,9 @@ export class MatchSimulation {
   private playerCount = 0;
   private tickCount = 0;
 
-  constructor(mode: GameModeDefinition = FFA_MODE) {
+  constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
     this.mode = mode;
-    this.simState = createSimMatchState();
+    this.simState = createSimMatchState(options.seedTestPaint ?? true);
   }
 
   get players(): ReadonlyMap<string, SimPlayerState> {
@@ -180,8 +237,10 @@ export class MatchSimulation {
 
   getRecentPaintStamps(): readonly PaintStampMessage[] {
     const messages: PaintStampMessage[] = [];
-    this.recentPaintStamps.forEach((planetMessages) => {
-      messages.push(...planetMessages);
+    this.simState.planets.forEach((planet) => {
+      for (const stamp of planet.stamps) {
+        messages.push({ planetId: planet.planetId, ...stamp });
+      }
     });
     messages.sort((a, b) => a.seq - b.seq);
     return messages;
@@ -286,6 +345,7 @@ export class MatchSimulation {
         paintGroupId: player.paintGroupId,
         movementState: player.movementState,
         swimState: player.swimState,
+        isCarving: player.isCarving,
         equippedWeaponId: player.equippedWeaponId,
         health: player.health,
         slimeLevel: player.slimeLevel,

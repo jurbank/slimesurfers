@@ -23,6 +23,7 @@ export interface PlayerSnapshot {
   paintGroupId: number;
   movementState: number;
   swimState: number;
+  isCarving: boolean;
   equippedWeaponId: WeaponId;
   health: number;
   slimeLevel: number;

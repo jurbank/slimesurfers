@@ -12,6 +12,7 @@ interface PlayerTransformState {
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
   swimState: number;
+  isCarving: boolean;
   equippedWeaponId: WeaponId;
 }
 
@@ -21,6 +22,7 @@ export class RemotePlayer {
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
+  private readonly snowboardMesh: THREE.Group;
   private readonly disturbance: THREE.Mesh;
   private readonly up = new THREE.Vector3(0, 1, 0);
 
@@ -30,6 +32,7 @@ export class RemotePlayer {
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
+    this.snowboardMesh = rig.snowboardMesh;
     this.disturbance = new THREE.Mesh(
       new THREE.SphereGeometry(0.38, 16, 12),
       new THREE.MeshBasicMaterial({
@@ -55,13 +58,25 @@ export class RemotePlayer {
       this.liveMesh.visible = false;
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
+      this.snowboardMesh.visible = false;
       this.disturbance.visible = false;
       return;
     }
 
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
+    this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
+    this.liveMesh.scale.set(1, 1, 1);
+    if (state.isCarving) {
+      this.liveMesh.scale.set(1.12, 0.68, 1.08);
+    }
     this.updateWeapon(state.equippedWeaponId);
+
+    if (state.movementState === PlayerMovementState.Airborne) {
+      this.mesh.visible = true;
+      this.disturbance.visible = false;
+      return;
+    }
 
     if (state.swimState === PlayerSwimState.None) {
       this.mesh.visible = true;
@@ -69,7 +84,7 @@ export class RemotePlayer {
       return;
     }
 
-    this.mesh.visible = false;
+    this.mesh.visible = state.swimState === PlayerSwimState.SkiVisible;
     this.disturbance.visible = state.swimState === PlayerSwimState.SwimmingMoving;
     if (!this.disturbance.visible) return;
 

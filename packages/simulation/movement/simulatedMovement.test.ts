@@ -30,12 +30,14 @@ const TEST_CONFIG = {
   player: {
     moveSpeed: 8,
     jumpImpulse: 18,
+    boostAcceleration: 24,
+    airBoostAcceleration: 10,
+    anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     standingHeight: 1.0,
   },
   paint: {
-    friendlySpeedMultiplier: 1.8,
-    enemySpeedMultiplier: 0.3,
+    enemySpeedMultiplier: 0.7,
     swimSpeedMultiplier: 2.4,
     swimDisturbanceMinSpeed: 1.5,
   },
@@ -76,6 +78,7 @@ function createPlayer(): PlayerPhysics {
     paintGroupId: 1,
     movementState: PlayerMovementState.Idle,
     swimState: PlayerSwimState.None,
+    isCarving: false,
   };
 }
 
@@ -95,7 +98,7 @@ function createPaintMap(paintGroupId: number): Map<string, SimPlanetPaintState> 
             nx: 0,
             ny: 1,
             nz: 0,
-            radius: 0.04,
+            radius: 1,
             seq: 1,
           },
         ],
@@ -143,20 +146,190 @@ describe("stepPlayer", () => {
     expect(player.pos.z).toBeGreaterThan(0);
   });
 
-  it("launches a grounded player into airborne state on jump", () => {
+  it("jumps with space outside ski mode", () => {
     const player = createPlayer();
 
-    stepPlayer(player, createInput(InputKey.Jump), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
 
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(player.vel.y).toBeGreaterThan(0);
+    expect(player.vel.y).toBeGreaterThan(TEST_CONFIG.player.jumpImpulse * 0.8);
+    expect(player.swimState).toBe(PlayerSwimState.None);
+  });
+
+  it("carries normal movement input into a jump", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+
+    stepPlayer(
+      player,
+      createInput(InputKey.Forward | InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
+
+    expect(player.planetId).toBe("");
+    expect(player.movementState).toBe(PlayerMovementState.Airborne);
+    expect(player.vel.z).toBeGreaterThan(0);
+  });
+
+  it("accelerates forward faster in ski mode when holding forward and anchor together", () => {
+    const normalPlayer = createPlayer();
+    const boostedPlayer = createPlayer();
+    const paint = createPaintMap(boostedPlayer.paintGroupId);
+
+    stepPlayer(normalPlayer, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    stepPlayer(
+      boostedPlayer,
+      createInput(InputKey.Submerge),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
+    stepPlayer(
+      boostedPlayer,
+      createInput(InputKey.Forward | InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
+
+    expect(boostedPlayer.planetId).toBe("planet-0");
+    expect(boostedPlayer.swimState).toBe(PlayerSwimState.SwimmingMoving);
+    expect(
+      Math.hypot(boostedPlayer.vel.x, boostedPlayer.vel.y, boostedPlayer.vel.z),
+    ).toBeGreaterThan(Math.hypot(normalPlayer.vel.x, normalPlayer.vel.y, normalPlayer.vel.z));
+  });
+
+  it("jumps instead of applying anchor boost on neutral ground", () => {
+    const player = createPlayer();
+
+    stepPlayer(
+      player,
+      createInput(InputKey.Forward | InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      EMPTY_PAINT,
+    );
+
+    expect(player.planetId).toBe("");
+    expect(player.movementState).toBe(PlayerMovementState.Airborne);
+    expect(player.vel.z).toBeGreaterThan(0);
+  });
+
+  it("keeps normal grounded movement from launching off stored upward velocity", () => {
+    const player = createPlayer();
+    player.vel.y = 20;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(player.movementState).toBe(PlayerMovementState.Idle);
+    expect(player.swimState).toBe(PlayerSwimState.None);
+  });
+
+  it("lets ski traversal leave the surface when the free path rises beyond snap distance", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+    stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    player.vel.y = 20;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+
+    expect(player.planetId).toBe("");
+    expect(player.movementState).toBe(PlayerMovementState.Airborne);
+    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+  });
+
+  it("keeps ski mode when landing back on slime after becoming airborne", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.swimState = PlayerSwimState.SwimmingMoving;
+    player.pos.y += 1;
+    player.vel.y = -20;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(player.swimState).not.toBe(PlayerSwimState.None);
+  });
+
+  it("clears ski mode after landing on neutral ground", () => {
+    const player = createPlayer();
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.swimState = PlayerSwimState.SwimmingMoving;
+    player.pos.y += 1;
+    player.vel.y = -20;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(player.swimState).toBe(PlayerSwimState.None);
+  });
+
+  it("keeps upward stored velocity grounded in normal mode without jump input", () => {
+    const player = createPlayer();
+    player.vel.y = 20;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(player.movementState).not.toBe(PlayerMovementState.Airborne);
+    expect(player.swimState).toBe(PlayerSwimState.None);
+  });
+
+  it("stops tangent velocity in normal mode without movement input", () => {
+    const player = createPlayer();
+    player.vel.z = 12;
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
+  });
+
+  it("does not accumulate slope slide in normal mode without movement input", () => {
+    const player = createPlayer();
+
+    for (let i = 0; i < 10; i += 1) {
+      stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    }
+
+    expect(player.planetId).toBe("planet-0");
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
+  });
+
+  it("uses direct movement in normal combat mode", () => {
+    const player = createPlayer();
+    player.vel.z = 4;
+
+    stepPlayer(player, createInput(InputKey.Backward), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.planetId).toBe("planet-0");
+    expect(player.vel.z).toBeLessThan(0);
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
+      TEST_CONFIG.player.moveSpeed,
+      0,
+    );
   });
 
   it("updates airborne facing from aim input before landing", () => {
     const player = createPlayer();
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.pos.y += 3;
+    player.vel.y = 8;
 
-    stepPlayer(player, createInput(InputKey.Jump), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
     stepPlayer(
       player,
       {
@@ -174,23 +347,66 @@ describe("stepPlayer", () => {
     const forward = forwardFromRot(player.rot);
 
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(forward.x).toBeGreaterThan(0.9);
-    expect(Math.abs(forward.z)).toBeLessThan(0.2);
+    expect(forward.z).toBeGreaterThan(0.9);
+    expect(Math.abs(forward.x)).toBeLessThan(0.2);
+  });
+
+  it("dives faster while airborne with anchor held and no movement input", () => {
+    const freePlayer = createPlayer();
+    const anchoredPlayer = createPlayer();
+    freePlayer.planetId = "";
+    anchoredPlayer.planetId = "";
+    freePlayer.movementState = PlayerMovementState.Airborne;
+    anchoredPlayer.movementState = PlayerMovementState.Airborne;
+    freePlayer.pos.y += 5;
+    anchoredPlayer.pos.y += 5;
+
+    stepPlayer(freePlayer, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(
+      anchoredPlayer,
+      createInput(InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      EMPTY_PAINT,
+    );
+
+    expect(anchoredPlayer.vel.y).toBeLessThan(freePlayer.vel.y);
+  });
+
+  it("adds forward flight acceleration while airborne with forward and anchor held", () => {
+    const player = createPlayer();
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.pos.y += 5;
+
+    stepPlayer(
+      player,
+      createInput(InputKey.Forward | InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      EMPTY_PAINT,
+    );
+
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.airBoostAcceleration * 0.1 - 0.1);
+    expect(player.vel.z).toBeLessThan(TEST_CONFIG.player.boostAcceleration * 0.1);
   });
 
   it("applies the friendly paint speed multiplier from config", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
+    stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.friendlySpeedMultiplier,
-      5,
+      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
+      0,
     );
   });
 
-  it("enters swim-moving state on friendly paint when submerge is toggled", () => {
+  it("shows a subtle moving indicator while skiing on friendly paint with movement input", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
@@ -206,11 +422,11 @@ describe("stepPlayer", () => {
     expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
       TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
-      5,
+      0,
     );
   });
 
-  it("becomes fully hidden when submerged and stationary", () => {
+  it("becomes hidden in ski mode when stationary", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
@@ -220,7 +436,7 @@ describe("stepPlayer", () => {
     expect(player.movementState).toBe(PlayerMovementState.Idle);
   });
 
-  it("stays submerged after the toggle input is released", () => {
+  it("stays in ski mode after the toggle input is released", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
@@ -230,7 +446,7 @@ describe("stepPlayer", () => {
     expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
   });
 
-  it("exits swim when submerge is toggled again", () => {
+  it("exits ski mode when toggled again", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
@@ -240,7 +456,7 @@ describe("stepPlayer", () => {
     expect(player.swimState).toBe(PlayerSwimState.None);
   });
 
-  it("does not allow swimming on enemy paint", () => {
+  it("allows visible ski mode on enemy paint", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId + 1);
 
@@ -253,30 +469,100 @@ describe("stepPlayer", () => {
       paint,
     );
 
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.enemySpeedMultiplier,
-      5,
+      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
+      0,
     );
   });
 
-  it("jumping while submerged pops out and launches airborne", () => {
+  it("keeps ski momentum when crossing from friendly slime onto enemy slime", () => {
+    const player = createPlayer();
+    const friendlyPaint = createPaintMap(player.paintGroupId);
+    const enemyPaint = createPaintMap(player.paintGroupId + 1);
+
+    stepPlayer(
+      player,
+      createInput(InputKey.Submerge),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      friendlyPaint,
+    );
+    player.vel.z = 18;
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemyPaint);
+
+    expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.moveSpeed);
+  });
+
+  it("anchoring while in ski mode keeps ski mode active", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId);
 
     stepPlayer(
       player,
-      createInput(InputKey.Jump | InputKey.Submerge),
+      createInput(InputKey.Anchor | InputKey.Submerge),
       0.1,
       TEST_PLANETS,
       TEST_CONFIG,
       paint,
     );
-    stepPlayer(player, createInput(InputKey.Jump), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    stepPlayer(
+      player,
+      createInput(InputKey.Forward | InputKey.Anchor),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
 
-    expect(player.planetId).toBe("");
+    expect(player.planetId).toBe("planet-0");
+    expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
+    expect(player.isCarving).toBe(true);
+    expect(player.movementState).toBe(PlayerMovementState.Moving);
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.moveSpeed);
+  });
+
+  it("clears carve pose when space is released in ski mode", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+
+    stepPlayer(
+      player,
+      createInput(InputKey.Forward | InputKey.Anchor | InputKey.Submerge),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
+    stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+
+    expect(player.swimState).not.toBe(PlayerSwimState.None);
+    expect(player.isCarving).toBe(false);
+  });
+
+  it("keeps carve pose while airborne if space is held in ski mode", () => {
+    const player = createPlayer();
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.swimState = PlayerSwimState.SwimmingMoving;
+
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    expect(player.isCarving).toBe(true);
+  });
+
+  it("exiting ski mode with the toggle brakes back into normal movement", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+
+    stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    player.vel.z = 18;
+    stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+
+    expect(player.planetId).toBe("planet-0");
     expect(player.swimState).toBe(PlayerSwimState.None);
-    expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(player.vel.y).toBeGreaterThan(0);
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
   });
 });

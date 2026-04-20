@@ -12,6 +12,7 @@ interface PlayerTransformState {
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
   swimState: number;
+  isCarving: boolean;
   equippedWeaponId: WeaponId;
 }
 
@@ -21,6 +22,7 @@ export class LocalPlayer {
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
+  private readonly snowboardMesh: THREE.Group;
   private readonly materials: THREE.Material[] = [];
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly inverseMeshQuat = new THREE.Quaternion();
@@ -37,6 +39,7 @@ export class LocalPlayer {
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
+    this.snowboardMesh = rig.snowboardMesh;
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
@@ -61,6 +64,7 @@ export class LocalPlayer {
       this.liveMesh.visible = false;
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
+      this.snowboardMesh.visible = false;
       this.mesh.scale.set(1, 1, 1);
       this.setOpacity(1);
       return;
@@ -68,9 +72,27 @@ export class LocalPlayer {
 
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
+    this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
+    this.liveMesh.scale.set(1, 1, 1);
     this.updateWeapon(state.equippedWeaponId, aimDir);
 
+    if (state.isCarving) {
+      this.liveMesh.scale.set(1.12, 0.68, 1.08);
+    }
+
+    if (state.movementState === PlayerMovementState.Airborne) {
+      this.mesh.scale.set(1, 1, 1);
+      this.setOpacity(1);
+      return;
+    }
+
     if (state.swimState === PlayerSwimState.None) {
+      this.mesh.scale.set(1, 1, 1);
+      this.setOpacity(1);
+      return;
+    }
+
+    if (state.swimState === PlayerSwimState.SkiVisible) {
       this.mesh.scale.set(1, 1, 1);
       this.setOpacity(1);
       return;

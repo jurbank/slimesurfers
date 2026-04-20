@@ -7,6 +7,7 @@ export interface PlayerMeshRig {
   liveMesh: THREE.Group;
   deadMesh: THREE.Group;
   weaponMesh: THREE.Mesh;
+  snowboardMesh: THREE.Group;
 }
 
 export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
@@ -65,6 +66,26 @@ export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
   mouth.position.set(0, -0.2, 0.45);
   liveMesh.add(mouth);
 
+  const snowboardMesh = new THREE.Group();
+  const boardGeom = new THREE.BoxGeometry(0.78, 0.08, 1.35);
+  const boardMat = new THREE.MeshLambertMaterial({
+    color: 0x1f2430,
+    emissive: 0x080a10,
+    emissiveIntensity: 0.18,
+  });
+  const board = new THREE.Mesh(boardGeom, boardMat);
+  snowboardMesh.add(board);
+
+  const stripeGeom = new THREE.BoxGeometry(0.08, 0.012, 1.18);
+  const stripeMat = new THREE.MeshBasicMaterial({ color: slimeColor });
+  const stripe = new THREE.Mesh(stripeGeom, stripeMat);
+  stripe.position.y = 0.048;
+  snowboardMesh.add(stripe);
+
+  snowboardMesh.position.set(0, -0.58, 0);
+  snowboardMesh.visible = false;
+  liveMesh.add(snowboardMesh);
+
   // 5. Debug Collider
   if (GAME_CONFIG.debug.showColliders) {
     const colliderGeom = new THREE.SphereGeometry(GAME_CONFIG.player.collisionRadius, 16, 16);
@@ -118,5 +139,5 @@ export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
   weaponMesh.visible = false;
   liveMesh.add(weaponMesh);
 
-  return { group, liveMesh, deadMesh, weaponMesh };
+  return { group, liveMesh, deadMesh, weaponMesh, snowboardMesh };
 }

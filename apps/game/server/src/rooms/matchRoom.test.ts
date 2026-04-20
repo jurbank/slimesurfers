@@ -75,15 +75,18 @@ describe("MatchRoom", () => {
     expect(harness.scheduledIntervalMs).toBeGreaterThan(0);
   });
 
-  it("adds joined players to authoritative room state and broadcasts bootstrap snapshot to others", () => {
+  it("adds joined players to authoritative room state and sends paint bootstrap before snapshot", () => {
     const harness = createRoomHarness();
     const alpha = createFakeClient("session-1");
 
     harness.room.onJoin(alpha.client as never, { name: "Alpha" });
 
     expect(harness.room.state.players.get("session-1")?.name).toBe("Alpha");
-    expect(alpha.sent).toHaveLength(1);
-    expect(alpha.sent[0]?.type).toBe(MessageType.Snapshot);
+    expect(alpha.sent).toHaveLength(2);
+    expect(alpha.sent[0]?.type).toBe(MessageType.PaintStamps);
+    const paintBootstrap = alpha.sent[0]!.payload as { stamps: unknown[] };
+    expect(paintBootstrap.stamps.length).toBeGreaterThan(0);
+    expect(alpha.sent[1]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts).toHaveLength(1);
     expect(harness.broadcasts[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts[0]?.options).toEqual({ except: alpha.client });

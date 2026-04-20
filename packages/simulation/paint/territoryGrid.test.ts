@@ -21,6 +21,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     spawnPlanetId: "planet-0",
     movementState: 0,
     swimState: 0,
+    isCarving: false,
     inputSeq: 0,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     health: 100,

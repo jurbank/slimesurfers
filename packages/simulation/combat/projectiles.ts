@@ -317,6 +317,7 @@ function applyDamage(
   if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return false;
 
   player.swimState = PlayerSwimState.None;
+  player.isCarving = false;
   player.health = Math.max(0, player.health - damage);
   if (player.health > 0) return false;
 
@@ -404,6 +405,7 @@ function applyBlastImpulse(
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
     player.swimState = PlayerSwimState.None;
+    player.isCarving = false;
   });
 }
 
@@ -426,6 +428,7 @@ function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: Comba
   player.respawnTimer = 0;
   player.movementState = PlayerMovementState.Idle;
   player.swimState = PlayerSwimState.None;
+  player.isCarving = false;
   player.lastFireTimeMs = -getWeaponDefinition(getEquippedWeaponId(player)).fireCooldownMs;
 }
 
@@ -461,6 +464,7 @@ export function tryFireProjectile(
   if (weapon.behavior !== "projectile") return;
   if (player.swimState !== PlayerSwimState.None) {
     player.swimState = PlayerSwimState.None;
+    player.isCarving = false;
   }
   if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return;
   if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return;

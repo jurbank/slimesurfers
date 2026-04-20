@@ -25,16 +25,16 @@ export interface QuatData {
 /**
  * Bitmask flags for the keys field of InputMessage.
  * Combine with bitwise OR: `keys = InputKey.Forward | InputKey.Fire`
- * Test with bitwise AND: `if (keys & InputKey.Jump) { ... }`
+ * Test with bitwise AND: `if (keys & InputKey.Anchor) { ... }`
  */
 export const InputKey = {
   Forward: 1 << 0, // W
   Backward: 1 << 1, // S
   Left: 1 << 2, // A
   Right: 1 << 3, // D
-  Jump: 1 << 4,
+  Anchor: 1 << 4, // Space carve/anchor
   Fire: 1 << 5,
-  Submerge: 1 << 6, // E action toggle
+  Submerge: 1 << 6, // E ski/swim toggle
 } as const;
 
 export type InputKeys = number; // bitmask — see InputKey flags above

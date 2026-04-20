@@ -104,7 +104,7 @@ export class InputSystem {
       (this.keysDown.has("KeyS") ? InputKey.Backward : 0) |
       (this.keysDown.has("KeyA") ? InputKey.Left : 0) |
       (this.keysDown.has("KeyD") ? InputKey.Right : 0) |
-      (this.keysDown.has("Space") ? InputKey.Jump : 0) |
+      (this.keysDown.has("Space") ? InputKey.Anchor : 0) |
       actionBit |
       (this.firePressed ? InputKey.Fire : 0)
     );

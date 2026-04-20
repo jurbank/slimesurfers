@@ -4,8 +4,8 @@ const CONTROLS = [
   ["Move", "W A S D"],
   ["Aim", "Mouse"],
   ["Fire", "Left Mouse"],
-  ["Jump", "Space"],
-  ["Submerge", "E on friendly slime"],
+  ["Carve / Boost", "Space / W+Space"],
+  ["Ski Mode", "E on friendly slime"],
   ["Pause", "Esc"],
 ] as const;
 

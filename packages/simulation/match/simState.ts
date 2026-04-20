@@ -77,6 +77,7 @@ export const PlayerSwimState = {
   None: 0,
   SwimmingMoving: 1,
   SwimmingHidden: 2,
+  SkiVisible: 3,
 } as const;
 export type PlayerSwimState = (typeof PlayerSwimState)[keyof typeof PlayerSwimState];
 
@@ -101,6 +102,7 @@ export interface SimPlayerState {
   /** Use PlayerMovementState values. Named movementState to avoid the confusing playerState.state pattern. */
   movementState: number;
   swimState: number;
+  isCarving: boolean;
   inputSeq: number;
   // Gameplay
   equippedWeaponId: WeaponId;

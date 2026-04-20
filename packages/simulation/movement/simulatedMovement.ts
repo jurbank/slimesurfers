@@ -29,6 +29,7 @@ export interface PlayerPhysics {
   paintGroupId: number;
   movementState: number;
   swimState: number;
+  isCarving: boolean;
 }
 
 /**
@@ -46,11 +47,13 @@ export interface StepConfig {
   player: {
     moveSpeed: number;
     jumpImpulse: number;
+    boostAcceleration: number;
+    airBoostAcceleration: number;
+    anchorGravityMultiplier: number;
     collisionRadius: number;
     standingHeight: number;
   };
   paint: {
-    friendlySpeedMultiplier: number;
     enemySpeedMultiplier: number;
     swimSpeedMultiplier: number;
     swimDisturbanceMinSpeed: number;
@@ -96,6 +99,13 @@ function vlen(a: Vec3Data): number {
 function normalize(a: Vec3Data): Vec3Data {
   const l = vlen(a);
   return l < 1e-8 ? { x: 0, y: 1, z: 0 } : scale(a, 1 / l);
+}
+function projectOntoPlane(a: Vec3Data, normal: Vec3Data): Vec3Data {
+  return sub(a, scale(normal, dot(a, normal)));
+}
+function clampLength(a: Vec3Data, maxLength: number): Vec3Data {
+  const l = vlen(a);
+  return l > maxLength && l > 1e-8 ? scale(a, maxLength / l) : a;
 }
 
 // Mutate target in place — required so Colyseus tracks field-level changes
@@ -178,14 +188,76 @@ function normalizeQuat(q: QuatData): QuatData {
   return { x: q.x / l, y: q.y / l, z: q.z / l, w: q.w / l };
 }
 
-function updateFacingFromAim(state: PlayerPhysics, up: Vec3Data, aimDir: Vec3Data): void {
-  const aimTangent = sub(aimDir, scale(up, dot(aimDir, up)));
-  const aimLen = vlen(aimTangent);
-  if (aimLen <= 1e-4) return;
+interface TerrainContact {
+  radialNormal: Vec3Data;
+  surfaceNormal: Vec3Data;
+  centerPos: Vec3Data;
+  centerRadius: number;
+}
 
-  const forward = scale(aimTangent, 1 / aimLen);
-  const right = normalize(cross(up, forward));
-  assignQuat(state.rot, quatFromAxes(right, up, forward));
+function getSurfaceCenter(planet: PlanetData, radialNormal: Vec3Data, cfg: StepConfig): Vec3Data {
+  const radius =
+    getTerrainRadius(radialNormal.x, radialNormal.y, radialNormal.z, cfg) +
+    cfg.player.standingHeight;
+  return add(planet.center, scale(radialNormal, radius));
+}
+
+function getTerrainContact(
+  planet: PlanetData,
+  radialNormal: Vec3Data,
+  cfg: StepConfig,
+): TerrainContact {
+  const n = normalize(radialNormal);
+  const tangentSeed = Math.abs(n.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  const tangentA = normalize(cross(tangentSeed, n));
+  const tangentB = normalize(cross(n, tangentA));
+  const sampleAngle = 0.006;
+  const centerRadius = getTerrainRadius(n.x, n.y, n.z, cfg) + cfg.player.standingHeight;
+  const centerPos = add(planet.center, scale(n, centerRadius));
+  const sampleA = normalize(add(n, scale(tangentA, sampleAngle)));
+  const sampleB = normalize(add(n, scale(tangentB, sampleAngle)));
+  const posA = getSurfaceCenter(planet, sampleA, cfg);
+  const posB = getSurfaceCenter(planet, sampleB, cfg);
+  let surfaceNormal = normalize(cross(sub(posA, centerPos), sub(posB, centerPos)));
+  if (dot(surfaceNormal, n) < 0) {
+    surfaceNormal = scale(surfaceNormal, -1);
+  }
+  return { radialNormal: n, surfaceNormal, centerPos, centerRadius };
+}
+
+function getNearestPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
+  let nearest: PlanetData | null = null;
+  let nearestDist = Infinity;
+  for (const planet of planets) {
+    const d = vlen(sub(pos, planet.center));
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = planet;
+    }
+  }
+  return nearest;
+}
+
+function getTangentBasis(
+  state: PlayerPhysics,
+  up: Vec3Data,
+  aimDir: Vec3Data,
+): { forward: Vec3Data; right: Vec3Data; aimTangent: Vec3Data; aimLen: number } {
+  const aimTangent = projectOntoPlane(aimDir, up);
+  const aimLen = vlen(aimTangent);
+  const fallbackForward = projectOntoPlane(applyQuat({ x: 0, y: 0, z: 1 }, state.rot), up);
+  const forward =
+    aimLen > 1e-4
+      ? scale(aimTangent, 1 / aimLen)
+      : vlen(fallbackForward) > 1e-4
+        ? normalize(fallbackForward)
+        : { x: 0, y: 0, z: 1 };
+  return {
+    forward,
+    right: normalize(cross(forward, up)),
+    aimTangent,
+    aimLen,
+  };
 }
 
 // -- Surface movement --------------------------------------------------------
@@ -206,79 +278,167 @@ function stepOnSurface(
   }
 
   const oldNormal = normalize(sub(state.pos, planet.center));
+  const oldContact = getTerrainContact(planet, oldNormal, cfg);
   const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint);
   const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
   const onEnemyPaint = paint !== null && !onFriendlyPaint;
+  const onNeutralSurface = paint === null;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   const firePressed = (input.keys & InputKey.Fire) !== 0;
-  let swimActive = state.swimState !== PlayerSwimState.None;
+  const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
+  const wasSkiActive = state.swimState !== PlayerSwimState.None;
+  let skiActive = wasSkiActive;
 
-  if (!onFriendlyPaint || onEnemyPaint || firePressed) {
-    swimActive = false;
+  if (onNeutralSurface || firePressed) {
+    skiActive = false;
   } else if (toggleSubmerge) {
-    swimActive = !swimActive;
+    skiActive = !skiActive;
   }
 
-  const aimTangent = sub(input.aimDir, scale(oldNormal, dot(input.aimDir, oldNormal)));
-  const aimLen = vlen(aimTangent);
-  const forward =
-    aimLen > 1e-4 ? scale(aimTangent, 1 / aimLen) : applyQuat({ x: 0, y: 0, z: 1 }, state.rot);
-  const right = normalize(cross(forward, oldNormal));
+  const { forward, right, aimTangent, aimLen } = getTangentBasis(
+    state,
+    oldContact.surfaceNormal,
+    input.aimDir,
+  );
 
   const moveX = (input.keys & InputKey.Right ? 1 : 0) + (input.keys & InputKey.Left ? -1 : 0);
   const moveZ = (input.keys & InputKey.Forward ? 1 : 0) + (input.keys & InputKey.Backward ? -1 : 0);
 
-  if (moveX !== 0 || moveZ !== 0) {
-    const moveDir = normalize(add(scale(right, moveX), scale(forward, moveZ)));
-    let speedMultiplier = 1.0;
-    if (onEnemyPaint) {
-      speedMultiplier = cfg.paint.enemySpeedMultiplier;
-    } else if (swimActive) {
-      speedMultiplier = cfg.paint.swimSpeedMultiplier;
-    } else if (onFriendlyPaint) {
-      speedMultiplier = cfg.paint.friendlySpeedMultiplier;
+  const hasMoveInput = moveX !== 0 || moveZ !== 0;
+  const boostPressed = skiActive && anchorPressed && moveZ > 0;
+  const tangentVel = projectOntoPlane(state.vel, oldContact.surfaceNormal);
+  let speedMultiplier = 1.0;
+  if (skiActive) {
+    speedMultiplier = cfg.paint.swimSpeedMultiplier;
+  } else if (onEnemyPaint) {
+    speedMultiplier = cfg.paint.enemySpeedMultiplier;
+  }
+  if (!skiActive && anchorPressed) {
+    const moveDir = hasMoveInput
+      ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
+      : { x: 0, y: 0, z: 0 };
+    const jumpTangentVel = hasMoveInput
+      ? scale(moveDir, cfg.player.moveSpeed * speedMultiplier)
+      : { x: 0, y: 0, z: 0 };
+    assign(state.vel, add(jumpTangentVel, scale(oldContact.surfaceNormal, cfg.player.jumpImpulse)));
+    state.planetId = "";
+    state.swimState = PlayerSwimState.None;
+    state.isCarving = false;
+    state.movementState = PlayerMovementState.Airborne;
+    assign(
+      state.pos,
+      add(state.pos, scale(oldContact.surfaceNormal, cfg.planet.surfaceSnapDistance)),
+    );
+    return;
+  }
+  let groundedDirectVel: Vec3Data | null = null;
+  if (!skiActive) {
+    const moveDir = hasMoveInput
+      ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
+      : { x: 0, y: 0, z: 0 };
+    groundedDirectVel = hasMoveInput
+      ? scale(moveDir, cfg.player.moveSpeed * speedMultiplier)
+      : { x: 0, y: 0, z: 0 };
+    assign(state.vel, groundedDirectVel);
+    state.movementState =
+      hasMoveInput && vlen(groundedDirectVel) > 1e-4
+        ? PlayerMovementState.Moving
+        : PlayerMovementState.Idle;
+  } else if (hasMoveInput || boostPressed) {
+    const moveDir = hasMoveInput
+      ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
+      : forward;
+    const baseSpeed = cfg.player.moveSpeed * speedMultiplier;
+    const baseAcceleration = baseSpeed * 10;
+    const currentSpeed = Math.max(0, dot(state.vel, moveDir));
+    const desiredTangentVel = hasMoveInput ? scale(moveDir, baseSpeed) : tangentVel;
+    const accelerationStep = clampLength(sub(desiredTangentVel, tangentVel), baseAcceleration * dt);
+    let nextTangentVel = hasMoveInput
+      ? currentSpeed >= baseSpeed
+        ? tangentVel
+        : add(tangentVel, accelerationStep)
+      : tangentVel;
+    if (boostPressed) {
+      nextTangentVel = add(
+        nextTangentVel,
+        scale(moveDir, cfg.player.boostAcceleration * speedMultiplier * dt),
+      );
     }
-    assign(state.vel, scale(moveDir, cfg.player.moveSpeed * speedMultiplier));
-    state.movementState = PlayerMovementState.Moving;
+    assign(state.vel, add(sub(state.vel, tangentVel), nextTangentVel));
+    const targetSpeed = vlen(nextTangentVel);
+    state.movementState =
+      targetSpeed > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
   } else {
-    assign(state.vel, scale(state.vel, Math.max(0, 1 - dt * 10)));
+    const friction = onNeutralSurface ? 2.4 : 1.2;
+    assign(state.vel, sub(state.vel, scale(tangentVel, Math.min(1, dt * friction))));
     state.movementState = PlayerMovementState.Idle;
   }
 
-  const speed = vlen(state.vel);
-  if (swimActive) {
-    state.swimState =
-      speed >= cfg.paint.swimDisturbanceMinSpeed
+  if (skiActive) {
+    state.isCarving = anchorPressed;
+    state.swimState = onFriendlyPaint
+      ? hasMoveInput
         ? PlayerSwimState.SwimmingMoving
-        : PlayerSwimState.SwimmingHidden;
+        : PlayerSwimState.SwimmingHidden
+      : PlayerSwimState.SkiVisible;
   } else {
+    state.isCarving = false;
     state.swimState = PlayerSwimState.None;
   }
 
-  const nextPos = add(state.pos, scale(state.vel, dt));
-  const newNormal = normalize(sub(nextPos, planet.center));
-  const transportQuat = quatFromUnitVectors(oldNormal, newNormal);
-  assign(state.vel, applyQuat(state.vel, transportQuat));
-  assignQuat(state.rot, normalizeQuat(quatMultiply(transportQuat, state.rot)));
-
-  const surfaceRadius = getTerrainRadius(newNormal.x, newNormal.y, newNormal.z, cfg);
+  const gravityDir = normalize(sub(planet.center, state.pos));
+  const gravityMultiplier = anchorPressed ? cfg.player.anchorGravityMultiplier : 1;
   assign(
-    state.pos,
-    add(planet.center, scale(newNormal, surfaceRadius + cfg.player.standingHeight)),
+    state.vel,
+    add(state.vel, scale(gravityDir, cfg.planet.gravityAcceleration * gravityMultiplier * dt)),
+  );
+
+  const nextPos = add(state.pos, scale(state.vel, dt));
+  const newRadialNormal = normalize(sub(nextPos, planet.center));
+  const newContact = getTerrainContact(planet, newRadialNormal, cfg);
+  const penetration = dot(sub(newContact.centerPos, nextPos), newContact.surfaceNormal);
+  const movingAwayFromSurface = dot(state.vel, newContact.surfaceNormal) > 0;
+
+  if (!anchorPressed && penetration < -cfg.planet.surfaceSnapDistance && movingAwayFromSurface) {
+    assign(state.pos, nextPos);
+    state.planetId = "";
+    state.movementState = PlayerMovementState.Airborne;
+    const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+    assignQuat(
+      state.rot,
+      normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, newRadialNormal), state.rot)),
+    );
+    return;
+  }
+
+  if (anchorPressed && penetration < 0) {
+    assign(state.pos, newContact.centerPos);
+  } else if (penetration > 0) {
+    assign(state.pos, add(nextPos, scale(newContact.surfaceNormal, penetration)));
+  } else {
+    assign(state.pos, nextPos);
+  }
+
+  const intoGround = dot(state.vel, newContact.surfaceNormal);
+  if (intoGround < 0) {
+    assign(state.vel, sub(state.vel, scale(newContact.surfaceNormal, intoGround)));
+  }
+  if (groundedDirectVel !== null) {
+    assign(state.vel, projectOntoPlane(groundedDirectVel, newContact.surfaceNormal));
+  }
+
+  const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+  assignQuat(
+    state.rot,
+    normalizeQuat(
+      quatMultiply(quatFromUnitVectors(currentUp, newContact.surfaceNormal), state.rot),
+    ),
   );
 
   if (aimLen > 1e-4) {
     const targetForward = scale(aimTangent, 1 / aimLen);
-    const targetRight = normalize(cross(newNormal, targetForward));
-    assignQuat(state.rot, quatFromAxes(targetRight, newNormal, targetForward));
-  }
-
-  if ((input.keys & InputKey.Jump) !== 0) {
-    state.swimState = PlayerSwimState.None;
-    const surfaceNormal = normalize(sub(state.pos, planet.center));
-    assign(state.vel, add(state.vel, scale(surfaceNormal, cfg.player.jumpImpulse)));
-    state.planetId = "";
-    state.movementState = PlayerMovementState.Airborne;
+    const targetRight = normalize(cross(newContact.surfaceNormal, targetForward));
+    assignQuat(state.rot, quatFromAxes(targetRight, newContact.surfaceNormal, targetForward));
   }
 }
 
@@ -291,23 +451,27 @@ function stepAirborne(
   planets: PlanetData[],
   cfg: StepConfig,
 ): void {
-  state.swimState = PlayerSwimState.None;
-  let nearest: PlanetData | null = null;
-  let nearestDist = Infinity;
-  for (const planet of planets) {
-    const d = vlen(sub(state.pos, planet.center));
-    if (d < nearestDist) {
-      nearestDist = d;
-      nearest = planet;
-    }
-  }
+  const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
+  state.isCarving = state.swimState !== PlayerSwimState.None && anchorPressed;
+  const nearest = getNearestPlanet(state.pos, planets);
 
   if (nearest !== null) {
     const toPlanet = sub(nearest.center, state.pos);
     const dist = vlen(toPlanet);
     if (dist > 0.01) {
       const gravDir = scale(toPlanet, 1 / dist);
-      assign(state.vel, add(state.vel, scale(gravDir, cfg.planet.gravityAcceleration * dt)));
+      const moveZ =
+        (input.keys & InputKey.Forward ? 1 : 0) + (input.keys & InputKey.Backward ? -1 : 0);
+      const gravityMultiplier = anchorPressed ? cfg.player.anchorGravityMultiplier : 1;
+      assign(
+        state.vel,
+        add(state.vel, scale(gravDir, cfg.planet.gravityAcceleration * gravityMultiplier * dt)),
+      );
+      if (anchorPressed && moveZ > 0) {
+        const up = scale(gravDir, -1);
+        const { forward } = getTangentBasis(state, up, input.aimDir);
+        assign(state.vel, add(state.vel, scale(forward, cfg.player.airBoostAcceleration * dt)));
+      }
       if (dist > cfg.planet.arenaReturnDistance) {
         assign(state.vel, add(state.vel, scale(gravDir, cfg.planet.arenaReturnAcceleration * dt)));
       }
@@ -319,7 +483,11 @@ function stepAirborne(
 
   if (nearest !== null) {
     const up = normalize(sub(state.pos, nearest.center));
-    updateFacingFromAim(state, up, input.aimDir);
+    const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+    assignQuat(
+      state.rot,
+      normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, up), state.rot)),
+    );
   }
 
   if (nearest !== null) {
@@ -362,6 +530,7 @@ export function stepPlayer(
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
     state.swimState = PlayerSwimState.None;
+    state.isCarving = false;
     return;
   }
   if (state.planetId !== "") {

@@ -6,7 +6,7 @@ import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
-import { appendPaintStamp } from "../paint/paintDetection.ts";
+import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { PlayerMovementState, PlayerSwimState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
@@ -101,6 +101,17 @@ function paintPlayerSurface(
 }
 
 describe("MatchSimulation", () => {
+  it("seeds large friendly and enemy slime regions for movement testing", () => {
+    const simulation = new MatchSimulation();
+    const planetPaint = simulation.matchState.planets;
+
+    expect(getPaintAtPoint({ x: 0, y: 100, z: 0 }, "planet-0", planetPaint)?.paintGroupId).toBe(0);
+    expect(getPaintAtPoint({ x: 0, y: -100, z: 0 }, "planet-0", planetPaint)?.paintGroupId).toBe(1);
+    expect(simulation.getRecentPaintStamps().map((stamp) => stamp.paintGroupId)).toEqual(
+      expect.arrayContaining([0, 1]),
+    );
+  });
+
   it("creates and removes players outside the room layer", () => {
     const simulation = new MatchSimulation();
 
@@ -315,7 +326,7 @@ describe("MatchSimulation", () => {
   });
 
   it("consumes slime on accepted shots and rejects firing without enough slime", () => {
-    const simulation = new MatchSimulation();
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const bazooka = getWeaponDefinition(WeaponId.Bazooka);
     shooter.equippedWeaponId = WeaponId.Bazooka;
@@ -407,9 +418,9 @@ describe("MatchSimulation", () => {
   });
 
   it("recharges slime slowly by default, faster on friendly paint, and fastest while submerged", () => {
-    const neutralSimulation = new MatchSimulation();
-    const paintedSimulation = new MatchSimulation();
-    const submergedSimulation = new MatchSimulation();
+    const neutralSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const paintedSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const submergedSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
     const painted = paintedSimulation.addPlayer("session-1", "Painted");
