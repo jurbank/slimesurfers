@@ -6,6 +6,7 @@ import { RenderSystem } from "../systems/renderSystem.ts";
 import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
 import { PaintSystem } from "../systems/paintSystem.ts";
+import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -53,6 +54,7 @@ export class MatchScene {
   private readonly camera: CameraSystem;
   private readonly input: InputSystem;
   private readonly paint: PaintSystem;
+  private readonly clouds: CloudSystem;
   private readonly pickups: PickupSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly connection: RoomConnection;
@@ -234,6 +236,7 @@ export class MatchScene {
     this.camera = new CameraSystem();
     this.input = new InputSystem(this.render.renderer.domElement);
     this.paint = new PaintSystem(this.render.renderer);
+    this.clouds = new CloudSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.connection = new RoomConnection();
@@ -339,6 +342,10 @@ export class MatchScene {
         water.renderOrder = 1;
         this.render.scene.add(water);
         this.waterMaterials.push(waterMat);
+      }
+
+      if (GAME_CONFIG.shaders.clouds.enabled) {
+        this.clouds.addPlanetClouds(p);
       }
     }
   }
@@ -581,6 +588,7 @@ export class MatchScene {
       for (const mat of this.waterMaterials) {
         mat.uniforms.time.value = now / 1000;
       }
+      this.clouds.update(dt);
 
       // Always update debug lines if enabled
       this.updateDebugLines();

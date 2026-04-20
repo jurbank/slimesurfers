@@ -161,6 +161,21 @@ export const GAME_CONFIG = {
       shimmerSpeed: 0.3,
       opacity: 1,
     },
+    clouds: {
+      enabled: true,
+      patches: 30,
+      altitude: 42,
+      altitudeVariation: 10,
+      minLobesPerPatch: 4,
+      maxLobesPerPatch: 7,
+      minWidth: 13,
+      maxWidth: 25,
+      minHeight: 3.6,
+      maxHeight: 7.2,
+      opacity: 0.46,
+      driftSpeed: 0.012,
+      color: 0xf7fbff,
+    },
   },
 
   // -- Debug -----------------------------------------------------------------
