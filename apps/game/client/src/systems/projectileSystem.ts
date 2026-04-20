@@ -31,8 +31,14 @@ export class ProjectileSystem {
     this.scene = scene;
   }
 
-  syncProjectile(id: string, projectile: ProjectileSnapshot, color: number, nowMs: number): void {
+  syncProjectile(
+    id: string,
+    projectile: ProjectileSnapshot,
+    color: number,
+    nowMs: number,
+  ): boolean {
     let state = this.projectiles.get(id);
+    const isNew = !state;
     const weapon = getWeaponDefinition(projectile.weaponId);
     if (!state) {
       const ageSec = Math.max(0, weapon.projectileLifetimeMs - projectile.lifeMs) / 1000;
@@ -79,6 +85,7 @@ export class ProjectileSystem {
         mat.emissive.setHex(weapon.projectileColor || color);
       }
     }
+    return isNew;
   }
 
   /** Call once per frame to extrapolate projectile positions. */

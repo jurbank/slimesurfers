@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
+import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import type { SnapshotMessage } from "@splat/protocol/network/serverMessages.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
@@ -9,6 +10,8 @@ import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
+import { SoundSystem } from "../systems/soundSystem.ts";
+import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
 import { LocalPlayer } from "../entities/player/player.ts";
 import { RemotePlayer } from "../entities/player/remotePlayer.ts";
@@ -57,6 +60,7 @@ export class MatchScene {
   private readonly clouds: CloudSystem;
   private readonly pickups: PickupSystem;
   private readonly projectiles: ProjectileSystem;
+  private readonly sound: SoundSystem;
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
   private readonly combatHud: CombatHud;
@@ -239,6 +243,7 @@ export class MatchScene {
     this.clouds = new CloudSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
+    this.sound = new SoundSystem();
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
@@ -247,6 +252,9 @@ export class MatchScene {
     this.pauseMenu.onResume(() => this.setPaused(false));
     this.pauseMenu.onToggle(() => this.setPaused(!this.pauseMenu.isVisible()));
     this.input.onPointerLockExit(() => this.setPaused(true));
+    this.render.renderer.domElement.addEventListener("pointerdown", () => this.sound.resume(), {
+      once: true,
+    });
     for (const p of PLANET_POSITIONS) {
       this.planetPaint.set(p.id, {
         planetId: p.id,
@@ -485,10 +493,17 @@ export class MatchScene {
 
   private syncProjectiles(snapshot: SnapshotMessage, receivedAtMs: number): void {
     const liveProjectileIds = new Set<string>();
+    const localSessionId = this.connection.sessionId;
     for (const projectile of snapshot.projectiles) {
       liveProjectileIds.add(projectile.id);
       const color = this.playerColors.get(projectile.ownerId) ?? FALLBACK_PLAYER_COLOR;
-      this.projectiles.syncProjectile(projectile.id, projectile, color, receivedAtMs);
+      const isNew = this.projectiles.syncProjectile(projectile.id, projectile, color, receivedAtMs);
+      if (isNew && projectile.ownerId !== localSessionId) {
+        this.sound.playSfxAt(
+          "pow",
+          new THREE.Vector3(projectile.pos.x, projectile.pos.y, projectile.pos.z),
+        );
+      }
     }
     this.projectiles.removeMissing(liveProjectileIds);
   }
@@ -507,6 +522,11 @@ export class MatchScene {
   }
 
   async connect(name: string): Promise<void> {
+    await Promise.all(
+      Object.entries(AUDIO).map(([key, { url, category }]) =>
+        this.sound.preload(key, url, category),
+      ),
+    );
     await this.connection.join(name, {
       onPlayerAdded: (sessionId: string, slimeColor: number, paintGroupId: number) => {
         this.playerColors.set(sessionId, slimeColor);
@@ -621,9 +641,15 @@ export class MatchScene {
         };
       }
 
+      const keyBits = this.input.buildKeyBits();
+      if (keyBits & InputKey.Fire) {
+        const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
+        this.sound.playSfx("pow", { cooldownMs: fireCooldownMs });
+      }
+
       const input = {
         seq: ++inputSeq,
-        keys: this.input.buildKeyBits(),
+        keys: keyBits,
         aimDir,
         aimPoint: { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z },
         dt,
@@ -676,6 +702,7 @@ export class MatchScene {
 
       this.pickups.update(now);
       this.projectiles.update(now);
+      this.sound.updateListener(this.camera.camera);
       this.render.render(this.camera.camera);
     };
 
