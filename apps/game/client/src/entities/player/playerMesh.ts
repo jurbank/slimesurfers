@@ -20,7 +20,7 @@ export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
   // 1. Body (the blob)
   // We'll use a sphere slightly squashed on the Y axis if we wanted,
   // but for now a regular sphere is fine.
-  const bodyRadius = GAME_CONFIG.player.collisionRadius;
+  const bodyRadius = GAME_CONFIG.movement.collisionRadius;
   const bodyGeom = new THREE.SphereGeometry(bodyRadius, 32, 24);
   const bodyMat = new THREE.MeshLambertMaterial({ color: slimeColor });
   const body = new THREE.Mesh(bodyGeom, bodyMat);
@@ -88,7 +88,7 @@ export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
 
   // 5. Debug Collider
   if (GAME_CONFIG.debug.showColliders) {
-    const colliderGeom = new THREE.SphereGeometry(GAME_CONFIG.player.collisionRadius, 16, 16);
+    const colliderGeom = new THREE.SphereGeometry(GAME_CONFIG.movement.collisionRadius, 16, 16);
     const colliderMat = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
       wireframe: true,

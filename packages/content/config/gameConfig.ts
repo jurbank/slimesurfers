@@ -17,26 +17,14 @@ export const GAME_CONFIG = {
     radius: 50,
     count: 1,
     interPlanetDistance: 200,
-    gravityAcceleration: 20,
-    surfaceSnapDistance: 0.6,
-    arenaReturnDistance: 90,
-    arenaReturnAcceleration: 15,
   },
 
   // -- Player ----------------------------------------------------------------
   player: {
-    moveSpeed: 8,
-    jumpImpulse: 18,
-    boostAcceleration: 24,
-    airBoostAcceleration: 10,
-    anchorGravityMultiplier: 2.6,
-    collisionRadius: 0.5,
-    /** Distance from planet surface to player center of mass. Must be > collisionRadius
-     *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
-    standingHeight: 1.0,
     projectileMuzzleHeight: 1.5,
     maxHealth: 100,
     projectileDamage: 34,
+    shootingRevealDurationMs: 220,
   },
 
   // -- Slime / Ammo ----------------------------------------------------------
@@ -71,9 +59,6 @@ export const GAME_CONFIG = {
     deathBurstRadiusMultiplier: 3.4,
     projectileStampRadiusMultiplier: 1,
     collisionAlphaThreshold: 0.2,
-    enemySpeedMultiplier: 0.7,
-    swimSpeedMultiplier: 2.2,
-    swimDisturbanceMinSpeed: 1.5,
     maxVisualStampsPerPlanet: 1024,
     // -- Rendering (Client Only) --
     maskResolution: 1024,
@@ -116,6 +101,26 @@ export const GAME_CONFIG = {
       0xff4444, // red
       0x00ffaa, // mint
     ] as const,
+  },
+
+  // -- Movement --------------------------------------------------------------
+  movement: {
+    gravityAcceleration: 20,
+    surfaceSnapDistance: 0.6,
+    arenaReturnDistance: 90,
+    arenaReturnAcceleration: 15,
+    moveSpeed: 8,
+    jumpImpulse: 18,
+    boostAcceleration: 14,
+    airBoostAcceleration: 10,
+    anchorGravityMultiplier: 2.6,
+    collisionRadius: 0.5,
+    /** Distance from planet surface to player center of mass. Must be > collisionRadius
+     *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
+    standingHeight: 1.0,
+    enemySpeedMultiplier: 0.7,
+    swimSpeedMultiplier: 2.2,
+    swimDisturbanceMinSpeed: 1.5,
   },
 
   // -- Terrain ---------------------------------------------------------------

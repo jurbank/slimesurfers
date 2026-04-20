@@ -13,6 +13,7 @@ interface PlayerTransformState {
   movementState: number;
   swimState: number;
   isCarving: boolean;
+  isShooting: boolean;
   equippedWeaponId: WeaponId;
 }
 
@@ -80,7 +81,7 @@ export class LocalPlayer {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
     }
 
-    if (state.movementState === PlayerMovementState.Airborne) {
+    if (state.movementState === PlayerMovementState.Airborne || state.isShooting) {
       this.mesh.scale.set(1, 1, 1);
       this.setOpacity(1);
       return;

@@ -306,7 +306,7 @@ describe("MatchSimulation", () => {
     const machineGun = getWeaponDefinition(WeaponId.MachineGun);
 
     target.pos = {
-      x: shooter.pos.x + GAME_CONFIG.player.collisionRadius,
+      x: shooter.pos.x + GAME_CONFIG.movement.collisionRadius,
       y: shooter.pos.y,
       z: shooter.pos.z,
     };
@@ -358,7 +358,7 @@ describe("MatchSimulation", () => {
     expect(shooter.slimeLevel).toBeLessThan(bazooka.slimeCost);
   });
 
-  it("pops a submerged player out and fires on the same tick", () => {
+  it("keeps ski mode active and fires on the same tick", () => {
     const simulation = new MatchSimulation();
     const swimmer = simulation.addPlayer("session-1", "Alpha");
     paintPlayerSurface(simulation, swimmer.sessionId, swimmer.paintGroupId);
@@ -375,14 +375,15 @@ describe("MatchSimulation", () => {
 
     simulation.recordInput("session-1", {
       seq: 2,
-      keys: InputKey.Submerge | InputKey.Fire,
+      keys: InputKey.Fire,
       aimDir: { x: 1, y: 0, z: 0 },
       dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(swimmer.swimState).toBe(PlayerSwimState.None);
+    expect(swimmer.swimState).toBe(PlayerSwimState.SwimmingHidden);
     expect(simulation.matchState.projectiles.size).toBe(1);
+    expect(simulation.buildSnapshotMessage().players[0]?.isShooting).toBe(true);
   });
 
   it("pops a submerged player out when they are hit", () => {
@@ -515,7 +516,7 @@ describe("MatchSimulation", () => {
     const planet = PLANET_POSITIONS[0]!;
     shooter.pos = {
       x: planet.x,
-      y: planet.y + surfaceRadius + GAME_CONFIG.player.collisionRadius,
+      y: planet.y + surfaceRadius + GAME_CONFIG.movement.collisionRadius,
       z: planet.z,
     };
     shooter.vel = { x: 0, y: 0, z: 0 };

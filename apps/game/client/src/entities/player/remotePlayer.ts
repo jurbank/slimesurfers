@@ -13,6 +13,7 @@ interface PlayerTransformState {
   movementState: number;
   swimState: number;
   isCarving: boolean;
+  isShooting: boolean;
   equippedWeaponId: WeaponId;
 }
 
@@ -72,7 +73,7 @@ export class RemotePlayer {
     }
     this.updateWeapon(state.equippedWeaponId);
 
-    if (state.movementState === PlayerMovementState.Airborne) {
+    if (state.movementState === PlayerMovementState.Airborne || state.isShooting) {
       this.mesh.visible = true;
       this.disturbance.visible = false;
       return;

@@ -22,9 +22,11 @@ import {
 
 export interface CombatConfig {
   player: {
-    collisionRadius: number;
     projectileMuzzleHeight: number;
     maxHealth: number;
+  };
+  movement: {
+    collisionRadius: number;
   };
   slime: {
     maxLevel: number;
@@ -349,7 +351,7 @@ function applySplashDamage(
     if (player.movementState === PlayerMovementState.Dead) return;
     if (excludedPlayerIds.has(player.sessionId)) return;
 
-    const hitDistance = splashRadius + cfg.player.collisionRadius;
+    const hitDistance = splashRadius + cfg.movement.collisionRadius;
     const playerDistance = distance(player.pos, impactPos);
     if (playerDistance > hitDistance) return;
 
@@ -392,7 +394,7 @@ function applyBlastImpulse(
   simState.players.forEach((player) => {
     if (player.movementState === PlayerMovementState.Dead) return;
 
-    const hitDistance = blastRadius + cfg.player.collisionRadius;
+    const hitDistance = blastRadius + cfg.movement.collisionRadius;
     const playerDistance = distance(player.pos, impactPos);
     if (playerDistance > hitDistance) return;
 
@@ -417,7 +419,7 @@ function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: Comba
   const spawnRadius = getTerrainRadius(0, 1, 0, cfg);
   player.pos = {
     x: planet.center.x,
-    y: planet.center.y + spawnRadius + cfg.respawn.dropInHeight + cfg.player.collisionRadius,
+    y: planet.center.y + spawnRadius + cfg.respawn.dropInHeight + cfg.movement.collisionRadius,
     z: planet.center.z,
   };
   player.vel = { x: 0, y: 0, z: 0 };
@@ -462,10 +464,6 @@ export function tryFireProjectile(
   if (player.movementState === PlayerMovementState.Dead) return;
   const weapon = getWeaponDefinition(getEquippedWeaponId(player));
   if (weapon.behavior !== "projectile") return;
-  if (player.swimState !== PlayerSwimState.None) {
-    player.swimState = PlayerSwimState.None;
-    player.isCarving = false;
-  }
   if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return;
   if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return;
   if (player.slimeLevel < weapon.slimeCost) return;
@@ -537,7 +535,7 @@ export function tickProjectiles(
       if (hit) return;
       if (player.sessionId === projectile.ownerId) return;
       if (player.movementState === PlayerMovementState.Dead) return;
-      const hitDistance = cfg.player.collisionRadius + weapon.projectileCollisionRadius;
+      const hitDistance = cfg.movement.collisionRadius + weapon.projectileCollisionRadius;
       const impactPos = closestPointOnSegment(player.pos, startPos, projectile.pos);
       if (distance(impactPos, player.pos) > hitDistance) return;
 

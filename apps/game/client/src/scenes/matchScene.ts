@@ -112,8 +112,8 @@ export class MatchScene {
 
     const weapon = getWeaponDefinition(weaponId);
     const playerHitRadius = Math.max(
-      GAME_CONFIG.player.collisionRadius + weapon.projectileCollisionRadius,
-      GAME_CONFIG.player.collisionRadius * 1.2,
+      GAME_CONFIG.movement.collisionRadius + weapon.projectileCollisionRadius,
+      GAME_CONFIG.movement.collisionRadius * 1.2,
     );
     const playerHitRadiusSq = playerHitRadius * playerHitRadius;
 
@@ -141,7 +141,7 @@ export class MatchScene {
   }
 
   private getTerrainHitDistance(maxDistance: number): number | null {
-    const stepDistance = Math.max(0.5, GAME_CONFIG.player.collisionRadius);
+    const stepDistance = Math.max(0.5, GAME_CONFIG.movement.collisionRadius);
     for (let d = stepDistance; d < maxDistance; d += stepDistance) {
       this.terrainSample.copy(this.camera.camera.position).addScaledVector(this.crosshairRayDir, d);
       const planetCenter = nearestPlanetCenter(this.terrainSample);

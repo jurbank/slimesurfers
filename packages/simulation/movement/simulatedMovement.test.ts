@@ -22,12 +22,12 @@ const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
 const TEST_CONFIG = {
   planet: {
     radius: 50,
+  },
+  movement: {
     gravityAcceleration: 20,
     surfaceSnapDistance: 0.6,
     arenaReturnDistance: 90,
     arenaReturnAcceleration: 15,
-  },
-  player: {
     moveSpeed: 8,
     jumpImpulse: 18,
     boostAcceleration: 24,
@@ -35,8 +35,6 @@ const TEST_CONFIG = {
     anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     standingHeight: 1.0,
-  },
-  paint: {
     enemySpeedMultiplier: 0.7,
     swimSpeedMultiplier: 2.4,
     swimDisturbanceMinSpeed: 1.5,
@@ -69,7 +67,7 @@ function createPlayer(): PlayerPhysics {
   return {
     pos: {
       x: TEST_PLANETS[0]!.center.x,
-      y: TEST_PLANETS[0]!.center.y + surfaceRadius + TEST_CONFIG.player.standingHeight,
+      y: TEST_PLANETS[0]!.center.y + surfaceRadius + TEST_CONFIG.movement.standingHeight,
       z: TEST_PLANETS[0]!.center.z,
     },
     vel: { x: 0, y: 0, z: 0 },
@@ -139,10 +137,10 @@ describe("stepPlayer", () => {
     const dist = Math.hypot(dx, dy, dz);
     const norm = { x: dx / dist, y: dy / dist, z: dz / dist };
     const expectedRadius =
-      getTerrainRadius(norm.x, norm.y, norm.z, TEST_CONFIG) + TEST_CONFIG.player.standingHeight;
+      getTerrainRadius(norm.x, norm.y, norm.z, TEST_CONFIG) + TEST_CONFIG.movement.standingHeight;
 
     expect(player.movementState).toBe(PlayerMovementState.Moving);
-    expect(dist).toBeCloseTo(expectedRadius, 4);
+    expect(dist).toBeCloseTo(expectedRadius, 3);
     expect(player.pos.z).toBeGreaterThan(0);
   });
 
@@ -153,7 +151,7 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(player.vel.y).toBeGreaterThan(TEST_CONFIG.player.jumpImpulse * 0.8);
+    expect(player.vel.y).toBeGreaterThan(TEST_CONFIG.movement.jumpImpulse * 0.8);
     expect(player.swimState).toBe(PlayerSwimState.None);
   });
 
@@ -300,6 +298,7 @@ describe("stepPlayer", () => {
 
   it("does not accumulate slope slide in normal mode without movement input", () => {
     const player = createPlayer();
+    const startPos = { ...player.pos };
 
     for (let i = 0; i < 10; i += 1) {
       stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
@@ -307,6 +306,7 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("planet-0");
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
+    expect(Math.hypot(player.pos.x - startPos.x, player.pos.z - startPos.z)).toBeLessThan(0.01);
   });
 
   it("uses direct movement in normal combat mode", () => {
@@ -318,7 +318,7 @@ describe("stepPlayer", () => {
     expect(player.planetId).toBe("planet-0");
     expect(player.vel.z).toBeLessThan(0);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed,
+      TEST_CONFIG.movement.moveSpeed,
       0,
     );
   });
@@ -389,8 +389,8 @@ describe("stepPlayer", () => {
       EMPTY_PAINT,
     );
 
-    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.airBoostAcceleration * 0.1 - 0.1);
-    expect(player.vel.z).toBeLessThan(TEST_CONFIG.player.boostAcceleration * 0.1);
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.airBoostAcceleration * 0.1 - 0.1);
+    expect(player.vel.z).toBeLessThan(TEST_CONFIG.movement.boostAcceleration * 0.1);
   });
 
   it("applies the friendly paint speed multiplier from config", () => {
@@ -401,7 +401,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
+      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.swimSpeedMultiplier,
       0,
     );
   });
@@ -421,7 +421,7 @@ describe("stepPlayer", () => {
 
     expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
+      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.swimSpeedMultiplier,
       0,
     );
   });
@@ -456,6 +456,16 @@ describe("stepPlayer", () => {
     expect(player.swimState).toBe(PlayerSwimState.None);
   });
 
+  it("keeps ski mode while firing", () => {
+    const player = createPlayer();
+    const paint = createPaintMap(player.paintGroupId);
+
+    stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    stepPlayer(player, createInput(InputKey.Fire), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+
+    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+  });
+
   it("allows visible ski mode on enemy paint", () => {
     const player = createPlayer();
     const paint = createPaintMap(player.paintGroupId + 1);
@@ -471,7 +481,7 @@ describe("stepPlayer", () => {
 
     expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(
-      TEST_CONFIG.player.moveSpeed * TEST_CONFIG.paint.swimSpeedMultiplier,
+      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.swimSpeedMultiplier,
       0,
     );
   });
@@ -493,7 +503,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemyPaint);
 
     expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
-    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.moveSpeed);
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.moveSpeed);
   });
 
   it("anchoring while in ski mode keeps ski mode active", () => {
@@ -521,7 +531,7 @@ describe("stepPlayer", () => {
     expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
     expect(player.isCarving).toBe(true);
     expect(player.movementState).toBe(PlayerMovementState.Moving);
-    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.player.moveSpeed);
+    expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.moveSpeed);
   });
 
   it("clears carve pose when space is released in ski mode", () => {

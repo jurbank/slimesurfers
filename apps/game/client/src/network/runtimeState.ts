@@ -16,6 +16,7 @@ const PLANETS = PLANET_POSITIONS.map((planet) => ({
 const MAX_PENDING_INPUTS = 60;
 
 export interface RuntimePlayerState extends PlayerPhysics {
+  isShooting: boolean;
   equippedWeaponId: WeaponId;
   health: number;
   slimeLevel: number;
@@ -48,6 +49,7 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     movementState: state.movementState,
     swimState: state.swimState,
     isCarving: state.isCarving,
+    isShooting: state.isShooting,
     equippedWeaponId: state.equippedWeaponId,
     health: state.health,
     slimeLevel: state.slimeLevel,
@@ -71,6 +73,7 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     movementState: snapshot.movementState,
     swimState: snapshot.swimState,
     isCarving: snapshot.isCarving,
+    isShooting: snapshot.isShooting,
     equippedWeaponId: snapshot.equippedWeaponId ?? DEFAULT_WEAPON_ID,
     health: snapshot.health,
     slimeLevel: snapshot.slimeLevel,
@@ -107,6 +110,7 @@ function interpolateState(
     movementState: newer.movementState,
     swimState: newer.swimState,
     isCarving: newer.isCarving,
+    isShooting: newer.isShooting,
     equippedWeaponId: newer.equippedWeaponId,
     health: newer.health,
     slimeLevel: newer.slimeLevel,

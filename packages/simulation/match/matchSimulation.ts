@@ -58,6 +58,10 @@ export interface TickResult {
   shouldBroadcastSnapshot: boolean;
 }
 
+function isPlayerShooting(player: SimPlayerState, nowMs: number): boolean {
+  return nowMs - player.lastFireTimeMs <= GAME_CONFIG.player.shootingRevealDurationMs;
+}
+
 function createSimPlanetState(planetId: string): SimPlanetPaintState {
   return {
     planetId,
@@ -171,7 +175,8 @@ function createSimPlayer(
     slimeColor: mode.palette[slot.paletteIndex] ?? mode.palette[0] ?? 0xffffff,
     pos: {
       x: planetPos.x + Math.cos(angle) * spread,
-      y: planetPos.y + getTerrainRadius(0, 1, 0, GAME_CONFIG) + GAME_CONFIG.player.collisionRadius,
+      y:
+        planetPos.y + getTerrainRadius(0, 1, 0, GAME_CONFIG) + GAME_CONFIG.movement.collisionRadius,
       z: planetPos.z + Math.sin(angle) * spread,
     },
     vel: { x: 0, y: 0, z: 0 },
@@ -346,6 +351,7 @@ export class MatchSimulation {
         movementState: player.movementState,
         swimState: player.swimState,
         isCarving: player.isCarving,
+        isShooting: isPlayerShooting(player, this.simState.elapsedMs),
         equippedWeaponId: player.equippedWeaponId,
         health: player.health,
         slimeLevel: player.slimeLevel,

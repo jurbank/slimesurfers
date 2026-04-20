@@ -19,7 +19,7 @@ interface PickupConfig {
     collectRadius: number;
     hoverHeight: number;
   };
-  player: {
+  movement: {
     collisionRadius: number;
   };
   slime: {
@@ -103,7 +103,7 @@ export function collectWeaponPickup(
 ): void {
   if (player.movementState === PlayerMovementState.Dead) return;
 
-  const collectDistance = cfg.pickups.collectRadius + cfg.player.collisionRadius;
+  const collectDistance = cfg.pickups.collectRadius + cfg.movement.collisionRadius;
   const collectDistanceSq = collectDistance * collectDistance;
 
   simState.pickups.forEach((pickup) => {

@@ -39,12 +39,12 @@ export interface PlayerPhysics {
 export interface StepConfig {
   planet: {
     radius: number;
+  };
+  movement: {
     gravityAcceleration: number;
     surfaceSnapDistance: number;
     arenaReturnDistance: number;
     arenaReturnAcceleration: number;
-  };
-  player: {
     moveSpeed: number;
     jumpImpulse: number;
     boostAcceleration: number;
@@ -52,8 +52,6 @@ export interface StepConfig {
     anchorGravityMultiplier: number;
     collisionRadius: number;
     standingHeight: number;
-  };
-  paint: {
     enemySpeedMultiplier: number;
     swimSpeedMultiplier: number;
     swimDisturbanceMinSpeed: number;
@@ -198,7 +196,7 @@ interface TerrainContact {
 function getSurfaceCenter(planet: PlanetData, radialNormal: Vec3Data, cfg: StepConfig): Vec3Data {
   const radius =
     getTerrainRadius(radialNormal.x, radialNormal.y, radialNormal.z, cfg) +
-    cfg.player.standingHeight;
+    cfg.movement.standingHeight;
   return add(planet.center, scale(radialNormal, radius));
 }
 
@@ -212,7 +210,7 @@ function getTerrainContact(
   const tangentA = normalize(cross(tangentSeed, n));
   const tangentB = normalize(cross(n, tangentA));
   const sampleAngle = 0.006;
-  const centerRadius = getTerrainRadius(n.x, n.y, n.z, cfg) + cfg.player.standingHeight;
+  const centerRadius = getTerrainRadius(n.x, n.y, n.z, cfg) + cfg.movement.standingHeight;
   const centerPos = add(planet.center, scale(n, centerRadius));
   const sampleA = normalize(add(n, scale(tangentA, sampleAngle)));
   const sampleB = normalize(add(n, scale(tangentB, sampleAngle)));
@@ -284,12 +282,11 @@ function stepOnSurface(
   const onEnemyPaint = paint !== null && !onFriendlyPaint;
   const onNeutralSurface = paint === null;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
-  const firePressed = (input.keys & InputKey.Fire) !== 0;
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const wasSkiActive = state.swimState !== PlayerSwimState.None;
   let skiActive = wasSkiActive;
 
-  if (onNeutralSurface || firePressed) {
+  if (onNeutralSurface) {
     skiActive = false;
   } else if (toggleSubmerge) {
     skiActive = !skiActive;
@@ -309,25 +306,28 @@ function stepOnSurface(
   const tangentVel = projectOntoPlane(state.vel, oldContact.surfaceNormal);
   let speedMultiplier = 1.0;
   if (skiActive) {
-    speedMultiplier = cfg.paint.swimSpeedMultiplier;
+    speedMultiplier = cfg.movement.swimSpeedMultiplier;
   } else if (onEnemyPaint) {
-    speedMultiplier = cfg.paint.enemySpeedMultiplier;
+    speedMultiplier = cfg.movement.enemySpeedMultiplier;
   }
   if (!skiActive && anchorPressed) {
     const moveDir = hasMoveInput
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
       : { x: 0, y: 0, z: 0 };
     const jumpTangentVel = hasMoveInput
-      ? scale(moveDir, cfg.player.moveSpeed * speedMultiplier)
+      ? scale(moveDir, cfg.movement.moveSpeed * speedMultiplier)
       : { x: 0, y: 0, z: 0 };
-    assign(state.vel, add(jumpTangentVel, scale(oldContact.surfaceNormal, cfg.player.jumpImpulse)));
+    assign(
+      state.vel,
+      add(jumpTangentVel, scale(oldContact.surfaceNormal, cfg.movement.jumpImpulse)),
+    );
     state.planetId = "";
     state.swimState = PlayerSwimState.None;
     state.isCarving = false;
     state.movementState = PlayerMovementState.Airborne;
     assign(
       state.pos,
-      add(state.pos, scale(oldContact.surfaceNormal, cfg.planet.surfaceSnapDistance)),
+      add(state.pos, scale(oldContact.surfaceNormal, cfg.movement.surfaceSnapDistance)),
     );
     return;
   }
@@ -337,7 +337,7 @@ function stepOnSurface(
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
       : { x: 0, y: 0, z: 0 };
     groundedDirectVel = hasMoveInput
-      ? scale(moveDir, cfg.player.moveSpeed * speedMultiplier)
+      ? scale(moveDir, cfg.movement.moveSpeed * speedMultiplier)
       : { x: 0, y: 0, z: 0 };
     assign(state.vel, groundedDirectVel);
     state.movementState =
@@ -348,7 +348,7 @@ function stepOnSurface(
     const moveDir = hasMoveInput
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
       : forward;
-    const baseSpeed = cfg.player.moveSpeed * speedMultiplier;
+    const baseSpeed = cfg.movement.moveSpeed * speedMultiplier;
     const baseAcceleration = baseSpeed * 10;
     const currentSpeed = Math.max(0, dot(state.vel, moveDir));
     const desiredTangentVel = hasMoveInput ? scale(moveDir, baseSpeed) : tangentVel;
@@ -361,7 +361,7 @@ function stepOnSurface(
     if (boostPressed) {
       nextTangentVel = add(
         nextTangentVel,
-        scale(moveDir, cfg.player.boostAcceleration * speedMultiplier * dt),
+        scale(moveDir, cfg.movement.boostAcceleration * speedMultiplier * dt),
       );
     }
     assign(state.vel, add(sub(state.vel, tangentVel), nextTangentVel));
@@ -387,19 +387,20 @@ function stepOnSurface(
   }
 
   const gravityDir = normalize(sub(planet.center, state.pos));
-  const gravityMultiplier = anchorPressed ? cfg.player.anchorGravityMultiplier : 1;
+  const gravityMultiplier = anchorPressed ? cfg.movement.anchorGravityMultiplier : 1;
   assign(
     state.vel,
-    add(state.vel, scale(gravityDir, cfg.planet.gravityAcceleration * gravityMultiplier * dt)),
+    add(state.vel, scale(gravityDir, cfg.movement.gravityAcceleration * gravityMultiplier * dt)),
   );
 
-  const nextPos = add(state.pos, scale(state.vel, dt));
+  const integrationVel = groundedDirectVel ?? state.vel;
+  const nextPos = add(state.pos, scale(integrationVel, dt));
   const newRadialNormal = normalize(sub(nextPos, planet.center));
   const newContact = getTerrainContact(planet, newRadialNormal, cfg);
   const penetration = dot(sub(newContact.centerPos, nextPos), newContact.surfaceNormal);
   const movingAwayFromSurface = dot(state.vel, newContact.surfaceNormal) > 0;
 
-  if (!anchorPressed && penetration < -cfg.planet.surfaceSnapDistance && movingAwayFromSurface) {
+  if (!anchorPressed && penetration < -cfg.movement.surfaceSnapDistance && movingAwayFromSurface) {
     assign(state.pos, nextPos);
     state.planetId = "";
     state.movementState = PlayerMovementState.Airborne;
@@ -462,18 +463,21 @@ function stepAirborne(
       const gravDir = scale(toPlanet, 1 / dist);
       const moveZ =
         (input.keys & InputKey.Forward ? 1 : 0) + (input.keys & InputKey.Backward ? -1 : 0);
-      const gravityMultiplier = anchorPressed ? cfg.player.anchorGravityMultiplier : 1;
+      const gravityMultiplier = anchorPressed ? cfg.movement.anchorGravityMultiplier : 1;
       assign(
         state.vel,
-        add(state.vel, scale(gravDir, cfg.planet.gravityAcceleration * gravityMultiplier * dt)),
+        add(state.vel, scale(gravDir, cfg.movement.gravityAcceleration * gravityMultiplier * dt)),
       );
       if (anchorPressed && moveZ > 0) {
         const up = scale(gravDir, -1);
         const { forward } = getTangentBasis(state, up, input.aimDir);
-        assign(state.vel, add(state.vel, scale(forward, cfg.player.airBoostAcceleration * dt)));
+        assign(state.vel, add(state.vel, scale(forward, cfg.movement.airBoostAcceleration * dt)));
       }
-      if (dist > cfg.planet.arenaReturnDistance) {
-        assign(state.vel, add(state.vel, scale(gravDir, cfg.planet.arenaReturnAcceleration * dt)));
+      if (dist > cfg.movement.arenaReturnDistance) {
+        assign(
+          state.vel,
+          add(state.vel, scale(gravDir, cfg.movement.arenaReturnAcceleration * dt)),
+        );
       }
     }
   }
@@ -497,13 +501,13 @@ function stepAirborne(
     const gravDir = scale(toPlanet, 1 / dist);
     const upDir = scale(gravDir, -1);
     const landingRadius = getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
-    if (dist <= landingRadius + cfg.player.standingHeight + cfg.planet.surfaceSnapDistance) {
+    if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
       // Only land when moving toward the planet — prevents re-landing immediately after a jump.
       const velToward = dot(state.vel, gravDir);
       if (velToward > 0) {
         assign(
           state.pos,
-          add(nearest.center, scale(upDir, landingRadius + cfg.player.standingHeight)),
+          add(nearest.center, scale(upDir, landingRadius + cfg.movement.standingHeight)),
         );
         assign(state.vel, sub(state.vel, scale(gravDir, velToward)));
         state.planetId = nearest.id;
