@@ -27,8 +27,8 @@ export class RemotePlayer {
   private readonly disturbance: THREE.Mesh;
   private readonly up = new THREE.Vector3(0, 1, 0);
 
-  constructor(scene: THREE.Scene, slimeColor: number) {
-    const rig = createPlayerMesh(slimeColor);
+  constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
+    const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;

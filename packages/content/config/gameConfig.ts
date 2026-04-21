@@ -109,7 +109,7 @@ export const GAME_CONFIG = {
     surfaceSnapDistance: 0.6,
     arenaReturnDistance: 90,
     arenaReturnAcceleration: 15,
-    moveSpeed: 8,
+    moveSpeed: 10,
     jumpImpulse: 18,
     boostAcceleration: 14,
     airBoostAcceleration: 10,

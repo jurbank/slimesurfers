@@ -3,6 +3,7 @@ import type {
   LeaderboardEntry,
   LeaderboardMessage,
 } from "@splat/protocol/network/serverMessages.ts";
+import { swatchBackground } from "./uiUtils.ts";
 
 const MAX_DISPLAY_ENTRIES = 10;
 const TOTAL_CELLS =
@@ -156,13 +157,24 @@ export class LeaderboardOverlay {
     const row = document.createElement("div");
     Object.assign(row.style, {
       display: "grid",
-      gridTemplateColumns: "1fr 30px 30px 45px",
+      gridTemplateColumns: "20px 1fr 30px 30px 45px",
       gap: "4px",
       alignItems: "center",
       padding: "4px 8px",
       borderRadius: "6px",
       fontSize: "0.85rem",
       background: entry.sessionId === localSessionId ? "rgba(255, 255, 255, 0.1)" : "transparent",
+    });
+
+    const swatch = document.createElement("div");
+    const bg = swatchBackground({ color: entry.slimeColor, patternId: entry.patternId });
+    Object.assign(swatch.style, {
+      width: "14px",
+      height: "14px",
+      borderRadius: "50%",
+      backgroundImage: bg.backgroundImage,
+      backgroundSize: bg.backgroundSize,
+      flexShrink: "0",
     });
 
     const name = document.createElement("span");
@@ -190,7 +202,7 @@ export class LeaderboardOverlay {
     score.style.fontVariantNumeric = "tabular-nums";
     score.style.fontWeight = "bold";
 
-    row.append(name, k, d, score);
+    row.append(swatch, name, k, d, score);
     this.list.appendChild(row);
   }
 
@@ -202,6 +214,7 @@ export class LeaderboardOverlay {
       if (width > 0) {
         const segment = this.createProgressSegment(
           GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff,
+          0,
           width,
         );
         this.progressBar.appendChild(segment);
@@ -223,19 +236,21 @@ export class LeaderboardOverlay {
       totalClaimed += width;
       if (width > 0.5) {
         // Only show visible segments
-        const segment = this.createProgressSegment(entry.slimeColor, width);
+        const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);
         this.progressBar.appendChild(segment);
       }
     });
     this.addUncontestedSegment(totalClaimed);
   }
 
-  private createProgressSegment(color: number, width: number): HTMLDivElement {
+  private createProgressSegment(color: number, patternId: number, width: number): HTMLDivElement {
     const segment = document.createElement("div");
+    const bg = swatchBackground({ color, patternId });
     Object.assign(segment.style, {
       height: "100%",
       width: `${width}%`,
-      background: `#${color.toString(16).padStart(6, "0")}`,
+      backgroundImage: bg.backgroundImage,
+      backgroundSize: bg.backgroundSize,
       transition: "width 300ms ease-out",
     });
     return segment;

@@ -97,6 +97,7 @@ function paintPlayerSurface(
     nz: dz / len,
     radius,
     seq: 1,
+    patternId: 0,
   });
 }
 
@@ -407,6 +408,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
       paintGroupId: shooter.paintGroupId,
+      patternId: 0,
       pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
       vel: { x: 0, y: 0, z: 0 },
       planetId: target.planetId,
@@ -487,6 +489,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       weaponId: WeaponId.Bazooka,
       paintGroupId: shooter.paintGroupId,
+      patternId: 0,
       pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
       vel: { x: 0, y: 0, z: 0 },
       planetId: target.planetId,
@@ -529,6 +532,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       weaponId: WeaponId.Bazooka,
       paintGroupId: shooter.paintGroupId,
+      patternId: 0,
       pos: {
         x: shooter.pos.x,
         y: shooter.pos.y + 2,
@@ -562,6 +566,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
       paintGroupId: shooter.paintGroupId,
+      patternId: 0,
       pos: {
         x: targetPoint.x + targetNormal.x * 5,
         y: targetPoint.y + targetNormal.y * 5,
@@ -614,6 +619,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
       paintGroupId: shooter.paintGroupId,
+      patternId: 0,
       pos: start,
       vel: {
         x: (end.x - start.x) / tickSeconds,
@@ -687,6 +693,7 @@ describe("MatchSimulation", () => {
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
         paintGroupId: shooter.paintGroupId,
+        patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
         vel: { x: 0, y: 0, z: 0 },
         planetId: target.planetId,
@@ -725,6 +732,7 @@ describe("MatchSimulation", () => {
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
         paintGroupId: shooter.paintGroupId,
+        patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
         vel: { x: 0, y: 0, z: 0 },
         planetId: target.planetId,
@@ -754,6 +762,7 @@ describe("MatchSimulation", () => {
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
         paintGroupId: shooter.paintGroupId,
+        patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
         vel: { x: 0, y: 0, z: 0 },
         planetId: target.planetId,

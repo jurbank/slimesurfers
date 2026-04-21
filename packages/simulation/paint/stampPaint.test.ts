@@ -47,6 +47,7 @@ describe("stampPaint", () => {
       pos: impactPos,
       paintGroupId: 0,
       slimeColor: 0x00e5ff,
+      patternId: 0,
       radiusMultiplier: 1,
     });
     const second = applyPaintImpact(simState, planetState, {
@@ -54,6 +55,7 @@ describe("stampPaint", () => {
       pos: impactPos,
       paintGroupId: 1,
       slimeColor: 0xff6200,
+      patternId: 0,
       radiusMultiplier: 1,
     });
 
@@ -73,6 +75,7 @@ describe("stampPaint", () => {
       pos: { x: 0, y: 0, z: 0 },
       paintGroupId: 0,
       slimeColor: 0x00e5ff,
+      patternId: 0,
       radiusMultiplier: 1,
     });
 

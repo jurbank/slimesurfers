@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 import type { ProjectileSnapshot } from "@splat/protocol/network/serverMessages.ts";
+import { createSlimeMaterial } from "../materials/slimeMaterial.ts";
 
 // Cap how far we extrapolate past the last snapshot to avoid wild predictions
 // if the server stops sending (e.g. the projectile was destroyed).
@@ -45,13 +46,14 @@ export class ProjectileSystem {
       const visualX = projectile.pos.x - projectile.vel.x * ageSec;
       const visualY = projectile.pos.y - projectile.vel.y * ageSec;
       const visualZ = projectile.pos.z - projectile.vel.z * ageSec;
+
+      const mat = createSlimeMaterial(weapon.projectileColor || color, projectile.patternId);
+      mat.emissive.setHex(weapon.projectileColor || color);
+      mat.emissiveIntensity = 0.35;
+
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(weapon.projectileCollisionRadius, 12, 12),
-        new THREE.MeshLambertMaterial({
-          color: weapon.projectileColor || color,
-          emissive: weapon.projectileColor || color,
-          emissiveIntensity: 0.35,
-        }),
+        mat,
       );
       mesh.position.set(visualX, visualY, visualZ);
       this.scene.add(mesh);

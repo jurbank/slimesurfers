@@ -84,6 +84,7 @@ function seedTestPaint(simState: SimMatchState): void {
     {
       paintGroupId: 0,
       color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      patternId: 0,
       nx: 0,
       ny: 1,
       nz: 0,
@@ -93,6 +94,7 @@ function seedTestPaint(simState: SimMatchState): void {
     {
       paintGroupId: 1,
       color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      patternId: 0,
       nx: 0,
       ny: -1,
       nz: 0,
@@ -102,6 +104,7 @@ function seedTestPaint(simState: SimMatchState): void {
     {
       paintGroupId: 1,
       color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      patternId: 0,
       nx: 0.55,
       ny: 0.55,
       nz: 0.62,
@@ -111,6 +114,7 @@ function seedTestPaint(simState: SimMatchState): void {
     {
       paintGroupId: 0,
       color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      patternId: 0,
       nx: -0.5,
       ny: -0.45,
       nz: -0.74,
@@ -153,10 +157,11 @@ function createSimPlayer(
   sessionId: string,
   playerIndex: number,
   name: string | undefined,
+  paletteIndex: number,
   maxPlayers: number,
   mode: GameModeDefinition,
 ): SimPlayerState {
-  const slot = mode.assignPlayerSlot(playerIndex);
+  const slot = { ...mode.assignPlayerSlot(playerIndex), paletteIndex };
   const spawnPlanetId = mode.selectSpawnPlanet(playerIndex);
   const planetPos =
     PLANET_POSITIONS.find((planet) => planet.id === spawnPlanetId) ?? PLANET_POSITIONS[0]!;
@@ -172,7 +177,8 @@ function createSimPlayer(
     teamId: slot.teamId,
     paintGroupId: slot.paintGroupId,
     paletteIndex: slot.paletteIndex,
-    slimeColor: mode.palette[slot.paletteIndex] ?? mode.palette[0] ?? 0xffffff,
+    patternId: mode.slots[slot.paletteIndex]?.patternId ?? 0,
+    slimeColor: mode.slots[slot.paletteIndex]?.color ?? 0xffffff,
     pos: {
       x: planetPos.x + Math.cos(angle) * spread,
       y:
@@ -228,8 +234,39 @@ export class MatchSimulation {
     return NETWORK_CONFIG.rooms.maxPlayers;
   }
 
-  addPlayer(sessionId: string, name?: string): SimPlayerState {
-    const player = createSimPlayer(sessionId, this.playerCount++, name, this.maxPlayers, this.mode);
+  takenColorIndices(): number[] {
+    return Array.from(this.simState.players.values()).map((p) => p.paletteIndex);
+  }
+
+  addPlayer(sessionId: string, name?: string, requestedColorIndex?: number): SimPlayerState {
+    const playerIndex = this.playerCount++;
+    const taken = new Set(this.takenColorIndices());
+    const paletteLen = this.mode.slots.length;
+    let paletteIndex = playerIndex % paletteLen;
+    if (
+      requestedColorIndex !== undefined &&
+      requestedColorIndex >= 0 &&
+      requestedColorIndex < paletteLen &&
+      !taken.has(requestedColorIndex)
+    ) {
+      paletteIndex = requestedColorIndex;
+    } else {
+      for (let i = 0; i < paletteLen; i++) {
+        const idx = (playerIndex + i) % paletteLen;
+        if (!taken.has(idx)) {
+          paletteIndex = idx;
+          break;
+        }
+      }
+    }
+    const player = createSimPlayer(
+      sessionId,
+      playerIndex,
+      name,
+      paletteIndex,
+      this.maxPlayers,
+      this.mode,
+    );
     this.simState.players.set(sessionId, player);
     this.inputQueues.set(sessionId, []);
     return player;
@@ -286,7 +323,6 @@ export class MatchSimulation {
     this.tickCount++;
     const serverDtSec = dtMs / 1000;
     let shouldBroadcastMatchPhase = false;
-    this.simState.elapsedMs += dtMs;
 
     if (this.simState.matchPhase === MatchPhase.Active) {
       const nextTimer = Math.max(0, this.simState.matchTimer - serverDtSec);
@@ -302,7 +338,7 @@ export class MatchSimulation {
     this.simState.players.forEach((player, sessionId) => {
       const queue = this.inputQueues.get(sessionId);
       if (queue && queue.length > 0) {
-        let processedNowMs = this.simState.elapsedMs - dtMs;
+        let processedNowMs = this.simState.elapsedMs;
         for (const input of queue) {
           const inputDtSec = Math.min(input.dt, MAX_INPUT_DT);
           processedNowMs += inputDtSec * 1000;
@@ -330,6 +366,8 @@ export class MatchSimulation {
     for (const stamp of paintStamps) {
       this.recordPaintStamp(stamp);
     }
+
+    this.simState.elapsedMs += dtMs;
 
     return {
       shouldBroadcastMatchPhase,
@@ -367,6 +405,7 @@ export class MatchSimulation {
         ownerId: projectile.ownerId,
         weaponId: projectile.weaponId,
         paintGroupId: projectile.paintGroupId,
+        patternId: projectile.patternId,
         pos: { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z },
         vel: { x: projectile.vel.x, y: projectile.vel.y, z: projectile.vel.z },
         planetId: projectile.planetId,
@@ -397,6 +436,7 @@ export class MatchSimulation {
         teamId: player.teamId,
         paintGroupId: player.paintGroupId,
         slimeColor: player.slimeColor,
+        patternId: player.patternId,
         paintScore: player.paintScore,
         killCount: player.killCount,
         deathCount: player.deathCount,

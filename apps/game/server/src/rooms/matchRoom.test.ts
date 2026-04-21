@@ -55,6 +55,11 @@ function createRoomHarness() {
   ).broadcast = (type: string, payload: unknown, options?: unknown) => {
     broadcasts.push({ type, payload, options });
   };
+  (room as unknown as { setMetadata(metadata: any): Promise<void> }).setMetadata = (
+    _metadata: any,
+  ) => {
+    return Promise.resolve();
+  };
 
   room.onCreate();
 

@@ -68,8 +68,10 @@ export class MatchScene {
   private readonly pauseMenu: PauseMenuOverlay;
 
   private localPlayer: LocalPlayer | null = null;
+  private localPlayerPatternId = -1;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
   private readonly playerColors = new Map<string, number>();
+  private readonly playerPatterns = new Map<string, number>();
   private readonly planetPaint = new Map<string, SimPlanetPaintState>();
   private lastLocalHealth: number | null = null;
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];
@@ -474,21 +476,28 @@ export class MatchScene {
   private clearPlayerEntities(): void {
     this.localPlayer?.dispose(this.render.scene);
     this.localPlayer = null;
+    this.localPlayerPatternId = -1;
     for (const player of this.remotePlayers.values()) {
       player.dispose(this.render.scene);
     }
     this.remotePlayers.clear();
     this.playerColors.clear();
+    this.playerPatterns.clear();
   }
 
-  private ensureLocalPlayer(slimeColor: number): void {
-    if (this.localPlayer) return;
-    this.localPlayer = new LocalPlayer(this.render.scene, slimeColor);
+  private ensureLocalPlayer(slimeColor: number, patternId: number): void {
+    // Recreate if pattern changed — handles snapshot-before-onPlayerAdded race
+    if (this.localPlayer && this.localPlayerPatternId === patternId) return;
+    this.localPlayer?.dispose(this.render.scene);
+    this.localPlayer = new LocalPlayer(this.render.scene, slimeColor, patternId);
+    this.localPlayerPatternId = patternId;
   }
 
-  private ensureRemotePlayer(sessionId: string, slimeColor: number): void {
-    if (this.remotePlayers.has(sessionId)) return;
-    this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor));
+  private ensureRemotePlayer(sessionId: string, slimeColor: number, patternId: number): void {
+    const existing = this.remotePlayers.get(sessionId);
+    if (existing && this.playerPatterns.get(sessionId) === patternId) return;
+    existing?.dispose(this.render.scene);
+    this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor, patternId));
   }
 
   private syncProjectiles(snapshot: SnapshotMessage, receivedAtMs: number): void {
@@ -521,24 +530,31 @@ export class MatchScene {
     this.onDisconnectCb = cb;
   }
 
-  async connect(name: string): Promise<void> {
+  async connect(name: string, colorIndex: number): Promise<void> {
     await Promise.all(
       Object.entries(AUDIO).map(([key, { url, category }]) =>
         this.sound.preload(key, url, category),
       ),
     );
-    await this.connection.join(name, {
-      onPlayerAdded: (sessionId: string, slimeColor: number, paintGroupId: number) => {
+    await this.connection.join(name, colorIndex, {
+      onPlayerAdded: (
+        sessionId: string,
+        slimeColor: number,
+        patternId: number,
+        paintGroupId: number,
+      ) => {
         this.playerColors.set(sessionId, slimeColor);
+        this.playerPatterns.set(sessionId, patternId);
         if (sessionId === this.connection.sessionId) {
-          this.ensureLocalPlayer(slimeColor);
+          this.ensureLocalPlayer(slimeColor, patternId);
           this.runtime.setLocalPaintGroupId(paintGroupId);
         } else {
-          this.ensureRemotePlayer(sessionId, slimeColor);
+          this.ensureRemotePlayer(sessionId, slimeColor, patternId);
         }
       },
       onPlayerRemoved: (sessionId: string) => {
         this.playerColors.delete(sessionId);
+        this.playerPatterns.delete(sessionId);
         this.runtime.removePlayer(sessionId);
         if (sessionId === this.connection.sessionId) {
           this.localPlayer?.dispose(this.render.scene);
@@ -564,8 +580,9 @@ export class MatchScene {
         for (const player of snapshot.players) {
           const isLocal = player.sessionId === localSessionId;
           const slimeColor = this.playerColors.get(player.sessionId) ?? FALLBACK_PLAYER_COLOR;
-          if (isLocal) this.ensureLocalPlayer(slimeColor);
-          else this.ensureRemotePlayer(player.sessionId, slimeColor);
+          const patternId = this.playerPatterns.get(player.sessionId) ?? 0;
+          if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
+          else this.ensureRemotePlayer(player.sessionId, slimeColor, patternId);
           this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetPaint);
         }
         this.syncProjectiles(snapshot, receivedAtMs);

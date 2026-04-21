@@ -98,6 +98,7 @@ function createPaintMap(paintGroupId: number): Map<string, SimPlanetPaintState> 
             nz: 0,
             radius: 1,
             seq: 1,
+            patternId: 0,
           },
         ],
         stampBuckets: createStampBuckets(1, 1),

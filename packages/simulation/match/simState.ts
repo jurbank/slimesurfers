@@ -19,6 +19,7 @@ export interface SimQuat {
 export interface SimPaintStamp {
   paintGroupId: number;
   color: number;
+  patternId: number;
   nx: number;
   ny: number;
   nz: number;
@@ -45,6 +46,7 @@ export interface SimProjectileState {
   ownerId: string;
   weaponId: WeaponId;
   paintGroupId: number;
+  patternId: number;
   pos: SimVec3;
   vel: SimVec3;
   planetId: string;
@@ -92,6 +94,7 @@ export interface SimPlayerState {
   teamId: number;
   paintGroupId: number;
   paletteIndex: number;
+  patternId: number;
   slimeColor: number;
   // Physics
   pos: SimVec3;

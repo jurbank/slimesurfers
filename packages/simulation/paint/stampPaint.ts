@@ -18,6 +18,7 @@ export function applyPaintImpact(
     pos: { x: number; y: number; z: number };
     paintGroupId: number;
     slimeColor: number;
+    patternId: number;
     radiusMultiplier: number;
   },
 ): PaintStampMessage | null {
@@ -38,6 +39,7 @@ export function applyPaintImpact(
   const stamp: SimPaintStamp = {
     paintGroupId: impact.paintGroupId,
     color: impact.slimeColor,
+    patternId: impact.patternId,
     nx,
     ny,
     nz,

@@ -54,6 +54,7 @@ function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
   schema.teamId = sim.teamId;
   schema.paintGroupId = sim.paintGroupId;
   schema.paletteIndex = sim.paletteIndex;
+  schema.patternId = sim.patternId;
   schema.slimeColor = sim.slimeColor;
   schema.health = sim.health;
   schema.slimeLevel = sim.slimeLevel;

@@ -26,9 +26,10 @@ export class MatchRoom extends Room<{ state: GameState }> {
     this.setSimulationInterval((dt) => this.tick(dt), this.simulation.tickIntervalMs);
   }
 
-  onJoin(client: Client, options: { name?: string } = {}) {
-    const simPlayer = this.simulation.addPlayer(client.sessionId, options.name);
+  onJoin(client: Client, options: { name?: string; colorIndex?: number } = {}) {
+    const simPlayer = this.simulation.addPlayer(client.sessionId, options.name, options.colorIndex);
     addSimPlayerToRoomState(this.state, simPlayer);
+    void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
 
     const bootstrap = buildJoinBootstrap(this.simulation);
     if (bootstrap.paintStamps.length > 0) {
@@ -41,6 +42,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
   onLeave(client: Client) {
     this.simulation.removePlayer(client.sessionId);
     this.state.players.delete(client.sessionId);
+    void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
   }
 
   private tick(dt: number): void {

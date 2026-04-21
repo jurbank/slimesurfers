@@ -17,6 +17,7 @@ export class PaintSystem {
     this.brushMaterial = new THREE.ShaderMaterial({
       uniforms: {
         brushColor: { value: new THREE.Color(0xffffff) },
+        patternId: { value: 0 },
         stampNormal: { value: new THREE.Vector3(0, 1, 0) },
         stampRadius: { value: 0.1 },
         brushSoftness: { value: GAME_CONFIG.paint.brushSoftness },
@@ -75,6 +76,7 @@ export class PaintSystem {
     if (!rt) return;
 
     this.brushMaterial.uniforms.brushColor.value.set(stamp.color);
+    this.brushMaterial.uniforms.patternId.value = stamp.patternId;
     this.brushMaterial.uniforms.stampNormal.value.set(stamp.nx, stamp.ny, stamp.nz);
     // Radius adjusted for visual presence
     this.brushMaterial.uniforms.stampRadius.value =

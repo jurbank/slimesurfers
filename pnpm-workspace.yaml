@@ -9,10 +9,10 @@ catalog:
   "@colyseus/schema": ^4.0.7
   "@colyseus/sdk": ^0.17.0
   "@colyseus/ws-transport": ^0.17.0
-  "@types/express": ^5.0.0
-  express: ^5.0.0
+  "@types/express": ^5.0.6
   "@types/node": ^24
   "@types/three": ^0.183.1
+  express: ^5.0.0
   three: ^0.183.2
   tsx: ^4.0.0
   typescript: ^5

@@ -2,7 +2,7 @@ export const NETWORK_CONFIG = {
   rooms: {
     // Target room size for the intended large-action arena. This is the design target,
     // not a claim that the current implementation is production-ready at this population yet.
-    maxPlayers: 40,
+    maxPlayers: 60,
     targetPlayersBeforeNewRoom: 36,
     maxRoomsPerProcess: 8,
   },

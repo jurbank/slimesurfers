@@ -13,6 +13,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     teamId: 255,
     paintGroupId,
     paletteIndex: paintGroupId,
+    patternId: 0,
     slimeColor,
     pos: { x: 0, y: 0, z: 0 },
     vel: { x: 0, y: 0, z: 0 },

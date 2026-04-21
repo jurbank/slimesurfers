@@ -21,7 +21,8 @@
       "Bash(find:*)",
       "Bash(ls C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\apps\\\\\\\\game\\\\\\\\server\\\\\\\\node_modules\\\\\\\\@colyseus\\\\\\\\core:*)",
       "Bash(ls C:\\\\\\\\Projects\\\\\\\\j\\\\\\\\jam2\\\\\\\\apps\\\\\\\\game\\\\\\\\server\\\\\\\\node_modules\\\\\\\\@colyseus\\\\\\\\core\\\\\\\\build:*)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"import\\('three'\\).then\\(m => console.log\\(m.REVISION\\)\\)\")"
     ]
   }
 }

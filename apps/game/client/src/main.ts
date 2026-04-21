@@ -1,5 +1,6 @@
 import { JoinOverlay } from "./ui/JoinOverlay.ts";
 import { MatchScene } from "./scenes/matchScene.ts";
+import { colyseusClient } from "./network/colyseusClient.ts";
 
 const scene = new MatchScene();
 const skipJoinScreen = import.meta.env.DEV && import.meta.env.VITE_SKIP_JOIN_SCREEN === "true";
@@ -18,9 +19,9 @@ const getDevPlayerName = (): string => {
   return name;
 };
 
-const connect = async (name: string, onError: () => void): Promise<boolean> => {
+const connect = async (name: string, colorIndex: number, onError: () => void): Promise<boolean> => {
   try {
-    await scene.connect(name);
+    await scene.connect(name, colorIndex);
     return true;
   } catch (err) {
     console.error(err);
@@ -43,7 +44,7 @@ if (skipJoinScreen) {
 
   const devAutoJoin = async (): Promise<void> => {
     reconnecting = true;
-    const connected = await connect(getDevPlayerName(), () => {
+    const connected = await connect(getDevPlayerName(), 0, () => {
       console.warn("Could not connect. Is the server running? Retrying...");
     });
     reconnecting = false;
@@ -58,12 +59,42 @@ if (skipJoinScreen) {
 } else {
   const overlay = new JoinOverlay();
 
-  scene.onDisconnect(() => overlay.show("Disconnected. Try rejoining."));
+  let pollInterval: number | null = null;
 
-  overlay.onJoin(async (name) => {
+  const refreshTakenColors = async (): Promise<void> => {
+    try {
+      const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
+      overlay.setTakenColorIndices(res.data.takenColorIndices ?? []);
+    } catch {
+      // server not up yet — all colors available
+    }
+  };
+
+  const startPolling = (): void => {
+    if (pollInterval !== null) return;
+    void refreshTakenColors();
+    pollInterval = window.setInterval(() => void refreshTakenColors(), 2000);
+  };
+
+  const stopPolling = (): void => {
+    if (pollInterval === null) return;
+    clearInterval(pollInterval);
+    pollInterval = null;
+  };
+
+  startPolling();
+
+  scene.onDisconnect(() => {
+    overlay.show("Disconnected. Try rejoining.");
+    startPolling();
+  });
+
+  overlay.onJoin(async (name, colorIndex) => {
+    stopPolling();
     overlay.setConnecting();
-    const connected = await connect(name, () => {
+    const connected = await connect(name, colorIndex, () => {
       overlay.show("Could not connect. Is the server running?");
+      startPolling();
     });
     if (connected) overlay.hide();
   });

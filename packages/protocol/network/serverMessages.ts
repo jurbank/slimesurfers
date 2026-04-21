@@ -51,6 +51,7 @@ export interface ProjectileSnapshot {
   ownerId: string;
   weaponId: WeaponId;
   paintGroupId: number;
+  patternId: number;
   pos: Vec3Data;
   vel: Vec3Data;
   planetId: string;
@@ -74,6 +75,7 @@ export interface PaintStampMessage {
   planetId: string;
   paintGroupId: number;
   color: number;
+  patternId: number;
   nx: number;
   ny: number;
   nz: number;
@@ -93,6 +95,7 @@ export interface LeaderboardEntry {
   teamId: number;
   paintGroupId: number;
   slimeColor: number;
+  patternId: number;
   /** Cumulative paint score for this match */
   paintScore: number;
   /** Total confirmed eliminations this match */

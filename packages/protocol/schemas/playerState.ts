@@ -44,6 +44,8 @@ export class PlayerState extends Schema {
   declare paintGroupId: number;
   /** Visual palette slot used to derive slimeColor for the current mode. */
   declare paletteIndex: number;
+  /** Pattern overlay applied to the slime mesh (see PATTERN_COUNT in gameModes.ts). */
+  declare patternId: number;
   /** 0xRRGGBB packed integer — the player's slime colour */
   declare slimeColor: number;
 
@@ -63,6 +65,7 @@ defineTypes(PlayerState, {
   teamId: "uint8",
   paintGroupId: "uint16",
   paletteIndex: "uint8",
+  patternId: "uint8",
   slimeColor: "uint32",
   health: "uint8",
   slimeLevel: "float32",

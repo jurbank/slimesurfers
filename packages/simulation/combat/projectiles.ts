@@ -304,6 +304,7 @@ function addDeathBurstPaint(
       pos: add(planet.center, scale(surfaceDir, surfaceRadius)),
       paintGroupId: owner.paintGroupId,
       slimeColor: owner.slimeColor,
+      patternId: owner.patternId,
       radiusMultiplier: cfg.paint.deathBurstRadiusMultiplier,
     });
     if (stamp) paintStamps.push(stamp);
@@ -477,6 +478,7 @@ export function tryFireProjectile(
     ownerId: player.sessionId,
     weaponId: weapon.id,
     paintGroupId: player.paintGroupId,
+    patternId: player.patternId,
     pos: muzzlePos,
     vel: scale(aim, weapon.projectileSpeed),
     planetId: player.planetId,
@@ -573,6 +575,7 @@ export function tickProjectiles(
             pos: impactPos,
             paintGroupId: projectile.paintGroupId,
             slimeColor: owner?.slimeColor ?? 0xffffff,
+            patternId: projectile.patternId,
             radiusMultiplier: weapon.paintRadiusMultiplier,
           });
           if (stamp) paintStamps.push(stamp);
@@ -599,6 +602,7 @@ export function tickProjectiles(
               pos: impactPos,
               paintGroupId: projectile.paintGroupId,
               slimeColor: owner?.slimeColor ?? 0xffffff,
+              patternId: projectile.patternId,
               radiusMultiplier: weapon.paintRadiusMultiplier,
             });
             if (stamp) paintStamps.push(stamp);

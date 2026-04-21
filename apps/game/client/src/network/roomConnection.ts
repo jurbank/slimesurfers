@@ -10,9 +10,15 @@ import type {
   SnapshotMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import type { PlayerState } from "@splat/protocol/schemas/playerState.ts";
+import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 
 export interface RoomCallbacks {
-  onPlayerAdded(sessionId: string, slimeColor: number, paintGroupId: number): void;
+  onPlayerAdded(
+    sessionId: string,
+    slimeColor: number,
+    patternId: number,
+    paintGroupId: number,
+  ): void;
   onPlayerRemoved(sessionId: string): void;
   // Snapshots and paint stamps drive frame-critical client state; schema stays
   // focused on persistent room membership and shared territory state.
@@ -29,8 +35,17 @@ export class RoomConnection {
     return this.room?.sessionId ?? null;
   }
 
-  async join(name: string, callbacks: RoomCallbacks): Promise<void> {
-    this.room = await colyseusClient.joinOrCreate("match", { name }, GameState);
+  async fetchTakenColorIndices(): Promise<number[]> {
+    try {
+      const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
+      return res.data.takenColorIndices ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  async join(name: string, colorIndex: number, callbacks: RoomCallbacks): Promise<void> {
+    this.room = await colyseusClient.joinOrCreate("match", { name, colorIndex }, GameState);
 
     this.room.onMessage(MessageType.Snapshot, (snapshot: SnapshotMessage) => {
       callbacks.onSnapshot(snapshot, performance.now());
@@ -47,7 +62,12 @@ export class RoomConnection {
     const $ = getStateCallbacks(this.room);
 
     $(this.room.state.players).onAdd((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerAdded(sessionId, player.slimeColor, player.paintGroupId);
+      callbacks.onPlayerAdded(
+        sessionId,
+        player.slimeColor,
+        FFA_MODE.slots[player.paletteIndex]?.patternId ?? 0,
+        player.paintGroupId,
+      );
     });
 
     $(this.room.state.players).onRemove((_player: PlayerState, sessionId: string) => {
@@ -56,7 +76,12 @@ export class RoomConnection {
 
     const players = this.room.state.players;
     players?.forEach((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerAdded(sessionId, player.slimeColor, player.paintGroupId);
+      callbacks.onPlayerAdded(
+        sessionId,
+        player.slimeColor,
+        FFA_MODE.slots[player.paletteIndex]?.patternId ?? 0,
+        player.paintGroupId,
+      );
     });
 
     this.room.onLeave(() => {

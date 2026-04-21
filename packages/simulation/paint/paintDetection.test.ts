@@ -53,6 +53,7 @@ describe("paintDetection", () => {
       nz: 0,
       radius: TEST_STAMP.radius,
       seq: 1,
+      patternId: 0,
     });
 
     expect(getPaintAtPoint({ x: -251, y: 0, z: 0 }, "planet-0", planets)?.paintGroupId).toBe(1);

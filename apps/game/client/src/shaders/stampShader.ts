@@ -8,6 +8,7 @@ export const stampVertexShader = `
 
 export const stampFragmentShader = `
   uniform vec3 brushColor;
+  uniform int patternId;
   uniform vec3 stampNormal;
   uniform float stampRadius;
   uniform float brushSoftness;
@@ -29,6 +30,20 @@ export const stampFragmentShader = `
                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+
+  bool isInPattern(float u, float v, int id) {
+    float freq = 400.0;
+    if (id == 1 || id == 5) return mod(v * freq, 1.0) > 0.5;
+    if (id == 2 || id == 6) {
+      float dx = mod(u * freq, 1.0) - 0.5;
+      float dy = mod(v * freq, 1.0) - 0.5;
+      return dx * dx + dy * dy < 0.04;
+    }
+    if (id == 3) return mod((u + v) * freq, 1.0) > 0.5;
+    if (id == 4) return mod(u * freq, 1.0) > 0.5;
+    if (id == 7) return mod(floor(u * freq) + floor(v * freq), 2.0) == 0.0;
+    return false;
   }
 
   void main() {
@@ -58,6 +73,14 @@ export const stampFragmentShader = `
     float pooledCenter = 1.0 - smoothstep(0.0, noisyRadius * 0.75, dist);
     mask = clamp(mask + pooledCenter * 0.18, 0.0, 1.0);
     
-    gl_FragColor = vec4(brushColor, mask);
+    vec3 color = brushColor;
+    if (isInPattern(u, v, patternId)) {
+      bool isDark = (patternId == 5 || patternId == 6);
+      vec3 patternColor = isDark ? vec3(0.0) : vec3(1.0);
+      float blend = 0.55;
+      color = mix(brushColor, patternColor, blend);
+    }
+
+    gl_FragColor = vec4(color, mask);
   }
 `;

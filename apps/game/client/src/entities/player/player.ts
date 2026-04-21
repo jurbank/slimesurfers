@@ -34,8 +34,8 @@ export class LocalPlayer {
   );
   private readonly aimQuat = new THREE.Quaternion();
 
-  constructor(scene: THREE.Scene, slimeColor: number) {
-    const rig = createPlayerMesh(slimeColor);
+  constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
+    const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;

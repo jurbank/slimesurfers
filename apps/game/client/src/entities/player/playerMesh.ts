@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { getWeaponDefinition, WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
 
 export interface PlayerMeshRig {
   group: THREE.Group;
@@ -10,7 +11,7 @@ export interface PlayerMeshRig {
   snowboardMesh: THREE.Group;
 }
 
-export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
+export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
   const group = new THREE.Group();
   const liveMesh = new THREE.Group();
   const deadMesh = new THREE.Group();
@@ -22,13 +23,13 @@ export function createPlayerMesh(slimeColor: number): PlayerMeshRig {
   // but for now a regular sphere is fine.
   const bodyRadius = GAME_CONFIG.movement.collisionRadius;
   const bodyGeom = new THREE.SphereGeometry(bodyRadius, 32, 24);
-  const bodyMat = new THREE.MeshLambertMaterial({ color: slimeColor });
+  const bodyMat = createSlimeMaterial(slimeColor, patternId);
   const body = new THREE.Mesh(bodyGeom, bodyMat);
   liveMesh.add(body);
 
   // 2. Bunny Ears
   const earGeom = new THREE.CapsuleGeometry(0.08, 0.3, 4, 8);
-  const earMat = new THREE.MeshLambertMaterial({ color: slimeColor });
+  const earMat = createSlimeMaterial(slimeColor, patternId);
 
   const leftEar = new THREE.Mesh(earGeom, earMat);
   leftEar.position.set(-0.2, 0.4, 0);
