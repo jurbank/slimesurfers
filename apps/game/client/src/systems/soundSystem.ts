@@ -14,6 +14,12 @@ interface ActiveMusic {
 }
 
 const FADE_DURATION = 1.5;
+const STORAGE_KEY = "jam2.audioSettings";
+
+interface StoredAudioSettings {
+  muted?: Partial<Record<SoundCategory, boolean>>;
+  volumes?: Partial<Record<SoundCategory, number>>;
+}
 
 export class SoundSystem {
   private ctx: AudioContext | null = null;
@@ -26,7 +32,12 @@ export class SoundSystem {
   private readonly pending = new Map<string, Promise<void>>();
   private readonly sfxLastPlayedMs = new Map<string, number>();
   private activeMusic: ActiveMusic | null = null;
-  private volumes = { music: 0.7, sfx: 1.0 };
+  private volumes = { music: 0.75, sfx: 0.75 };
+  private muted = { music: false, sfx: false };
+
+  constructor() {
+    this.loadSettings();
+  }
 
   // Call once after the first user interaction to unlock the AudioContext.
   resume(): void {
@@ -38,8 +49,8 @@ export class SoundSystem {
     this.ctx = new AudioContext();
     const music = this.ctx.createGain();
     const sfx = this.ctx.createGain();
-    music.gain.value = this.volumes.music;
-    sfx.gain.value = this.volumes.sfx;
+    music.gain.value = this.getEffectiveVolume("music");
+    sfx.gain.value = this.getEffectiveVolume("sfx");
     music.connect(this.ctx.destination);
     sfx.connect(this.ctx.destination);
     this.masterGain.music = music;
@@ -171,13 +182,23 @@ export class SoundSystem {
   }
 
   setVolume(category: SoundCategory, value: number): void {
-    this.volumes[category] = value;
-    const node = this.masterGain[category];
-    if (node) node.gain.value = value;
+    this.volumes[category] = Math.max(0, Math.min(1, value));
+    this.applyVolume(category);
+    this.saveSettings();
   }
 
   getVolume(category: SoundCategory): number {
     return this.volumes[category];
+  }
+
+  setMuted(category: SoundCategory, muted: boolean): void {
+    this.muted[category] = muted;
+    this.applyVolume(category);
+    this.saveSettings();
+  }
+
+  isMuted(category: SoundCategory): boolean {
+    return this.muted[category];
   }
 
   isLoaded(key: string): boolean {
@@ -192,6 +213,44 @@ export class SoundSystem {
     gain.gain.linearRampToValueAtTime(0, now + duration);
     source.stop(now + duration);
     this.activeMusic = null;
+  }
+
+  private applyVolume(category: SoundCategory): void {
+    const node = this.masterGain[category];
+    if (node) node.gain.value = this.getEffectiveVolume(category);
+  }
+
+  private getEffectiveVolume(category: SoundCategory): number {
+    return this.muted[category] ? 0 : this.volumes[category];
+  }
+
+  private loadSettings(): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredAudioSettings;
+      this.applyStoredVolume("music", parsed.volumes?.music);
+      this.applyStoredVolume("sfx", parsed.volumes?.sfx);
+      this.muted.music = parsed.muted?.music ?? this.muted.music;
+      this.muted.sfx = parsed.muted?.sfx ?? this.muted.sfx;
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
+  private applyStoredVolume(category: SoundCategory, value: unknown): void {
+    if (typeof value !== "number" || !Number.isFinite(value)) return;
+    this.volumes[category] = Math.max(0, Math.min(1, value));
+  }
+
+  private saveSettings(): void {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        muted: this.muted,
+        volumes: this.volumes,
+      }),
+    );
   }
 
   private ensureContext(): AudioContext {

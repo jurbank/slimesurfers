@@ -1,3 +1,5 @@
+import type { SoundSystem, SoundCategory } from "../systems/soundSystem.ts";
+
 type PauseMenuCallback = () => void;
 
 const CONTROLS = [
@@ -16,7 +18,7 @@ export class PauseMenuOverlay {
   private onResumeCb: PauseMenuCallback | null = null;
   private onToggleCb: PauseMenuCallback | null = null;
 
-  constructor() {
+  constructor(sound: SoundSystem) {
     this.root = document.createElement("div");
     Object.assign(this.root.style, {
       position: "fixed",
@@ -104,6 +106,28 @@ export class PauseMenuOverlay {
       controls.append(actionEl, bindingEl);
     }
 
+    const audioTitle = document.createElement("div");
+    audioTitle.textContent = "Audio";
+    Object.assign(audioTitle.style, {
+      margin: "0 0 10px",
+      color: "#97abc0",
+      fontSize: "0.76rem",
+      fontWeight: "bold",
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+    });
+
+    const audioControls = document.createElement("div");
+    Object.assign(audioControls.style, {
+      display: "grid",
+      gap: "12px",
+      marginBottom: "22px",
+    });
+    audioControls.append(
+      this.createAudioControl(sound, "music", "Music"),
+      this.createAudioControl(sound, "sfx", "Sound"),
+    );
+
     this.resumeBtn = document.createElement("button");
     this.resumeBtn.textContent = "Resume";
     Object.assign(this.resumeBtn.style, {
@@ -129,7 +153,16 @@ export class PauseMenuOverlay {
       textAlign: "center",
     });
 
-    panel.append(title, summary, controlsTitle, controls, this.resumeBtn, note);
+    panel.append(
+      title,
+      summary,
+      controlsTitle,
+      controls,
+      audioTitle,
+      audioControls,
+      this.resumeBtn,
+      note,
+    );
     this.root.appendChild(panel);
     document.body.appendChild(this.root);
 
@@ -166,5 +199,75 @@ export class PauseMenuOverlay {
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  private createAudioControl(
+    sound: SoundSystem,
+    category: SoundCategory,
+    label: string,
+  ): HTMLDivElement {
+    const row = document.createElement("div");
+    Object.assign(row.style, {
+      display: "grid",
+      gridTemplateColumns: "auto 1fr auto",
+      gap: "12px",
+      alignItems: "center",
+    });
+
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = !sound.isMuted(category);
+    enabled.ariaLabel = `${label} enabled`;
+    Object.assign(enabled.style, {
+      width: "18px",
+      height: "18px",
+      accentColor: "#27ffb3",
+      cursor: "pointer",
+    });
+
+    const labelEl = document.createElement("label");
+    labelEl.textContent = label;
+    Object.assign(labelEl.style, {
+      color: "#e8eef8",
+      fontSize: "0.94rem",
+    });
+
+    const value = document.createElement("div");
+    Object.assign(value.style, {
+      minWidth: "42px",
+      color: "#b8c6d4",
+      fontSize: "0.82rem",
+      textAlign: "right",
+      fontVariantNumeric: "tabular-nums",
+    });
+
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "100";
+    slider.step = "1";
+    slider.value = String(Math.round(sound.getVolume(category) * 100));
+    slider.ariaLabel = `${label} volume`;
+    Object.assign(slider.style, {
+      gridColumn: "2 / 4",
+      width: "100%",
+      accentColor: "#27ffb3",
+      cursor: "pointer",
+    });
+
+    const sync = () => {
+      sound.setMuted(category, !enabled.checked);
+      sound.setVolume(category, Number(slider.value) / 100);
+      value.textContent = `${slider.value}%`;
+      slider.disabled = !enabled.checked;
+      slider.style.opacity = enabled.checked ? "1" : "0.45";
+    };
+
+    enabled.addEventListener("change", sync);
+    slider.addEventListener("input", sync);
+    sync();
+
+    row.append(enabled, labelEl, value, slider);
+    return row;
   }
 }

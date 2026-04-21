@@ -250,7 +250,7 @@ export class MatchScene {
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
     this.leaderboard = new LeaderboardOverlay();
-    this.pauseMenu = new PauseMenuOverlay();
+    this.pauseMenu = new PauseMenuOverlay(this.sound);
     this.pauseMenu.onResume(() => this.setPaused(false));
     this.pauseMenu.onToggle(() => this.setPaused(!this.pauseMenu.isVisible()));
     this.input.onPointerLockExit(() => this.setPaused(true));
