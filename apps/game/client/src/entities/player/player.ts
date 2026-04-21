@@ -24,8 +24,9 @@ export class LocalPlayer {
   private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
+  private readonly outlineMesh: THREE.Group;
+  private readonly disturbanceMesh: THREE.Mesh;
   private readonly materials: THREE.Material[] = [];
-  private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly inverseMeshQuat = new THREE.Quaternion();
   private readonly localAimDir = new THREE.Vector3();
   private readonly weaponForward = new THREE.Vector3(0, 0, 1);
@@ -41,6 +42,8 @@ export class LocalPlayer {
     this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
+    this.outlineMesh = rig.outlineMesh;
+    this.disturbanceMesh = rig.disturbanceMesh;
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
@@ -66,6 +69,8 @@ export class LocalPlayer {
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
       this.snowboardMesh.visible = false;
+      this.outlineMesh.visible = false;
+      this.disturbanceMesh.visible = false;
       this.mesh.scale.set(1, 1, 1);
       this.setOpacity(1);
       return;
@@ -81,31 +86,32 @@ export class LocalPlayer {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
     }
 
-    if (state.movementState === PlayerMovementState.Airborne || state.isShooting) {
+    const isSubmerged =
+      state.swimState === PlayerSwimState.SwimmingMoving ||
+      state.swimState === PlayerSwimState.SwimmingHidden;
+
+    this.outlineMesh.visible = isSubmerged;
+
+    if (isSubmerged) {
       this.mesh.scale.set(1, 1, 1);
-      this.setOpacity(1);
+      this.setOpacity(0);
+      if (state.swimState === PlayerSwimState.SwimmingMoving) {
+        const t = performance.now() * 0.001;
+        const pulse = Math.sin(t * 3) * 0.5 + 0.5;
+        const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.25 + pulse * 0.4;
+        this.disturbanceMesh.scale.setScalar(0.75 + pulse * 0.5);
+        this.disturbanceMesh.visible = true;
+      } else {
+        this.disturbanceMesh.visible = false;
+      }
       return;
     }
 
-    if (state.swimState === PlayerSwimState.None) {
-      this.mesh.scale.set(1, 1, 1);
-      this.setOpacity(1);
-      return;
-    }
-
-    if (
-      state.swimState === PlayerSwimState.SkiVisible ||
-      state.swimState === PlayerSwimState.SkiWater
-    ) {
-      this.mesh.scale.set(1, 1, 1);
-      this.setOpacity(1);
-      return;
-    }
-
-    this.up.set(0, 1, 0).applyQuaternion(this.mesh.quaternion).normalize();
-    this.mesh.position.addScaledVector(this.up, -0.45);
-    this.mesh.scale.set(1.1, 0.5, 1.1);
-    this.setOpacity(0.45);
+    this.disturbanceMesh.visible = false;
+    this.outlineMesh.visible = false;
+    this.mesh.scale.set(1, 1, 1);
+    this.setOpacity(1);
   }
 
   dispose(scene: THREE.Scene): void {

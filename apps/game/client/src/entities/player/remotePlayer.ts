@@ -24,9 +24,7 @@ export class RemotePlayer {
   private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
-  private readonly disturbance: THREE.Mesh;
-  private readonly up = new THREE.Vector3(0, 1, 0);
-
+  private readonly disturbanceMesh: THREE.Mesh;
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
@@ -34,25 +32,16 @@ export class RemotePlayer {
     this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
-    this.disturbance = new THREE.Mesh(
-      new THREE.SphereGeometry(0.38, 16, 12),
-      new THREE.MeshBasicMaterial({
-        color: slimeColor,
-        transparent: true,
-        opacity: 0.45,
-        depthWrite: false,
-      }),
-    );
-    this.disturbance.scale.set(1.4, 0.18, 1.4);
-    this.disturbance.visible = false;
+    this.disturbanceMesh = rig.disturbanceMesh;
+    // Detach disturbance from group so it stays visible when the player mesh is hidden.
+    this.mesh.remove(this.disturbanceMesh);
+    scene.add(this.disturbanceMesh);
     scene.add(this.mesh);
-    scene.add(this.disturbance);
   }
 
   update(state: PlayerTransformState): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
-    this.up.set(0, 1, 0).applyQuaternion(this.mesh.quaternion).normalize();
 
     if (state.movementState === PlayerMovementState.Dead) {
       this.mesh.visible = true;
@@ -60,7 +49,7 @@ export class RemotePlayer {
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
       this.snowboardMesh.visible = false;
-      this.disturbance.visible = false;
+      this.disturbanceMesh.visible = false;
       return;
     }
 
@@ -75,30 +64,37 @@ export class RemotePlayer {
 
     if (state.movementState === PlayerMovementState.Airborne || state.isShooting) {
       this.mesh.visible = true;
-      this.disturbance.visible = false;
+      this.disturbanceMesh.visible = false;
       return;
     }
 
     if (state.swimState === PlayerSwimState.None) {
       this.mesh.visible = true;
-      this.disturbance.visible = false;
+      this.disturbanceMesh.visible = false;
       return;
     }
 
     this.mesh.visible =
       state.swimState === PlayerSwimState.SkiVisible ||
       state.swimState === PlayerSwimState.SkiWater;
-    this.disturbance.visible = state.swimState === PlayerSwimState.SwimmingMoving;
-    if (!this.disturbance.visible) return;
 
-    this.disturbance.position.set(state.pos.x, state.pos.y, state.pos.z);
-    this.disturbance.position.addScaledVector(this.up, -0.75);
-    this.disturbance.quaternion.copy(this.mesh.quaternion);
+    if (state.swimState === PlayerSwimState.SwimmingMoving) {
+      const t = performance.now() * 0.001;
+      const pulse = Math.sin(t * 3) * 0.5 + 0.5;
+      const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.25 + pulse * 0.4;
+      this.disturbanceMesh.quaternion.copy(this.mesh.quaternion);
+      this.disturbanceMesh.position.copy(this.mesh.position);
+      this.disturbanceMesh.scale.setScalar(0.75 + pulse * 0.5);
+      this.disturbanceMesh.visible = true;
+    } else {
+      this.disturbanceMesh.visible = false;
+    }
   }
 
   dispose(scene: THREE.Scene): void {
     scene.remove(this.mesh);
-    scene.remove(this.disturbance);
+    scene.remove(this.disturbanceMesh);
   }
 
   isAimTargetVisible(): boolean {

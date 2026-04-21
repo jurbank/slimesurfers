@@ -9,6 +9,8 @@ export interface PlayerMeshRig {
   deadMesh: THREE.Group;
   weaponMesh: THREE.Mesh;
   snowboardMesh: THREE.Group;
+  outlineMesh: THREE.Group;
+  disturbanceMesh: THREE.Mesh;
 }
 
 export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
@@ -140,5 +142,51 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   weaponMesh.visible = false;
   liveMesh.add(weaponMesh);
 
-  return { group, liveMesh, deadMesh, weaponMesh, snowboardMesh };
+  // Inverted-hull outline — visible only to the local player when submerged/invisible.
+  // Lives on `group` (not `liveMesh`) so it's unaffected by setOpacity traversal.
+  const outlineMat = new THREE.MeshBasicMaterial({
+    color: slimeColor,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0.82,
+    depthWrite: false,
+  });
+  const outlineMesh = new THREE.Group();
+  outlineMesh.visible = false;
+
+  const bodyOutline = new THREE.Mesh(bodyGeom, outlineMat);
+  bodyOutline.scale.setScalar(1.18);
+  outlineMesh.add(bodyOutline);
+
+  const leftEarOutline = new THREE.Mesh(earGeom, outlineMat);
+  leftEarOutline.position.copy(leftEar.position);
+  leftEarOutline.rotation.copy(leftEar.rotation);
+  leftEarOutline.scale.setScalar(1.18);
+  outlineMesh.add(leftEarOutline);
+
+  const rightEarOutline = new THREE.Mesh(earGeom, outlineMat);
+  rightEarOutline.position.copy(rightEar.position);
+  rightEarOutline.rotation.copy(rightEar.rotation);
+  rightEarOutline.scale.setScalar(1.18);
+  outlineMesh.add(rightEarOutline);
+
+  group.add(outlineMesh);
+
+  const disturbanceMat = new THREE.MeshBasicMaterial({
+    color: slimeColor,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const disturbanceMesh = new THREE.Mesh(
+    new THREE.TorusGeometry(0.55, 0.055, 6, 28),
+    disturbanceMat,
+  );
+  disturbanceMesh.rotation.x = Math.PI / 2;
+  disturbanceMesh.position.y = -0.3;
+  disturbanceMesh.visible = false;
+  group.add(disturbanceMesh);
+
+  return { group, liveMesh, deadMesh, weaponMesh, snowboardMesh, outlineMesh, disturbanceMesh };
 }
