@@ -688,6 +688,7 @@ export class MatchScene {
             : undefined;
         this.localPlayer.update(
           predictedLocalState,
+          dt,
           visualRotation,
           new THREE.Vector3(aimDir.x, aimDir.y, aimDir.z),
         );

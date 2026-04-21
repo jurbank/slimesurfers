@@ -7,6 +7,8 @@ import {
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 
+const SKI_ROTATION_LERP_SPEED = 7;
+
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
@@ -34,6 +36,8 @@ export class LocalPlayer {
     new THREE.Euler(Math.PI / 2, Math.PI / 18, 0),
   );
   private readonly aimQuat = new THREE.Quaternion();
+  private readonly skiVisualRotation = new THREE.Quaternion();
+  private readonly skiTargetRotation = new THREE.Quaternion();
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
@@ -54,14 +58,24 @@ export class LocalPlayer {
 
   update(
     state: PlayerTransformState,
+    dt: number,
     visualRotation?: THREE.Quaternion,
     aimDir?: THREE.Vector3,
   ): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     if (visualRotation) {
+      this.skiVisualRotation.copy(visualRotation);
       this.mesh.quaternion.copy(visualRotation);
+    } else if (state.swimState !== PlayerSwimState.None) {
+      this.skiTargetRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
+      this.skiVisualRotation.slerp(
+        this.skiTargetRotation,
+        Math.min(1, dt * SKI_ROTATION_LERP_SPEED),
+      );
+      this.mesh.quaternion.copy(this.skiVisualRotation);
     } else {
-      this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
+      this.skiVisualRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
+      this.mesh.quaternion.copy(this.skiVisualRotation);
     }
 
     if (state.movementState === PlayerMovementState.Dead) {
