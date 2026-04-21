@@ -10,6 +10,7 @@ import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
+import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { SoundSystem } from "../systems/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -69,6 +70,7 @@ export class MatchScene {
 
   private localPlayer: LocalPlayer | null = null;
   private localPlayerPatternId = -1;
+  private localTrail: SkiTrailSystem | null = null;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
   private readonly playerColors = new Map<string, number>();
   private readonly playerPatterns = new Map<string, number>();
@@ -475,7 +477,9 @@ export class MatchScene {
 
   private clearPlayerEntities(): void {
     this.localPlayer?.dispose(this.render.scene);
+    this.localTrail?.dispose();
     this.localPlayer = null;
+    this.localTrail = null;
     this.localPlayerPatternId = -1;
     for (const player of this.remotePlayers.values()) {
       player.dispose(this.render.scene);
@@ -489,7 +493,9 @@ export class MatchScene {
     // Recreate if pattern changed — handles snapshot-before-onPlayerAdded race
     if (this.localPlayer && this.localPlayerPatternId === patternId) return;
     this.localPlayer?.dispose(this.render.scene);
+    this.localTrail?.dispose();
     this.localPlayer = new LocalPlayer(this.render.scene, slimeColor, patternId);
+    this.localTrail = new SkiTrailSystem(this.render.scene, slimeColor);
     this.localPlayerPatternId = patternId;
   }
 
@@ -685,6 +691,10 @@ export class MatchScene {
           visualRotation,
           new THREE.Vector3(aimDir.x, aimDir.y, aimDir.z),
         );
+        if (this.localTrail) {
+          const localColor = this.playerColors.get(localSessionId) ?? FALLBACK_PLAYER_COLOR;
+          this.localTrail.update(predictedLocalState, planetCenter, localColor);
+        }
         this.lastAimDir = this.camera.update(
           predictedLocalState.pos,
           yawForward,
