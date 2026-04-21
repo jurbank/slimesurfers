@@ -80,6 +80,7 @@ export const PlayerSwimState = {
   SwimmingMoving: 1,
   SwimmingHidden: 2,
   SkiVisible: 3,
+  SkiWater: 4,
 } as const;
 export type PlayerSwimState = (typeof PlayerSwimState)[keyof typeof PlayerSwimState];
 

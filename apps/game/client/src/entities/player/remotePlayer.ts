@@ -85,7 +85,9 @@ export class RemotePlayer {
       return;
     }
 
-    this.mesh.visible = state.swimState === PlayerSwimState.SkiVisible;
+    this.mesh.visible =
+      state.swimState === PlayerSwimState.SkiVisible ||
+      state.swimState === PlayerSwimState.SkiWater;
     this.disturbance.visible = state.swimState === PlayerSwimState.SwimmingMoving;
     if (!this.disturbance.visible) return;
 

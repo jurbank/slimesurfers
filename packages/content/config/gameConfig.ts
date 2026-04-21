@@ -121,6 +121,9 @@ export const GAME_CONFIG = {
     enemySpeedMultiplier: 0.7,
     swimSpeedMultiplier: 2.2,
     swimDisturbanceMinSpeed: 1.5,
+    waterSkiSpeedMultiplier: 2.8,
+    waterSkiFriction: 0.6,
+    waterSkiLateralDrag: 4.0,
   },
 
   // -- Terrain ---------------------------------------------------------------

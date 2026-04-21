@@ -10,7 +10,7 @@ import {
   type SimPlanetPaintState,
 } from "../match/simState.ts";
 import { getPaintAtPoint } from "../paint/paintDetection.ts";
-import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
 
 // -- Public interfaces -------------------------------------------------------
 
@@ -55,6 +55,9 @@ export interface StepConfig {
     enemySpeedMultiplier: number;
     swimSpeedMultiplier: number;
     swimDisturbanceMinSpeed: number;
+    waterSkiSpeedMultiplier: number;
+    waterSkiFriction: number;
+    waterSkiLateralDrag: number;
   };
   terrain: {
     seed: number;
@@ -223,6 +226,17 @@ function getTerrainContact(
   return { radialNormal: n, surfaceNormal, centerPos, centerRadius };
 }
 
+function getWaterContact(
+  planet: PlanetData,
+  radialNormal: Vec3Data,
+  cfg: StepConfig,
+): TerrainContact {
+  const n = normalize(radialNormal);
+  const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel + cfg.movement.standingHeight;
+  const centerPos = add(planet.center, scale(n, waterRadius));
+  return { radialNormal: n, surfaceNormal: n, centerPos, centerRadius: waterRadius };
+}
+
 function getNearestPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
   let nearest: PlanetData | null = null;
   let nearestDist = Infinity;
@@ -276,21 +290,43 @@ function stepOnSurface(
   }
 
   const oldNormal = normalize(sub(state.pos, planet.center));
-  const oldContact = getTerrainContact(planet, oldNormal, cfg);
   const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint);
   const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
   const onEnemyPaint = paint !== null && !onFriendlyPaint;
   const onNeutralSurface = paint === null;
+  const terrainHeight = getTerrainHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg);
+  const terrainBelowWater = terrainHeight < cfg.terrain.waterLevel;
+  // Player is above water if their position hasn't yet dropped below the water sphere.
+  const waterSurfaceRadius =
+    cfg.planet.radius + cfg.terrain.waterLevel + cfg.movement.standingHeight;
+  const playerAboveWater =
+    vlen(sub(state.pos, planet.center)) >= waterSurfaceRadius - cfg.movement.surfaceSnapDistance;
+  // Terrain below water triggers water skiing when the player is still at the surface,
+  // or when they're already water skiing (to prevent submerged paint pulling them down).
+  const onWater =
+    terrainBelowWater && (playerAboveWater || state.swimState === PlayerSwimState.SkiWater);
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const wasSkiActive = state.swimState !== PlayerSwimState.None;
   let skiActive = wasSkiActive;
 
-  if (onNeutralSurface) {
+  if (onNeutralSurface && !onWater) {
     skiActive = false;
+  } else if (onWater) {
+    // Don't water ski if the player is already submerged and on paint — they intentionally went under.
+    const wasSubmerged =
+      !playerAboveWater &&
+      (state.swimState === PlayerSwimState.SwimmingMoving ||
+        state.swimState === PlayerSwimState.SwimmingHidden);
+    skiActive = wasSkiActive && !wasSubmerged && !toggleSubmerge;
   } else if (toggleSubmerge) {
     skiActive = !skiActive;
   }
+
+  const oldContact =
+    onWater && skiActive
+      ? getWaterContact(planet, oldNormal, cfg)
+      : getTerrainContact(planet, oldNormal, cfg);
 
   const { forward, right, aimTangent, aimLen } = getTangentBasis(
     state,
@@ -305,7 +341,9 @@ function stepOnSurface(
   const boostPressed = skiActive && anchorPressed && moveZ > 0;
   const tangentVel = projectOntoPlane(state.vel, oldContact.surfaceNormal);
   let speedMultiplier = 1.0;
-  if (skiActive) {
+  if (onWater && skiActive) {
+    speedMultiplier = cfg.movement.waterSkiSpeedMultiplier;
+  } else if (skiActive) {
     speedMultiplier = cfg.movement.swimSpeedMultiplier;
   } else if (onEnemyPaint) {
     speedMultiplier = cfg.movement.enemySpeedMultiplier;
@@ -344,6 +382,45 @@ function stepOnSurface(
       hasMoveInput && vlen(groundedDirectVel) > 1e-4
         ? PlayerMovementState.Moving
         : PlayerMovementState.Idle;
+  } else if (onWater && skiActive) {
+    // Lateral drag: preserve forward momentum, damp sideways drift for carving feel
+    const fwdVel = dot(tangentVel, forward);
+    const rtVel = dot(tangentVel, right);
+    const lateralDecay = Math.max(0, 1 - cfg.movement.waterSkiLateralDrag * dt);
+    const draggedTangentVel = add(scale(forward, fwdVel), scale(right, rtVel * lateralDecay));
+
+    if (hasMoveInput || boostPressed) {
+      const moveDir = hasMoveInput
+        ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
+        : forward;
+      const baseSpeed = cfg.movement.moveSpeed * speedMultiplier;
+      const baseAcceleration = baseSpeed * 8;
+      const currentSpeed = Math.max(0, dot(state.vel, moveDir));
+      const accelerationStep = clampLength(
+        sub(scale(moveDir, baseSpeed), draggedTangentVel),
+        baseAcceleration * dt,
+      );
+      let nextTangentVel =
+        currentSpeed >= baseSpeed ? draggedTangentVel : add(draggedTangentVel, accelerationStep);
+      if (boostPressed) {
+        nextTangentVel = add(
+          nextTangentVel,
+          scale(moveDir, cfg.movement.boostAcceleration * speedMultiplier * dt),
+        );
+      }
+      assign(state.vel, add(sub(state.vel, tangentVel), nextTangentVel));
+      state.movementState =
+        vlen(nextTangentVel) > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
+    } else {
+      // Glide: apply low friction and lateral drag
+      const glidedTangentVel = sub(
+        draggedTangentVel,
+        scale(draggedTangentVel, Math.min(1, dt * cfg.movement.waterSkiFriction)),
+      );
+      assign(state.vel, add(sub(state.vel, tangentVel), glidedTangentVel));
+      state.movementState =
+        vlen(glidedTangentVel) > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
+    }
   } else if (hasMoveInput || boostPressed) {
     const moveDir = hasMoveInput
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
@@ -376,11 +453,15 @@ function stepOnSurface(
 
   if (skiActive) {
     state.isCarving = anchorPressed;
-    state.swimState = onFriendlyPaint
-      ? hasMoveInput
+    if (onWater) {
+      state.swimState = PlayerSwimState.SkiWater;
+    } else if (onFriendlyPaint) {
+      state.swimState = hasMoveInput
         ? PlayerSwimState.SwimmingMoving
-        : PlayerSwimState.SwimmingHidden
-      : PlayerSwimState.SkiVisible;
+        : PlayerSwimState.SwimmingHidden;
+    } else {
+      state.swimState = PlayerSwimState.SkiVisible;
+    }
   } else {
     state.isCarving = false;
     state.swimState = PlayerSwimState.None;
@@ -396,7 +477,10 @@ function stepOnSurface(
   const integrationVel = groundedDirectVel ?? state.vel;
   const nextPos = add(state.pos, scale(integrationVel, dt));
   const newRadialNormal = normalize(sub(nextPos, planet.center));
-  const newContact = getTerrainContact(planet, newRadialNormal, cfg);
+  const newContact =
+    onWater && skiActive
+      ? getWaterContact(planet, newRadialNormal, cfg)
+      : getTerrainContact(planet, newRadialNormal, cfg);
   const penetration = dot(sub(newContact.centerPos, nextPos), newContact.surfaceNormal);
   const movingAwayFromSurface = dot(state.vel, newContact.surfaceNormal) > 0;
 
@@ -500,7 +584,13 @@ function stepAirborne(
     if (dist < 0.01) return; // degenerate: inside planet centre
     const gravDir = scale(toPlanet, 1 / dist);
     const upDir = scale(gravDir, -1);
-    const landingRadius = getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
+    const rawLandingRadius = getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
+    const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
+    // Skiers land at the water surface, not the ocean floor — preserves ski state through the arc.
+    const landingRadius =
+      state.swimState !== PlayerSwimState.None && rawLandingRadius < waterRadius
+        ? waterRadius
+        : rawLandingRadius;
     if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
       // Only land when moving toward the planet — prevents re-landing immediately after a jump.
       const velToward = dot(state.vel, gravDir);

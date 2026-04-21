@@ -93,7 +93,10 @@ export class LocalPlayer {
       return;
     }
 
-    if (state.swimState === PlayerSwimState.SkiVisible) {
+    if (
+      state.swimState === PlayerSwimState.SkiVisible ||
+      state.swimState === PlayerSwimState.SkiWater
+    ) {
       this.mesh.scale.set(1, 1, 1);
       this.setOpacity(1);
       return;
