@@ -310,9 +310,7 @@ function stepOnSurface(
   const wasSkiActive = state.swimState !== PlayerSwimState.None;
   let skiActive = wasSkiActive;
 
-  if (onNeutralSurface && !onWater) {
-    skiActive = false;
-  } else if (onWater) {
+  if (onWater) {
     // Don't water ski if the player is already submerged and on paint — they intentionally went under.
     const wasSubmerged =
       !playerAboveWater &&
@@ -421,6 +419,9 @@ function stepOnSurface(
       state.movementState =
         vlen(glidedTangentVel) > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
     }
+  } else if (onNeutralSurface && !onWater) {
+    assign(state.vel, sub(state.vel, tangentVel));
+    state.movementState = PlayerMovementState.Idle;
   } else if (hasMoveInput || boostPressed) {
     const moveDir = hasMoveInput
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
@@ -537,6 +538,12 @@ function stepAirborne(
   cfg: StepConfig,
 ): void {
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
+  const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
+  if (toggleSubmerge && state.swimState === PlayerSwimState.None) {
+    state.swimState = PlayerSwimState.SkiVisible;
+  } else if (toggleSubmerge && state.swimState !== PlayerSwimState.None) {
+    state.swimState = PlayerSwimState.None;
+  }
   state.isCarving = state.swimState !== PlayerSwimState.None && anchorPressed;
   const nearest = getNearestPlanet(state.pos, planets);
 
