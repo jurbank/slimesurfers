@@ -11,6 +11,7 @@
     "@splat/protocol": "workspace:*",
     "@splat/simulation": "workspace:*",
     "@types/three": "catalog:",
+    "nipplejs": "catalog:",
     "three": "catalog:"
   }
 }

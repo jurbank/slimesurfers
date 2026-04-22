@@ -30,6 +30,9 @@ catalogs:
     express:
       specifier: ^5.0.0
       version: 5.2.1
+    nipplejs:
+      specifier: ^1.0.1
+      version: 1.0.1
     three:
       specifier: ^0.183.2
       version: 0.183.2
@@ -69,6 +72,9 @@ importers:
       '@types/three':
         specifier: 'catalog:'
         version: 0.183.1
+      nipplejs:
+        specifier: 'catalog:'
+        version: 1.0.1
       three:
         specifier: 'catalog:'
         version: 0.183.2
@@ -1289,6 +1295,9 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
+  nipplejs@1.0.1:
+    resolution: {integrity: sha512-+GhZWy62hfGIo6qE7vkAbbSFPWDIf3KLxOXwOruryKO3e8Tm8bDMz9EyK+CUr6zqWUC2sT7jZjsQIUawndGzQA==}
+
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
@@ -2397,6 +2406,8 @@ snapshots:
   nanoid@3.3.11: {}
 
   negotiator@1.0.0: {}
+
+  nipplejs@1.0.1: {}
 
   node-gyp-build-optional-packages@5.2.2:
     dependencies:

@@ -14,7 +14,7 @@ export class CombatHud {
     Object.assign(this.root.style, {
       position: "fixed",
       left: "16px",
-      bottom: "16px",
+      top: "16px",
       width: "260px",
       padding: "12px",
       borderRadius: "12px",
