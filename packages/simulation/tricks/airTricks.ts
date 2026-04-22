@@ -23,10 +23,18 @@ const SPIN_TRICKS = AIR_TRICK_DEFS.filter(
   (trick): trick is AirTrickDefinition & { degrees: number } =>
     trick.kind === "spin" && typeof trick.degrees === "number",
 ).sort((a, b) => a.degrees - b.degrees);
+const FRONT_FLIP_TRICKS = AIR_TRICK_DEFS.filter(
+  (trick): trick is AirTrickDefinition & { degrees: number } =>
+    trick.kind === "flip" && typeof trick.degrees === "number" && trick.degrees > 0,
+).sort((a, b) => a.degrees - b.degrees);
+const BACK_FLIP_TRICKS = AIR_TRICK_DEFS.filter(
+  (trick): trick is AirTrickDefinition & { degrees: number } =>
+    trick.kind === "flip" && typeof trick.degrees === "number" && trick.degrees < 0,
+).sort((a, b) => Math.abs(a.degrees) - Math.abs(b.degrees));
 const SEQUENCE_TRICKS = AIR_TRICK_DEFS.filter(
   (trick): trick is AirTrickDefinition & { sequence: readonly number[] } =>
     trick.kind === "sequence" && Array.isArray(trick.sequence),
-);
+).sort((a, b) => b.sequence.length - a.sequence.length);
 
 function normalize(vec: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
   const length = Math.hypot(vec.x, vec.y, vec.z);
@@ -42,6 +50,9 @@ function resetAirTrickState(player: SimPlayerState): void {
   player.lastAirTrickTimeMs = -Infinity;
   player.airTrickSpinDegrees = 0;
   player.airTrickSpinMilestoneIndex = 0;
+  player.airTrickFlipDegrees = 0;
+  player.airTrickFrontFlipMilestoneIndex = 0;
+  player.airTrickBackFlipMilestoneIndex = 0;
   player.airTrickPaintMultiplier = 1;
 }
 
@@ -136,6 +147,22 @@ function getSpinTrick(player: SimPlayerState): AirTrickDefinition | null {
   return nextSpin;
 }
 
+function getFlipTrick(player: SimPlayerState): AirTrickDefinition | null {
+  if (player.airTrickFlipDegrees >= 0) {
+    const nextFlip = FRONT_FLIP_TRICKS[player.airTrickFrontFlipMilestoneIndex];
+    if (!nextFlip) return null;
+    if (player.airTrickFlipDegrees < nextFlip.degrees) return null;
+    player.airTrickFrontFlipMilestoneIndex++;
+    return nextFlip;
+  }
+
+  const nextFlip = BACK_FLIP_TRICKS[player.airTrickBackFlipMilestoneIndex];
+  if (!nextFlip) return null;
+  if (Math.abs(player.airTrickFlipDegrees) < Math.abs(nextFlip.degrees)) return null;
+  player.airTrickBackFlipMilestoneIndex++;
+  return nextFlip;
+}
+
 function buildTrickResult(
   simState: SimMatchState,
   player: SimPlayerState,
@@ -203,6 +230,12 @@ export function processAirTricks(
   if (spinDirection !== 0) {
     player.airTrickSpinDegrees += (GAME_CONFIG.tricks.spinDegreesPerSecond * dtMs) / 1000;
   }
+  const flipDirection =
+    (input.keys & InputKey.Forward ? 1 : 0) + (input.keys & InputKey.Backward ? -1 : 0);
+  if (flipDirection !== 0) {
+    player.airTrickFlipDegrees +=
+      (flipDirection * (GAME_CONFIG.tricks.spinDegreesPerSecond * dtMs)) / 1000;
+  }
 
   const pressedDirections = getPressedDirections(input);
   if (pressedDirections.length > 0) {
@@ -222,6 +255,11 @@ export function processAirTricks(
   const spinTrick = getSpinTrick(player);
   if (spinTrick) {
     return buildTrickResult(simState, player, getAirTrickDefinition(spinTrick.id), nowMs);
+  }
+
+  const flipTrick = getFlipTrick(player);
+  if (flipTrick) {
+    return buildTrickResult(simState, player, getAirTrickDefinition(flipTrick.id), nowMs);
   }
 
   return empty;

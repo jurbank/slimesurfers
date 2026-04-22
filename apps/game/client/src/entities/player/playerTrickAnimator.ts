@@ -32,6 +32,12 @@ export class PlayerTrickAnimator {
       snowboardMesh.rotation.z = eased * Math.PI * 2;
       snowboardMesh.rotation.x = Math.sin(progress * Math.PI) * 0.35;
       liveMesh.rotation.z = Math.sin(progress * Math.PI) * -0.22;
+    } else if (trick.animation === "frontFlip" || trick.animation === "backFlip") {
+      const direction = trick.animation === "frontFlip" ? 1 : -1;
+      const rotations = Math.max(1, Math.abs(trick.degrees ?? 360) / 360);
+      liveMesh.rotation.x = direction * eased * Math.PI * 2 * rotations;
+      snowboardMesh.rotation.x = direction * eased * Math.PI * 2 * rotations;
+      snowboardMesh.position.y = -0.58 + Math.sin(progress * Math.PI) * 0.18;
     } else {
       snowboardMesh.rotation.x = eased * Math.PI * 2;
       snowboardMesh.position.y = -0.58 + Math.sin(progress * Math.PI) * 0.18;

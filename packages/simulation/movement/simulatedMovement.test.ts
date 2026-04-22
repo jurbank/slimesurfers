@@ -268,7 +268,7 @@ describe("stepPlayer", () => {
     expect(player.swimState).not.toBe(PlayerSwimState.None);
   });
 
-  it("clears ski mode after landing on neutral ground", () => {
+  it("keeps ski mode after landing on neutral ground", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
@@ -280,7 +280,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.swimState).not.toBe(PlayerSwimState.None);
   });
 
   it("keeps upward stored velocity grounded in normal mode without jump input", () => {
@@ -382,20 +382,13 @@ describe("stepPlayer", () => {
     expect(anchoredPlayer.vel.y).toBeLessThan(freePlayer.vel.y);
   });
 
-  it("adds forward flight acceleration while airborne with forward and anchor held", () => {
+  it("adds forward flight acceleration while airborne with anchor held", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
     player.pos.y += 5;
 
-    stepPlayer(
-      player,
-      createInput(InputKey.Forward | InputKey.Anchor),
-      0.1,
-      TEST_PLANETS,
-      TEST_CONFIG,
-      EMPTY_PAINT,
-    );
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
 
     expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.airBoostAcceleration * 0.1 - 0.1);
     expect(player.vel.z).toBeLessThan(TEST_CONFIG.movement.boostAcceleration * 0.1);

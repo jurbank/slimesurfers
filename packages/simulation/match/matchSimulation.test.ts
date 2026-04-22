@@ -467,6 +467,37 @@ describe("MatchSimulation", () => {
     );
   });
 
+  it("turns advanced air trick sequences into larger landing splats", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const player = simulation.addPlayer("session-1", "Alpha");
+    makeAirborneSkier(player);
+    player.slimeLevel = GAME_CONFIG.slime.maxLevel;
+
+    const sequence = [InputKey.Left, InputKey.Forward, InputKey.Right, InputKey.Backward];
+    for (let index = 0; index < sequence.length; index++) {
+      simulation.recordInput("session-1", trickInput(index + 1, sequence[index]!));
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    const events = simulation.drainTrickEventMessages();
+    expect(events).toEqual([
+      {
+        playerId: player.sessionId,
+        trickId: "slimecopter",
+        combo: 4,
+        seq: 1,
+      },
+    ]);
+    expect(player.airTrickCombo).toBe(4);
+    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+
+    landAirbornePlayer(simulation, player);
+
+    const stamps = simulation.drainPaintStampMessages();
+    expect(stamps).toHaveLength(1);
+    expect(stamps[0]?.radius).toBe(GAME_CONFIG.paint.impactStampRadius * 4.2);
+  });
+
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
@@ -535,6 +566,42 @@ describe("MatchSimulation", () => {
 
     landAirbornePlayer(simulation, player);
     expect(simulation.drainPaintStampMessages().length).toBeGreaterThan(0);
+  });
+
+  it("emits named flip trick events from held forward and backward air rotation", () => {
+    const frontSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const frontPlayer = frontSimulation.addPlayer("session-1", "Alpha");
+    makeAirborneSkier(frontPlayer);
+
+    for (let seq = 1; seq <= 10; seq++) {
+      frontSimulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Forward,
+        aimDir: { x: 0, y: 0, z: 1 },
+        dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+      });
+      frontSimulation.tick(frontSimulation.tickIntervalMs);
+    }
+
+    const frontEvents = frontSimulation.drainTrickEventMessages();
+    expect(frontEvents.some((event) => event.trickId === "frontflip")).toBe(true);
+
+    const backSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const backPlayer = backSimulation.addPlayer("session-1", "Alpha");
+    makeAirborneSkier(backPlayer);
+
+    for (let seq = 1; seq <= 10; seq++) {
+      backSimulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Backward,
+        aimDir: { x: 0, y: 0, z: 1 },
+        dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+      });
+      backSimulation.tick(backSimulation.tickIntervalMs);
+    }
+
+    const backEvents = backSimulation.drainTrickEventMessages();
+    expect(backEvents.some((event) => event.trickId === "backflip")).toBe(true);
   });
 
   it("pops a submerged player out when they are hit", () => {

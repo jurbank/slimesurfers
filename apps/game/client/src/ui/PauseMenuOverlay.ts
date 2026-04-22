@@ -1,3 +1,5 @@
+import { AIR_TRICK_DEFS, type AirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
+import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import type { SoundSystem, SoundCategory } from "../systems/soundSystem.ts";
 
 type PauseMenuCallback = () => void;
@@ -6,10 +8,26 @@ const CONTROLS = [
   ["Move", "W A S D"],
   ["Aim", "Mouse"],
   ["Fire", "Left Mouse"],
-  ["Carve / Boost", "Space / W+Space"],
+  ["Carve / Air Boost", "Space"],
   ["Ski Mode", "E on friendly slime"],
   ["Pause", "Esc"],
 ] as const;
+
+const KEY_LABELS = new Map<number, string>([
+  [InputKey.Forward, "W"],
+  [InputKey.Backward, "S"],
+  [InputKey.Left, "A"],
+  [InputKey.Right, "D"],
+]);
+
+function describeMoveInput(trick: AirTrickDefinition): string {
+  if (trick.kind === "sequence") {
+    return trick.sequence?.map((key) => KEY_LABELS.get(key) ?? "?").join(" -> ") ?? "";
+  }
+  if (trick.kind === "spin") return "Hold A / D";
+  if (trick.kind === "flip") return (trick.degrees ?? 0) > 0 ? "Hold W" : "Hold S";
+  return "";
+}
 
 export class PauseMenuOverlay {
   private readonly root: HTMLDivElement;
@@ -35,13 +53,15 @@ export class PauseMenuOverlay {
 
     const panel = document.createElement("div");
     Object.assign(panel.style, {
-      width: "min(520px, calc(100vw - 32px))",
+      width: "min(880px, calc(100vw - 32px))",
+      maxHeight: "calc(100vh - 32px)",
       boxSizing: "border-box",
       padding: "24px",
       borderRadius: "8px",
       background: "rgba(12, 18, 32, 0.94)",
       border: "1px solid rgba(255, 255, 255, 0.14)",
       boxShadow: "0 18px 60px rgba(0, 0, 0, 0.42)",
+      overflow: "hidden",
     });
 
     const title = document.createElement("h2");
@@ -61,6 +81,36 @@ export class PauseMenuOverlay {
       color: "#b8c6d4",
       fontSize: "0.98rem",
       lineHeight: "1.45",
+    });
+
+    const content = document.createElement("div");
+    const syncContentLayout = () => {
+      const narrow = window.innerWidth < 720;
+      content.style.gridTemplateColumns = narrow
+        ? "minmax(0, 1fr)"
+        : "minmax(260px, 0.95fr) minmax(260px, 1.05fr)";
+      content.style.overflowY = narrow ? "auto" : "visible";
+      movesColumn.style.maxHeight = narrow ? "none" : "100%";
+    };
+    Object.assign(content.style, {
+      display: "grid",
+      gap: "22px",
+      alignItems: "start",
+      marginBottom: "22px",
+      maxHeight: "min(560px, calc(100vh - 210px))",
+    });
+
+    const leftColumn = document.createElement("div");
+    Object.assign(leftColumn.style, {
+      minWidth: "0",
+    });
+
+    const movesColumn = document.createElement("div");
+    Object.assign(movesColumn.style, {
+      minWidth: "0",
+      maxHeight: "100%",
+      overflowY: "auto",
+      paddingRight: "4px",
     });
 
     const controlsTitle = document.createElement("div");
@@ -128,6 +178,51 @@ export class PauseMenuOverlay {
       this.createAudioControl(sound, "sfx", "Sound"),
     );
 
+    const movesTitle = document.createElement("div");
+    movesTitle.textContent = "Moves";
+    Object.assign(movesTitle.style, {
+      margin: "0 0 10px",
+      color: "#97abc0",
+      fontSize: "0.76rem",
+      fontWeight: "bold",
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+    });
+
+    const movesList = document.createElement("div");
+    Object.assign(movesList.style, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      gap: "9px 14px",
+      alignItems: "center",
+      paddingBottom: "2px",
+    });
+
+    for (const trick of AIR_TRICK_DEFS) {
+      const nameEl = document.createElement("div");
+      nameEl.textContent = trick.name;
+      Object.assign(nameEl.style, {
+        color: "#e8eef8",
+        fontSize: "0.94rem",
+        minWidth: "0",
+        overflowWrap: "anywhere",
+      });
+
+      const inputEl = document.createElement("div");
+      inputEl.textContent = describeMoveInput(trick);
+      Object.assign(inputEl.style, {
+        color: "#0b1220",
+        background: "#d8e8ff",
+        borderRadius: "6px",
+        padding: "5px 8px",
+        fontSize: "0.8rem",
+        fontWeight: "bold",
+        whiteSpace: "nowrap",
+      });
+
+      movesList.append(nameEl, inputEl);
+    }
+
     this.resumeBtn = document.createElement("button");
     this.resumeBtn.textContent = "Resume";
     Object.assign(this.resumeBtn.style, {
@@ -153,16 +248,13 @@ export class PauseMenuOverlay {
       textAlign: "center",
     });
 
-    panel.append(
-      title,
-      summary,
-      controlsTitle,
-      controls,
-      audioTitle,
-      audioControls,
-      this.resumeBtn,
-      note,
-    );
+    leftColumn.append(controlsTitle, controls, audioTitle, audioControls);
+    movesColumn.append(movesTitle, movesList);
+    content.append(leftColumn, movesColumn);
+    syncContentLayout();
+    window.addEventListener("resize", syncContentLayout);
+
+    panel.append(title, summary, content, this.resumeBtn, note);
     this.root.appendChild(panel);
     document.body.appendChild(this.root);
 
