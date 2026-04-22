@@ -62,5 +62,8 @@ export class MatchRoom extends Room<{ state: GameState }> {
     if (broadcasts.paintStamps.length > 0) {
       this.broadcast(MessageType.PaintStamps, { stamps: broadcasts.paintStamps });
     }
+    if (broadcasts.trickEvents.length > 0) {
+      this.broadcast(MessageType.TrickEvents, { events: broadcasts.trickEvents });
+    }
   }
 }

@@ -15,6 +15,7 @@ function createSimState(): SimMatchState {
     matchPhase: MatchPhase.Active,
     matchTimer: GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
+    trickSeq: 0,
     scores: new Map(),
     elapsedMs: 0,
     nextProjectileId: 0,

@@ -21,6 +21,8 @@ export const MessageType = {
   Leaderboard: "leaderboard",
   /** Batched transient visual paint impacts; not authoritative scoring state */
   PaintStamps: "paintStamps",
+  /** Batched transient air-trick events for client animation and feedback */
+  TrickEvents: "trickEvents",
   /** Match phase transition (lobby -> countdown -> active -> ended) */
   MatchPhase: "matchPhase",
 } as const;
@@ -35,4 +37,6 @@ export type {
   PlayerSnapshot,
   ProjectileSnapshot,
   SnapshotMessage,
+  TrickEventBatchMessage,
+  TrickEventMessage,
 } from "./serverMessages.ts";

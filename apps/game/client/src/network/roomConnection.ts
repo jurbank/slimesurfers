@@ -8,6 +8,8 @@ import type {
   PaintStampBatchMessage,
   PaintStampMessage,
   SnapshotMessage,
+  TrickEventBatchMessage,
+  TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import type { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
@@ -23,6 +25,7 @@ export interface RoomCallbacks {
   // Snapshots and paint stamps drive frame-critical client state; schema stays
   // focused on persistent room membership and shared territory state.
   onPaintStamps(stamps: PaintStampMessage[]): void;
+  onTrickEvents(events: TrickEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
   onDisconnect(): void;
@@ -57,6 +60,10 @@ export class RoomConnection {
 
     this.room.onMessage(MessageType.PaintStamps, (message: PaintStampBatchMessage) => {
       callbacks.onPaintStamps(message.stamps);
+    });
+
+    this.room.onMessage(MessageType.TrickEvents, (message: TrickEventBatchMessage) => {
+      callbacks.onTrickEvents(message.events);
     });
 
     const $ = getStateCallbacks(this.room);

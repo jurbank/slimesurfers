@@ -1,5 +1,5 @@
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
-import { cssColor, swatchBackground } from "./uiUtils.ts";
+import { swatchBackground } from "./uiUtils.ts";
 
 const SLOTS = FFA_MODE.slots;
 

@@ -6,6 +6,7 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
+import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
 
@@ -38,6 +39,7 @@ export class LocalPlayer {
   private readonly aimQuat = new THREE.Quaternion();
   private readonly skiVisualRotation = new THREE.Quaternion();
   private readonly skiTargetRotation = new THREE.Quaternion();
+  private readonly trickAnimator = new PlayerTrickAnimator();
   private skiLaunchTimer = 0;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
@@ -95,6 +97,7 @@ export class LocalPlayer {
     this.deadMesh.visible = false;
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
+    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
     this.updateWeapon(state.equippedWeaponId, aimDir);
 
     if (state.isCarving) {
@@ -137,6 +140,10 @@ export class LocalPlayer {
 
   triggerSkiLaunch(): void {
     this.skiLaunchTimer = 0.4;
+  }
+
+  triggerTrick(trickId: string): void {
+    this.trickAnimator.trigger(trickId);
   }
 
   dispose(scene: THREE.Scene): void {

@@ -4,6 +4,7 @@ import type {
   MatchPhaseMessage,
   PaintStampMessage,
   SnapshotMessage,
+  TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { PlanetPaintState, TerritoryCell } from "@splat/protocol/schemas/paintedState.ts";
@@ -21,6 +22,7 @@ export interface MatchRoomTickBroadcasts {
   matchPhase?: MatchPhaseMessage;
   paintStamps: PaintStampMessage[];
   snapshot?: SnapshotMessage;
+  trickEvents: TrickEventMessage[];
 }
 
 export interface MatchRoomJoinBootstrap {
@@ -154,5 +156,6 @@ export function buildTickBroadcasts(
       ? simulation.buildLeaderboardMessage()
       : undefined,
     paintStamps: simulation.drainPaintStampMessages(),
+    trickEvents: simulation.drainTrickEventMessages(),
   };
 }

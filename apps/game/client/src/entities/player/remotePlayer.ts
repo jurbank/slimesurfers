@@ -6,6 +6,7 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
+import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
@@ -25,6 +26,7 @@ export class RemotePlayer {
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
+  private readonly trickAnimator = new PlayerTrickAnimator();
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
@@ -39,7 +41,7 @@ export class RemotePlayer {
     scene.add(this.mesh);
   }
 
-  update(state: PlayerTransformState): void {
+  update(state: PlayerTransformState, dt: number): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
 
@@ -57,6 +59,7 @@ export class RemotePlayer {
     this.deadMesh.visible = false;
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
+    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
     if (state.isCarving) {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
     }
@@ -99,6 +102,10 @@ export class RemotePlayer {
 
   isAimTargetVisible(): boolean {
     return this.mesh.visible && this.liveMesh.visible;
+  }
+
+  triggerTrick(trickId: string): void {
+    this.trickAnimator.trigger(trickId);
   }
 
   private updateWeapon(weaponId: WeaponId): void {

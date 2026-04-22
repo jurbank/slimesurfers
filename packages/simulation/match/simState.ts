@@ -109,6 +109,14 @@ export interface SimPlayerState {
   isCarving: boolean;
   skiJumpCharge: number;
   inputSeq: number;
+  airTrickCombo: number;
+  airTrickAirTimeMs: number;
+  airTrickInputSequence: number[];
+  airTrickInputAgeMs: number;
+  lastAirTrickTimeMs: number;
+  airTrickSpinDegrees: number;
+  airTrickSpinMilestoneIndex: number;
+  airTrickPaintMultiplier: number;
   // Gameplay
   equippedWeaponId: WeaponId;
   health: number;
@@ -130,6 +138,7 @@ export interface SimMatchState {
   matchPhase: MatchPhase;
   matchTimer: number;
   paintSeq: number;
+  trickSeq: number;
   scores: Map<string, number>;
   elapsedMs: number;
   nextProjectileId: number;

@@ -6,7 +6,8 @@
     "./combat/weaponDefs.ts": "./combat/weaponDefs.ts",
     "./config/gameConfig.ts": "./config/gameConfig.ts",
     "./config/networkConfig.ts": "./config/networkConfig.ts",
-    "./modes/gameModes.ts": "./modes/gameModes.ts"
+    "./modes/gameModes.ts": "./modes/gameModes.ts",
+    "./tricks/airTrickDefs.ts": "./tricks/airTrickDefs.ts"
   },
   "dependencies": {
     "@splat/protocol": "workspace:*"

@@ -83,6 +83,7 @@ function parseArgs(argv) {
 
 function buildExcludeMatcher(rootDir, outputPath, excludes) {
   const normalizedOutputPath = normalizeForMatch(path.relative(rootDir, outputPath));
+  /** @type {Set<string>} */
   const normalizedExcludes = new Set(
     excludes.map((value) => normalizeForMatch(value)).filter(Boolean),
   );

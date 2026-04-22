@@ -9,6 +9,7 @@ import type {
   LeaderboardMessage,
   PaintStampMessage,
   SnapshotMessage,
+  TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { rechargePlayerSlime, tickProjectiles, tryFireProjectile } from "../combat/projectiles.ts";
 import {
@@ -20,6 +21,7 @@ import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
+import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
 import {
   NO_TEAM_ID,
   PlayerMovementState,
@@ -139,6 +141,7 @@ function createSimMatchState(seedPaint: boolean): SimMatchState {
     matchPhase: MatchPhase.Active,
     matchTimer: GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
+    trickSeq: 0,
     scores: new Map(),
     elapsedMs: 0,
     nextProjectileId: 0,
@@ -194,6 +197,14 @@ function createSimPlayer(
     isCarving: false,
     skiJumpCharge: 0,
     inputSeq: 0,
+    airTrickCombo: 0,
+    airTrickAirTimeMs: 0,
+    airTrickInputSequence: [],
+    airTrickInputAgeMs: 0,
+    lastAirTrickTimeMs: -Infinity,
+    airTrickSpinDegrees: 0,
+    airTrickSpinMilestoneIndex: 0,
+    airTrickPaintMultiplier: 1,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     health: GAME_CONFIG.player.maxHealth,
     slimeLevel: GAME_CONFIG.slime.maxLevel,
@@ -211,6 +222,7 @@ export class MatchSimulation {
   private readonly inputQueues = new Map<string, InputMessage[]>();
   private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
   private readonly pendingPaintStamps: PaintStampMessage[] = [];
+  private readonly pendingTrickEvents: TrickEventMessage[] = [];
   private playerCount = 0;
   private tickCount = 0;
 
@@ -293,6 +305,10 @@ export class MatchSimulation {
     return this.pendingPaintStamps.splice(0, this.pendingPaintStamps.length);
   }
 
+  drainTrickEventMessages(): TrickEventMessage[] {
+    return this.pendingTrickEvents.splice(0, this.pendingTrickEvents.length);
+  }
+
   private recordPaintStamp(message: PaintStampMessage): void {
     this.pendingPaintStamps.push(message);
 
@@ -343,7 +359,22 @@ export class MatchSimulation {
         for (const input of queue) {
           const inputDtSec = Math.min(input.dt, MAX_INPUT_DT);
           processedNowMs += inputDtSec * 1000;
+          const wasAirborne = player.movementState === PlayerMovementState.Airborne;
           stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+          if (player.movementState === PlayerMovementState.Airborne) {
+            const tricks = processAirTricks(
+              this.simState,
+              player,
+              input,
+              inputDtSec * 1000,
+              processedNowMs,
+            );
+            this.pendingTrickEvents.push(...tricks.trickEvents);
+          } else if (wasAirborne) {
+            for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
+              this.recordPaintStamp(stamp);
+            }
+          }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, processedNowMs, GAME_CONFIG);
           tryFireProjectile(this.simState, player, input, processedNowMs, PLANETS, GAME_CONFIG);
@@ -351,7 +382,22 @@ export class MatchSimulation {
         player.inputSeq = queue[queue.length - 1]!.seq;
         queue.length = 0;
       } else {
+        const wasAirborne = player.movementState === PlayerMovementState.Airborne;
         stepPlayer(player, IDLE_INPUT, serverDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+        if (player.movementState === PlayerMovementState.Airborne) {
+          const tricks = processAirTricks(
+            this.simState,
+            player,
+            IDLE_INPUT,
+            serverDtSec * 1000,
+            this.simState.elapsedMs,
+          );
+          this.pendingTrickEvents.push(...tricks.trickEvents);
+        } else if (wasAirborne) {
+          for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
+            this.recordPaintStamp(stamp);
+          }
+        }
         collectWeaponPickup(this.simState, player, GAME_CONFIG);
         rechargePlayerSlime(
           this.simState,

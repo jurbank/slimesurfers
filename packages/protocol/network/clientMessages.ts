@@ -51,6 +51,8 @@ export interface InputMessage {
   seq: number;
   /** Packed bitmask of keys held this tick */
   keys: InputKeys;
+  /** Packed bitmask of keys newly pressed this tick. Used for edge-triggered actions. */
+  pressedKeys?: InputKeys;
   /**
    * Normalised aim direction in world space.
    * Fallback used by the server when spawning a projectile on Fire.

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
+import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
-import type { SnapshotMessage } from "@splat/protocol/network/serverMessages.ts";
+import type { SnapshotMessage, TrickEventMessage } from "@splat/protocol/network/serverMessages.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
 import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
@@ -11,6 +12,7 @@ import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
+import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { SoundSystem } from "../systems/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -66,6 +68,7 @@ export class MatchScene {
   private readonly clouds: CloudSystem;
   private readonly pickups: PickupSystem;
   private readonly projectiles: ProjectileSystem;
+  private readonly trickText: TrickTextSystem;
   private readonly sound: SoundSystem;
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
@@ -255,6 +258,7 @@ export class MatchScene {
     this.clouds = new CloudSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
+    this.trickText = new TrickTextSystem();
     this.sound = new SoundSystem();
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
@@ -488,6 +492,7 @@ export class MatchScene {
   private clearPlayerEntities(): void {
     this.localPlayer?.dispose(this.render.scene);
     this.localTrail?.dispose();
+    this.trickText.clear();
     this.localPlayer = null;
     this.localTrail = null;
     this.localPlayerPatternId = -1;
@@ -542,6 +547,33 @@ export class MatchScene {
     this.pickups.removeMissing(livePickupIds);
   }
 
+  private getPlayerMesh(sessionId: string): THREE.Object3D | null {
+    if (sessionId === this.connection.sessionId) return this.localPlayer?.mesh ?? null;
+    return this.remotePlayers.get(sessionId)?.mesh ?? null;
+  }
+
+  private handleTrickEvents(events: TrickEventMessage[]): void {
+    for (const event of events) {
+      const trick = getAirTrickDefinition(event.trickId);
+      if (event.playerId === this.connection.sessionId) {
+        this.localPlayer?.triggerTrick(event.trickId);
+      } else {
+        this.remotePlayers.get(event.playerId)?.triggerTrick(event.trickId);
+      }
+
+      const mesh = this.getPlayerMesh(event.playerId);
+      if (mesh) {
+        this.sound.playSfxAt(trick.soundKey, mesh.position, {
+          volume: event.combo >= 3 ? 0.9 : 0.65,
+          refDistance: 18,
+        });
+      } else {
+        this.sound.playSfx(trick.soundKey, { volume: 0.65 });
+      }
+      this.trickText.show(event.playerId, `${trick.name} x${event.combo}`);
+    }
+  }
+
   onDisconnect(cb: () => void): void {
     this.onDisconnectCb = cb;
   }
@@ -581,6 +613,7 @@ export class MatchScene {
           this.remotePlayers.get(sessionId)?.dispose(this.render.scene);
           this.remotePlayers.delete(sessionId);
         }
+        this.trickText.clear();
       },
       onPaintStamps: (stamps) => {
         for (const stamp of stamps) {
@@ -590,6 +623,9 @@ export class MatchScene {
             appendPaintStamp(planetState, stamp);
           }
         }
+      },
+      onTrickEvents: (events) => {
+        this.handleTrickEvents(events);
       },
       onSnapshot: (snapshot, receivedAtMs) => {
         const localSessionId = this.connection.sessionId;
@@ -614,6 +650,7 @@ export class MatchScene {
         this.clearPlanetPaint();
         this.pickups.clear();
         this.projectiles.clear();
+        this.trickText.clear();
         this.lastLocalHealth = null;
         this.combatHud.clear();
         this.setPaused(false);
@@ -674,7 +711,7 @@ export class MatchScene {
         };
       }
 
-      const keyBits = this.input.buildKeyBits();
+      const { keys: keyBits, pressedKeys } = this.input.buildInputBits();
       if (keyBits & InputKey.Fire) {
         const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
         this.sound.playSfx("pow", { cooldownMs: fireCooldownMs });
@@ -683,6 +720,7 @@ export class MatchScene {
       const input = {
         seq: ++inputSeq,
         keys: keyBits,
+        pressedKeys,
         aimDir,
         aimPoint: { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z },
         dt,
@@ -783,11 +821,14 @@ export class MatchScene {
       for (const [sessionId, remotePlayer] of this.remotePlayers) {
         if (sessionId === localSessionId) continue;
         const remoteState = this.runtime.getRemotePlayerState(sessionId, now);
-        if (remoteState) remotePlayer.update(remoteState);
+        if (remoteState) remotePlayer.update(remoteState, dt);
       }
 
       this.pickups.update(now);
       this.projectiles.update(now);
+      this.trickText.update(dt * 1000, this.camera.camera, (sessionId) =>
+        this.getPlayerMesh(sessionId),
+      );
       this.sound.updateListener(this.camera.camera);
       this.render.render(this.camera.camera);
     };

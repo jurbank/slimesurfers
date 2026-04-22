@@ -10,6 +10,7 @@ export class InputSystem {
   private pointerLocked = false;
   private firePressed = false;
   private actionPressed = false;
+  private previousKeyBits = 0;
   private enabled = true;
   private onPointerLockExitCb: (() => void) | null = null;
 
@@ -93,21 +94,31 @@ export class InputSystem {
     });
   }
 
-  buildKeyBits(): number {
-    if (!this.enabled) return 0;
+  buildInputBits(): { keys: number; pressedKeys: number } {
+    if (!this.enabled) {
+      this.previousKeyBits = 0;
+      return { keys: 0, pressedKeys: 0 };
+    }
 
     const actionBit = this.actionPressed ? InputKey.Submerge : 0;
     this.actionPressed = false;
 
-    return (
+    const keys =
       (this.keysDown.has("KeyW") ? InputKey.Forward : 0) |
       (this.keysDown.has("KeyS") ? InputKey.Backward : 0) |
       (this.keysDown.has("KeyA") ? InputKey.Left : 0) |
       (this.keysDown.has("KeyD") ? InputKey.Right : 0) |
       (this.keysDown.has("Space") ? InputKey.Anchor : 0) |
       actionBit |
-      (this.firePressed ? InputKey.Fire : 0)
-    );
+      (this.firePressed ? InputKey.Fire : 0);
+    const pressedKeys = (keys & ~this.previousKeyBits) | actionBit;
+    this.previousKeyBits = keys;
+
+    return { keys, pressedKeys };
+  }
+
+  buildKeyBits(): number {
+    return this.buildInputBits().keys;
   }
 
   /**
@@ -171,6 +182,7 @@ export class InputSystem {
     this.keysDown.clear();
     this.firePressed = false;
     this.actionPressed = false;
+    this.previousKeyBits = 0;
     this.mouseX = 0;
     this.mouseY = 0;
     if (document.pointerLockElement) document.exitPointerLock();

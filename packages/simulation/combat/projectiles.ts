@@ -118,6 +118,20 @@ function closestPointOnSegment(point: Vec3Data, start: Vec3Data, end: Vec3Data):
   return add(start, scale(segment, t));
 }
 
+function closestPointOnPlayerCapsule(
+  point: Vec3Data,
+  player: SimPlayerState,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): SimVec3 {
+  const planet = getPlayerPlanet(player, planets);
+  if (!planet) return player.pos;
+
+  const up = normalize(sub(player.pos, planet.center));
+  const capsuleTop = add(player.pos, scale(up, cfg.player.projectileMuzzleHeight));
+  return closestPointOnSegment(point, player.pos, capsuleTop);
+}
+
 function terrainClearance(
   point: Vec3Data,
   planet: PlanetData,
@@ -539,7 +553,8 @@ export function tickProjectiles(
       if (player.movementState === PlayerMovementState.Dead) return;
       const hitDistance = cfg.movement.collisionRadius + weapon.projectileCollisionRadius;
       const impactPos = closestPointOnSegment(player.pos, startPos, projectile.pos);
-      if (distance(impactPos, player.pos) > hitDistance) return;
+      const playerHitPoint = closestPointOnPlayerCapsule(impactPos, player, planets, cfg);
+      if (distance(impactPos, playerHitPoint) > hitDistance) return;
 
       const killed = applyDamage(player, owner, weapon.directDamage, cfg);
       if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);

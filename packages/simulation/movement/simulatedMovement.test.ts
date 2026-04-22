@@ -185,7 +185,14 @@ describe("stepPlayer", () => {
 
     stepPlayer(normalPlayer, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     // Enter ski mode then ramp up with carving — needs several steps to surpass normal speed
-    stepPlayer(boostedPlayer, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
+    stepPlayer(
+      boostedPlayer,
+      createInput(InputKey.Submerge),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      paint,
+    );
     for (let i = 0; i < 10; i++) {
       stepPlayer(
         boostedPlayer,

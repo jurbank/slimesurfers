@@ -88,6 +88,19 @@ export interface PaintStampBatchMessage {
   stamps: PaintStampMessage[];
 }
 
+// -- Tricks ------------------------------------------------------------------
+
+export interface TrickEventMessage {
+  playerId: string;
+  trickId: string;
+  combo: number;
+  seq: number;
+}
+
+export interface TrickEventBatchMessage {
+  events: TrickEventMessage[];
+}
+
 // -- Leaderboard -------------------------------------------------------------
 
 export interface LeaderboardEntry {

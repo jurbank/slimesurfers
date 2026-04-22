@@ -580,6 +580,7 @@ function stepAirborne(
   dt: number,
   planets: PlanetData[],
   cfg: StepConfig,
+  planetPaint: Map<string, SimPlanetPaintState>,
 ): void {
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
@@ -654,6 +655,12 @@ function stepAirborne(
         assign(state.vel, sub(state.vel, scale(gravDir, velToward)));
         state.planetId = nearest.id;
         state.movementState = PlayerMovementState.Idle;
+        if (rawLandingRadius >= waterRadius) {
+          const paint = getPaintAtPoint(state.pos, nearest.id, planetPaint);
+          if (paint?.paintGroupId !== state.paintGroupId) {
+            state.swimState = PlayerSwimState.None;
+          }
+        }
       }
     }
   }
@@ -682,6 +689,6 @@ export function stepPlayer(
   if (state.planetId !== "") {
     stepOnSurface(state, input, dt, planets, cfg, planetPaint);
   } else {
-    stepAirborne(state, input, dt, planets, cfg);
+    stepAirborne(state, input, dt, planets, cfg, planetPaint);
   }
 }

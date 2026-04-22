@@ -76,6 +76,24 @@ export const GAME_CONFIG = {
     slimePoolDarkening: 0.18,
   },
 
+  // -- Air Tricks ------------------------------------------------------------
+  tricks: {
+    minAirTimeMs: 220,
+    inputWindowMs: 450,
+    trickCooldownMs: 180,
+    maxCombo: 5,
+    slimeCostPerTrick: 4,
+    minSlimeToTrick: 8,
+    baseDropCount: 1,
+    dropsPerCombo: 1,
+    maxDropsPerTrick: 6,
+    radiusMultiplier: 1.4,
+    comboRadiusBonus: 0.15,
+    maxRadiusMultiplier: 4.2,
+    spreadRadius: 2.4,
+    spinDegreesPerSecond: 720,
+  },
+
   // -- Projectiles -----------------------------------------------------------
   projectile: {
     speed: 95,
