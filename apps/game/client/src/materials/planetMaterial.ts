@@ -4,12 +4,17 @@ import { planetVertexShader, planetFragmentShader } from "../shaders/planetShade
 
 export interface PlanetMaterialOptions {
   paintMask: THREE.Texture | null;
+  planetCenter: THREE.Vector3;
+  waterRadius: number;
 }
 
 export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       paintMask: { value: options.paintMask },
+      planetCenter: { value: options.planetCenter },
+      waterRadius: { value: options.waterRadius },
+      waterDeepColor: { value: new THREE.Vector3(...GAME_CONFIG.shaders.water.deepColor) },
       time: { value: 0 },
       edgeNoiseScale: { value: GAME_CONFIG.paint.edgeNoiseScale },
       edgeNoiseStrength: { value: GAME_CONFIG.paint.edgeNoiseStrength },

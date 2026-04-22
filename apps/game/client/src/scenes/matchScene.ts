@@ -340,6 +340,8 @@ export class MatchScene {
       const paintMask = this.paint.getRenderTarget(p.id);
       const planetMaterial = createPlanetMaterial({
         paintMask: paintMask?.texture || null,
+        planetCenter: new THREE.Vector3(p.x, p.y, p.z),
+        waterRadius,
       });
 
       const geometry = this.buildTerrainGeometry();
@@ -363,7 +365,7 @@ export class MatchScene {
       // Water sphere at sea level
       if (GAME_CONFIG.shaders.water.enabled) {
         const waterMat = createWaterMaterial();
-        const water = new THREE.Mesh(new THREE.SphereGeometry(waterRadius, 48, 48), waterMat);
+        const water = new THREE.Mesh(this.buildWaterGeometry(waterRadius), waterMat);
         water.position.set(p.x, p.y, p.z);
         water.renderOrder = 1;
         this.render.scene.add(water);
@@ -479,6 +481,26 @@ export class MatchScene {
     // Recompute normals after displacement — flat normals since non-indexed
     geometry.computeVertexNormals();
 
+    return geometry;
+  }
+
+  private buildWaterGeometry(waterRadius: number): THREE.BufferGeometry {
+    const geometry = new THREE.SphereGeometry(waterRadius, 64, 64);
+    const posAttr = geometry.getAttribute("position");
+    const waterDepths = new Float32Array(posAttr.count);
+
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      const z = posAttr.getZ(i);
+      const len = Math.sqrt(x * x + y * y + z * z);
+      const nx = x / len;
+      const ny = y / len;
+      const nz = z / len;
+      waterDepths[i] = GAME_CONFIG.terrain.waterLevel - getTerrainHeight(nx, ny, nz, GAME_CONFIG);
+    }
+
+    geometry.setAttribute("waterDepth", new THREE.Float32BufferAttribute(waterDepths, 1));
     return geometry;
   }
 
