@@ -122,7 +122,7 @@ export const GAME_CONFIG = {
     swimSpeedMultiplier: 2.2,
     swimDisturbanceMinSpeed: 1.5,
     waterSkiSpeedMultiplier: 2.8,
-    waterSkiFriction: 0.6,
+    waterSkiFriction: 0.9,
     waterSkiLateralDrag: 4.0,
   },
 

@@ -18,6 +18,7 @@ import { LocalPlayer } from "../entities/player/player.ts";
 import { RemotePlayer } from "../entities/player/remotePlayer.ts";
 import { ClientRuntimeState } from "../network/runtimeState.ts";
 import { CombatHud } from "../ui/CombatHud.ts";
+import { SkiDebugHud } from "../ui/SkiDebugHud.ts";
 import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
 import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
@@ -34,7 +35,11 @@ import {
   createStampBuckets,
   getPaintCollisionDistance,
 } from "@splat/simulation/paint/paintDetection.ts";
-import { PlayerMovementState, type SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
+import {
+  PlayerMovementState,
+  PlayerSwimState,
+  type SimPlanetPaintState,
+} from "@splat/simulation/match/simState.ts";
 
 const PLANET_CENTERS = PLANET_POSITIONS.map((p) => new THREE.Vector3(p.x, p.y, p.z));
 const FALLBACK_PLAYER_COLOR = 0xffffff;
@@ -65,6 +70,7 @@ export class MatchScene {
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
   private readonly combatHud: CombatHud;
+  private readonly skiDebugHud: SkiDebugHud;
   private readonly leaderboard: LeaderboardOverlay;
   private readonly pauseMenu: PauseMenuOverlay;
 
@@ -76,6 +82,8 @@ export class MatchScene {
   private readonly playerPatterns = new Map<string, number>();
   private readonly planetPaint = new Map<string, SimPlanetPaintState>();
   private lastLocalHealth: number | null = null;
+  private lastWasCarving = false;
+  private lastWasAirborne = false;
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];
   private readonly atmosphereMaterials: THREE.ShaderMaterial[] = [];
   private readonly waterMaterials: THREE.ShaderMaterial[] = [];
@@ -251,6 +259,8 @@ export class MatchScene {
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
+    this.skiDebugHud = new SkiDebugHud();
+    this.skiDebugHud.setVisible(import.meta.env.VITE_DEV_MODE === "true");
     this.leaderboard = new LeaderboardOverlay();
     this.pauseMenu = new PauseMenuOverlay(this.sound);
     this.pauseMenu.onResume(() => this.setPaused(false));
@@ -681,6 +691,24 @@ export class MatchScene {
       this.runtime.recordLocalInput(input, this.planetPaint);
 
       const predictedLocalState = this.runtime.getLocalPlayerState();
+      if (predictedLocalState) {
+        const isNowAirborne = predictedLocalState.movementState === PlayerMovementState.Airborne;
+        const isNowSki = predictedLocalState.swimState !== PlayerSwimState.None;
+        const { vel } = predictedLocalState;
+        const velMag = Math.hypot(vel.x, vel.y, vel.z);
+        const justLaunched =
+          this.lastWasCarving &&
+          !this.lastWasAirborne &&
+          isNowAirborne &&
+          isNowSki &&
+          velMag > GAME_CONFIG.movement.jumpImpulse;
+        if (justLaunched) {
+          this.localPlayer?.triggerSkiLaunch();
+          this.sound.playSfx("skiLaunch");
+        }
+        this.lastWasAirborne = isNowAirborne;
+        this.lastWasCarving = isNowSki && predictedLocalState.isCarving && !isNowAirborne;
+      }
       if (predictedLocalState && this.localPlayer) {
         const visualRotation =
           predictedLocalState.movementState === PlayerMovementState.Airborne
@@ -720,6 +748,36 @@ export class MatchScene {
       } else {
         this.lastLocalHealth = null;
         this.combatHud.clear();
+      }
+
+      if (predictedLocalState) {
+        const { vel, pos } = predictedLocalState;
+        const isSki = predictedLocalState.swimState !== PlayerSwimState.None;
+        const speed = Math.hypot(vel.x, vel.y, vel.z);
+        const pLen = Math.hypot(pos.x, pos.y, pos.z);
+        const gravDirX = pLen > 1e-6 ? pos.x / pLen : 0;
+        const gravDirY = pLen > 1e-6 ? pos.y / pLen : 1;
+        const gravDirZ = pLen > 1e-6 ? pos.z / pLen : 0;
+        const velLen = speed > 1e-6 ? speed : 1;
+        const travelX = vel.x / velLen;
+        const travelY = vel.y / velLen;
+        const travelZ = vel.z / velLen;
+        const slopeAccel =
+          -(gravDirX * travelX + gravDirY * travelY + gravDirZ * travelZ) *
+          GAME_CONFIG.movement.gravityAcceleration;
+        const baseSpeed =
+          GAME_CONFIG.movement.moveSpeed * GAME_CONFIG.movement.waterSkiSpeedMultiplier;
+        const dynamicMaxSpeed = Math.max(
+          baseSpeed * 0.5,
+          baseSpeed + Math.max(0, slopeAccel) * 0.6,
+        );
+        this.skiDebugHud.update(
+          speed,
+          slopeAccel,
+          dynamicMaxSpeed,
+          predictedLocalState.isCarving,
+          isSki,
+        );
       }
 
       for (const [sessionId, remotePlayer] of this.remotePlayers) {

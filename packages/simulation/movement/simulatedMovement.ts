@@ -30,6 +30,7 @@ export interface PlayerPhysics {
   movementState: number;
   swimState: number;
   isCarving: boolean;
+  skiJumpCharge: number;
 }
 
 /**
@@ -336,7 +337,8 @@ function stepOnSurface(
   const moveZ = (input.keys & InputKey.Forward ? 1 : 0) + (input.keys & InputKey.Backward ? -1 : 0);
 
   const hasMoveInput = moveX !== 0 || moveZ !== 0;
-  const boostPressed = skiActive && anchorPressed && moveZ > 0;
+  const boostPressed = false;
+  const wantsSkiJump = skiActive && !anchorPressed && state.skiJumpCharge > 0;
   const tangentVel = projectOntoPlane(state.vel, oldContact.surfaceNormal);
   let speedMultiplier = 1.0;
   if (onWater && skiActive) {
@@ -355,11 +357,29 @@ function stepOnSurface(
       : { x: 0, y: 0, z: 0 };
     assign(
       state.vel,
-      add(jumpTangentVel, scale(oldContact.surfaceNormal, cfg.movement.jumpImpulse)),
+      add(jumpTangentVel, scale(oldContact.radialNormal, cfg.movement.jumpImpulse)),
     );
     state.planetId = "";
     state.swimState = PlayerSwimState.None;
     state.isCarving = false;
+    state.movementState = PlayerMovementState.Airborne;
+    assign(
+      state.pos,
+      add(state.pos, scale(oldContact.surfaceNormal, cfg.movement.surfaceSnapDistance)),
+    );
+    return;
+  }
+  if (wantsSkiJump) {
+    const speed = vlen(tangentVel);
+    const baseSpeed = cfg.movement.moveSpeed * speedMultiplier;
+    const speedRatio = Math.min(speed / baseSpeed, 2.0);
+    const travelDir = speed > 1e-4 ? normalize(tangentVel) : forward;
+    const slopeBonus = Math.max(0, -dot(oldContact.surfaceNormal, travelDir));
+    const impulse = cfg.movement.jumpImpulse * (speedRatio + slopeBonus);
+    assign(state.vel, add(tangentVel, scale(oldContact.radialNormal, impulse)));
+    state.skiJumpCharge = 0;
+    state.isCarving = false;
+    state.planetId = "";
     state.movementState = PlayerMovementState.Airborne;
     assign(
       state.pos,
@@ -392,14 +412,24 @@ function stepOnSurface(
         ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
         : forward;
       const baseSpeed = cfg.movement.moveSpeed * speedMultiplier;
-      const baseAcceleration = baseSpeed * 8;
+      // Slope factor: positive = downhill (adds speed), negative = uphill (subtracts)
+      const gravDir = normalize(sub(planet.center, state.pos));
+      const slopeAccel = -dot(gravDir, moveDir) * cfg.movement.gravityAcceleration;
+      const carvingBoost = anchorPressed ? 1.25 : 1.0;
+      const dynamicMaxSpeed = Math.max(
+        baseSpeed * 0.5,
+        baseSpeed * carvingBoost + Math.max(0, slopeAccel) * 0.6,
+      );
+      const baseAcceleration = baseSpeed * 2.5;
       const currentSpeed = Math.max(0, dot(state.vel, moveDir));
       const accelerationStep = clampLength(
-        sub(scale(moveDir, baseSpeed), draggedTangentVel),
+        sub(scale(moveDir, dynamicMaxSpeed), draggedTangentVel),
         baseAcceleration * dt,
       );
       let nextTangentVel =
-        currentSpeed >= baseSpeed ? draggedTangentVel : add(draggedTangentVel, accelerationStep);
+        currentSpeed >= dynamicMaxSpeed
+          ? draggedTangentVel
+          : add(draggedTangentVel, accelerationStep);
       if (boostPressed) {
         nextTangentVel = add(
           nextTangentVel,
@@ -427,12 +457,20 @@ function stepOnSurface(
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
       : forward;
     const baseSpeed = cfg.movement.moveSpeed * speedMultiplier;
-    const baseAcceleration = baseSpeed * 10;
+    // Slope factor: positive = downhill (adds speed), negative = uphill (subtracts)
+    const gravDir = normalize(sub(planet.center, state.pos));
+    const slopeAccel = -dot(gravDir, moveDir) * cfg.movement.gravityAcceleration;
+    const carvingBoost = anchorPressed ? 1.25 : 1.0;
+    const dynamicMaxSpeed = Math.max(
+      baseSpeed * 0.5,
+      baseSpeed * carvingBoost + Math.max(0, slopeAccel) * 0.6,
+    );
+    const baseAcceleration = baseSpeed * 3.0;
     const currentSpeed = Math.max(0, dot(state.vel, moveDir));
-    const desiredTangentVel = hasMoveInput ? scale(moveDir, baseSpeed) : tangentVel;
+    const desiredTangentVel = hasMoveInput ? scale(moveDir, dynamicMaxSpeed) : tangentVel;
     const accelerationStep = clampLength(sub(desiredTangentVel, tangentVel), baseAcceleration * dt);
     let nextTangentVel = hasMoveInput
-      ? currentSpeed >= baseSpeed
+      ? currentSpeed >= dynamicMaxSpeed
         ? tangentVel
         : add(tangentVel, accelerationStep)
       : tangentVel;
@@ -453,7 +491,13 @@ function stepOnSurface(
   }
 
   if (skiActive) {
-    state.isCarving = anchorPressed;
+    if (anchorPressed) {
+      state.skiJumpCharge = Math.min(1, state.skiJumpCharge + dt * 1.25);
+      state.isCarving = true;
+    } else {
+      state.skiJumpCharge = 0;
+      state.isCarving = false;
+    }
     if (onWater) {
       state.swimState = PlayerSwimState.SkiWater;
     } else if (onFriendlyPaint) {
@@ -539,6 +583,7 @@ function stepAirborne(
 ): void {
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
+  state.skiJumpCharge = 0;
   if (toggleSubmerge && state.swimState === PlayerSwimState.None) {
     state.swimState = PlayerSwimState.SkiVisible;
   } else if (toggleSubmerge && state.swimState !== PlayerSwimState.None) {

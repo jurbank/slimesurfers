@@ -24,6 +24,7 @@ export interface PlayerSnapshot {
   movementState: number;
   swimState: number;
   isCarving: boolean;
+  skiJumpCharge: number;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   health: number;

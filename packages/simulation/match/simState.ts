@@ -107,6 +107,7 @@ export interface SimPlayerState {
   movementState: number;
   swimState: number;
   isCarving: boolean;
+  skiJumpCharge: number;
   inputSeq: number;
   // Gameplay
   equippedWeaponId: WeaponId;

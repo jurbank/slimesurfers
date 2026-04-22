@@ -23,6 +23,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     movementState: 0,
     swimState: 0,
     isCarving: false,
+    skiJumpCharge: 0,
     inputSeq: 0,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     health: 100,

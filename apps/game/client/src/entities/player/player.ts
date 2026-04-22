@@ -38,6 +38,7 @@ export class LocalPlayer {
   private readonly aimQuat = new THREE.Quaternion();
   private readonly skiVisualRotation = new THREE.Quaternion();
   private readonly skiTargetRotation = new THREE.Quaternion();
+  private skiLaunchTimer = 0;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
@@ -98,6 +99,12 @@ export class LocalPlayer {
 
     if (state.isCarving) {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
+    } else if (this.skiLaunchTimer > 0) {
+      this.skiLaunchTimer = Math.max(0, this.skiLaunchTimer - dt);
+      const t = this.skiLaunchTimer / 0.4;
+      const stretch = 1 + Math.sin(t * Math.PI) * 0.6;
+      const squash = 1 / Math.sqrt(stretch);
+      this.liveMesh.scale.set(squash, stretch, squash);
     }
 
     const isSubmerged =
@@ -126,6 +133,10 @@ export class LocalPlayer {
     this.outlineMesh.visible = false;
     this.mesh.scale.set(1, 1, 1);
     this.setOpacity(1);
+  }
+
+  triggerSkiLaunch(): void {
+    this.skiLaunchTimer = 0.4;
   }
 
   dispose(scene: THREE.Scene): void {
