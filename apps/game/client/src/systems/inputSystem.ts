@@ -270,6 +270,8 @@ export class InputSystem {
 
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!this.enabled) return;
+      if ((e.target as HTMLElement)?.closest("input, button, textarea, select, a, label")) return;
+
       if (MOVEMENT_KEYS.has(e.code)) {
         this.keysDown.add(e.code);
         if (e.code === "KeyE" && !e.repeat) {
@@ -281,6 +283,8 @@ export class InputSystem {
 
     const handleKeyUp = (e: KeyboardEvent): void => {
       if (!this.enabled) return;
+      if ((e.target as HTMLElement)?.closest("input, button, textarea, select, a, label")) return;
+
       if (MOVEMENT_KEYS.has(e.code)) {
         this.keysDown.delete(e.code);
         e.preventDefault();

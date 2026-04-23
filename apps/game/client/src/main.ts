@@ -33,13 +33,15 @@ const connect = async (name: string, colorIndex: number, onError: () => void): P
 };
 
 // Start preloading immediately
-void scene.preload((progress) => {
-  overlay?.setProgress(progress);
-}).then(() => {
-  if (skipJoinScreen) {
-    void startDevAutoJoin();
-  }
-});
+void scene
+  .preload((progress) => {
+    overlay?.setProgress(progress);
+  })
+  .then(() => {
+    if (skipJoinScreen) {
+      void startDevAutoJoin();
+    }
+  });
 
 async function startDevAutoJoin(): Promise<void> {
   let retryTimeout: number | null = null;
