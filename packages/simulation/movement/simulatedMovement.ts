@@ -55,8 +55,10 @@ export interface StepConfig {
     standingHeight: number;
     enemySpeedMultiplier: number;
     swimSpeedMultiplier: number;
+    swimAccelerationMultiplier: number;
     swimDisturbanceMinSpeed: number;
     waterSkiSpeedMultiplier: number;
+    waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
     waterSkiLateralDrag: number;
   };
@@ -420,7 +422,7 @@ function stepOnSurface(
         baseSpeed * 0.5,
         baseSpeed * carvingBoost + Math.max(0, slopeAccel) * 0.6,
       );
-      const baseAcceleration = baseSpeed * 2.5;
+      const baseAcceleration = baseSpeed * cfg.movement.waterSkiAccelerationMultiplier;
       const currentSpeed = Math.max(0, dot(state.vel, moveDir));
       const accelerationStep = clampLength(
         sub(scale(moveDir, dynamicMaxSpeed), draggedTangentVel),
@@ -465,7 +467,7 @@ function stepOnSurface(
       baseSpeed * 0.5,
       baseSpeed * carvingBoost + Math.max(0, slopeAccel) * 0.6,
     );
-    const baseAcceleration = baseSpeed * 3.0;
+    const baseAcceleration = baseSpeed * cfg.movement.swimAccelerationMultiplier;
     const currentSpeed = Math.max(0, dot(state.vel, moveDir));
     const desiredTangentVel = hasMoveInput ? scale(moveDir, dynamicMaxSpeed) : tangentVel;
     const accelerationStep = clampLength(sub(desiredTangentVel, tangentVel), baseAcceleration * dt);

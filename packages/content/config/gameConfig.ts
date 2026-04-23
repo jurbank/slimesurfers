@@ -137,9 +137,11 @@ export const GAME_CONFIG = {
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
     standingHeight: 1.0,
     enemySpeedMultiplier: 0.7,
-    swimSpeedMultiplier: 2.2,
+    swimSpeedMultiplier: 3.2,
+    swimAccelerationMultiplier: 1.0,
     swimDisturbanceMinSpeed: 1.5,
-    waterSkiSpeedMultiplier: 2.8,
+    waterSkiSpeedMultiplier: 3.8,
+    waterSkiAccelerationMultiplier: 1.5,
     waterSkiFriction: 0.9,
     waterSkiLateralDrag: 4.0,
   },
@@ -231,7 +233,7 @@ export const GAME_CONFIG = {
 
   // -- Debug -----------------------------------------------------------------
   debug: {
-    showColliders: true,
+    showColliders: false,
     showPaintColliders: false,
   },
 } as const;

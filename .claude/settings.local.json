@@ -24,7 +24,8 @@
       "Bash(node -e ' *)",
       "Bash(node -e \"import\\('three'\\).then\\(m => console.log\\(m.REVISION\\)\\)\")",
       "Bash(git stash *)",
-      "Bash(vp fmt *)"
+      "Bash(vp fmt *)",
+      "Bash(git *)"
     ]
   }
 }
