@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { getWeaponDefinition, WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
+import { createOutlineMaterial } from "../../materials/outlineMaterial.ts";
 
 export interface PlayerMeshRig {
   group: THREE.Group;
@@ -10,6 +11,7 @@ export interface PlayerMeshRig {
   weaponMesh: THREE.Mesh;
   snowboardMesh: THREE.Group;
   outlineMesh: THREE.Group;
+  jsrOutline: THREE.Group;
   disturbanceMesh: THREE.Mesh;
 }
 
@@ -21,8 +23,6 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   group.add(deadMesh);
 
   // 1. Body (the blob)
-  // We'll use a sphere slightly squashed on the Y axis if we wanted,
-  // but for now a regular sphere is fine.
   const bodyRadius = GAME_CONFIG.movement.collisionRadius;
   const bodyGeom = new THREE.SphereGeometry(bodyRadius, 32, 24);
   const bodyMat = createSlimeMaterial(slimeColor, patternId);
@@ -44,8 +44,6 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   liveMesh.add(rightEar);
 
   // 3. 4 Alien Eyes
-  // Arranged in two rows of two.
-  // Local +Z is forward.
   const eyeGeom = new THREE.SphereGeometry(0.05, 8, 8);
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
@@ -142,8 +140,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   weaponMesh.visible = false;
   liveMesh.add(weaponMesh);
 
-  // Inverted-hull outline — visible only to the local player when submerged/invisible.
-  // Lives on `group` (not `liveMesh`) so it's unaffected by setOpacity traversal.
+  // Inverted-hull outline
   const outlineMat = new THREE.MeshBasicMaterial({
     color: slimeColor,
     side: THREE.BackSide,
@@ -172,6 +169,25 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
 
   group.add(outlineMesh);
 
+  // 6. JSR Style Permanent Outline
+  const jsrOutline = new THREE.Group();
+  const jsrOutlineMat = createOutlineMaterial();
+
+  const bodyJsr = new THREE.Mesh(bodyGeom, jsrOutlineMat);
+  jsrOutline.add(bodyJsr);
+
+  const leftEarJsr = new THREE.Mesh(earGeom, jsrOutlineMat);
+  leftEarJsr.position.copy(leftEar.position);
+  leftEarJsr.rotation.copy(leftEar.rotation);
+  jsrOutline.add(leftEarJsr);
+
+  const rightEarJsr = new THREE.Mesh(earGeom, jsrOutlineMat);
+  rightEarJsr.position.copy(rightEar.position);
+  rightEarJsr.rotation.copy(rightEar.rotation);
+  jsrOutline.add(rightEarJsr);
+
+  liveMesh.add(jsrOutline);
+
   const disturbanceMat = new THREE.MeshBasicMaterial({
     color: slimeColor,
     transparent: true,
@@ -188,5 +204,14 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   disturbanceMesh.visible = false;
   group.add(disturbanceMesh);
 
-  return { group, liveMesh, deadMesh, weaponMesh, snowboardMesh, outlineMesh, disturbanceMesh };
+  return {
+    group,
+    liveMesh,
+    deadMesh,
+    weaponMesh,
+    snowboardMesh,
+    outlineMesh,
+    jsrOutline,
+    disturbanceMesh,
+  };
 }

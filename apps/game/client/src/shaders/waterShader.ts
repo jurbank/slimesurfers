@@ -1,3 +1,5 @@
+import { celCommonChunks } from "./celShader.ts";
+
 export const waterVertexShader = `
   uniform float time;
   uniform float waveSpeed;
@@ -26,6 +28,7 @@ export const waterVertexShader = `
 `;
 
 export const waterFragmentShader = `
+  ${celCommonChunks}
   uniform float time;
   uniform float fresnelPower;
   uniform float fresnelStrength;
@@ -110,13 +113,16 @@ export const waterFragmentShader = `
     // Lambert lighting
     vec3 lightDir = normalize(vec3(200.0, 300.0, 100.0));
     float diff = max(dot(waterNormal, lightDir), 0.0);
+    diff = getCelLighting(diff);
     vec3 ambient = vec3(0.45);
 
     // Specular highlight
     vec3 halfDir = normalize(lightDir + vViewDir);
     float spec = pow(max(dot(waterNormal, halfDir), 0.0), specularPower);
+    spec = smoothstep(0.4, 0.45, spec); // Sharp specular for JSR look
 
     vec3 finalColor = waterColor * (diff + ambient) + vec3(1.0) * spec * specularStrength;
+    finalColor *= getHatching(gl_FragCoord.xy / 1000.0, diff);
 
     // Fresnel glow — additive colored rim light
     finalColor += glowColor * fresnel * glowIntensity;

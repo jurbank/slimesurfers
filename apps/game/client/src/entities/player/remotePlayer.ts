@@ -25,8 +25,10 @@ export class RemotePlayer {
   private readonly deadMesh: THREE.Group;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
+  private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
   private readonly trickAnimator = new PlayerTrickAnimator();
+
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
@@ -34,6 +36,7 @@ export class RemotePlayer {
     this.deadMesh = rig.deadMesh;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
+    this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
     // Detach disturbance from group so it stays visible when the player mesh is hidden.
     this.mesh.remove(this.disturbanceMesh);
@@ -51,12 +54,14 @@ export class RemotePlayer {
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
       this.snowboardMesh.visible = false;
+      this.jsrOutline.visible = false;
       this.disturbanceMesh.visible = false;
       return;
     }
 
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
+    this.jsrOutline.visible = true;
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
@@ -65,23 +70,15 @@ export class RemotePlayer {
     }
     this.updateWeapon(state.equippedWeaponId);
 
-    if (state.movementState === PlayerMovementState.Airborne || state.isShooting) {
-      this.mesh.visible = true;
-      this.disturbanceMesh.visible = false;
-      return;
-    }
+    const airborne = state.movementState === PlayerMovementState.Airborne;
+    const submerged =
+      state.swimState === PlayerSwimState.SwimmingMoving ||
+      state.swimState === PlayerSwimState.SwimmingHidden;
+    const effectivelySubmerged = submerged && !airborne && !state.isShooting;
 
-    if (state.swimState === PlayerSwimState.None) {
-      this.mesh.visible = true;
-      this.disturbanceMesh.visible = false;
-      return;
-    }
+    this.mesh.visible = !effectivelySubmerged;
 
-    this.mesh.visible =
-      state.swimState === PlayerSwimState.SkiVisible ||
-      state.swimState === PlayerSwimState.SkiWater;
-
-    if (state.swimState === PlayerSwimState.SwimmingMoving) {
+    if (effectivelySubmerged && state.swimState === PlayerSwimState.SwimmingMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
       const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;

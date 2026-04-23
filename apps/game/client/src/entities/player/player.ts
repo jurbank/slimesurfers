@@ -9,6 +9,9 @@ import { createPlayerMesh } from "./playerMesh.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
+const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
+const OPACITY_FADE_IN_SPEED = 6; // ~0.35s to fully reveal
+const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
@@ -28,6 +31,7 @@ export class LocalPlayer {
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly outlineMesh: THREE.Group;
+  private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
   private readonly materials: THREE.Material[] = [];
   private readonly inverseMeshQuat = new THREE.Quaternion();
@@ -41,6 +45,8 @@ export class LocalPlayer {
   private readonly skiTargetRotation = new THREE.Quaternion();
   private readonly trickAnimator = new PlayerTrickAnimator();
   private skiLaunchTimer = 0;
+  private currentOpacity = 1;
+  private submersionTimer = 0;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
@@ -50,6 +56,7 @@ export class LocalPlayer {
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.outlineMesh = rig.outlineMesh;
+    this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
@@ -87,14 +94,18 @@ export class LocalPlayer {
       this.weaponMesh.visible = false;
       this.snowboardMesh.visible = false;
       this.outlineMesh.visible = false;
+      this.jsrOutline.visible = false;
       this.disturbanceMesh.visible = false;
       this.mesh.scale.set(1, 1, 1);
+      this.currentOpacity = 1;
+      this.submersionTimer = 0;
       this.setOpacity(1);
       return;
     }
 
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
+    this.jsrOutline.visible = true;
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
@@ -113,29 +124,35 @@ export class LocalPlayer {
     const isSubmerged =
       state.swimState === PlayerSwimState.SwimmingMoving ||
       state.swimState === PlayerSwimState.SwimmingHidden;
+    const airborne = state.movementState === PlayerMovementState.Airborne;
+    const effectivelySubmerged = isSubmerged && !airborne && !state.isShooting;
 
-    this.outlineMesh.visible = isSubmerged;
-
-    if (isSubmerged) {
-      this.mesh.scale.set(1, 1, 1);
-      this.setOpacity(0);
-      if (state.swimState === PlayerSwimState.SwimmingMoving) {
-        const t = performance.now() * 0.001;
-        const pulse = Math.sin(t * 3) * 0.5 + 0.5;
-        const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;
-        mat.opacity = 0.25 + pulse * 0.4;
-        this.disturbanceMesh.scale.setScalar(0.75 + pulse * 0.5);
-        this.disturbanceMesh.visible = true;
-      } else {
-        this.disturbanceMesh.visible = false;
-      }
-      return;
+    if (effectivelySubmerged) {
+      this.submersionTimer += dt;
+    } else {
+      this.submersionTimer = 0;
     }
+    const targetOpacity = this.submersionTimer >= SUBMERSION_DELAY ? 0 : 1;
+    const fadeSpeed =
+      targetOpacity < this.currentOpacity ? OPACITY_FADE_OUT_SPEED : OPACITY_FADE_IN_SPEED;
+    this.currentOpacity += (targetOpacity - this.currentOpacity) * Math.min(1, fadeSpeed * dt);
+    if (this.currentOpacity > 0.995) this.currentOpacity = 1;
+    if (this.currentOpacity < 0.005) this.currentOpacity = 0;
+    this.setOpacity(this.currentOpacity);
 
-    this.disturbanceMesh.visible = false;
-    this.outlineMesh.visible = false;
+    this.outlineMesh.visible = effectivelySubmerged;
     this.mesh.scale.set(1, 1, 1);
-    this.setOpacity(1);
+
+    if (effectivelySubmerged && state.swimState === PlayerSwimState.SwimmingMoving) {
+      const t = performance.now() * 0.001;
+      const pulse = Math.sin(t * 3) * 0.5 + 0.5;
+      const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.25 + pulse * 0.4;
+      this.disturbanceMesh.scale.setScalar(0.75 + pulse * 0.5);
+      this.disturbanceMesh.visible = true;
+    } else {
+      this.disturbanceMesh.visible = false;
+    }
   }
 
   triggerSkiLaunch(): void {
@@ -151,11 +168,19 @@ export class LocalPlayer {
   }
 
   private setOpacity(opacity: number): void {
+    const transparent = opacity < 1;
     for (const material of this.materials) {
-      if (!("opacity" in material) || !("transparent" in material)) continue;
-      material.opacity = opacity;
-      material.transparent = opacity < 1;
-      material.needsUpdate = true;
+      if (material instanceof THREE.ShaderMaterial) {
+        if ("opacity" in material.uniforms) material.uniforms.opacity.value = opacity;
+      } else if ("opacity" in material) {
+        (material as THREE.Material & { opacity: number }).opacity = opacity;
+      } else {
+        continue;
+      }
+      if (material.transparent !== transparent) {
+        material.transparent = transparent;
+        material.needsUpdate = true;
+      }
     }
   }
 

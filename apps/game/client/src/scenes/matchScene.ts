@@ -26,6 +26,7 @@ import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
 import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
 import { createWaterMaterial } from "../materials/waterMaterial.ts";
+import { createOutlineMaterial } from "../materials/outlineMaterial.ts";
 import {
   getTerrainHeight,
   getTerrainNormal,
@@ -88,6 +89,7 @@ export class MatchScene {
   private lastWasCarving = false;
   private lastWasAirborne = false;
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];
+  private readonly planetOutlines: THREE.Mesh[] = [];
   private readonly atmosphereMaterials: THREE.ShaderMaterial[] = [];
   private readonly waterMaterials: THREE.ShaderMaterial[] = [];
 
@@ -349,6 +351,12 @@ export class MatchScene {
       planet.position.set(p.x, p.y, p.z);
       this.render.scene.add(planet);
       this.planetMaterials.push(planetMaterial);
+
+      // JSR Style Planet Outline
+      const planetOutline = new THREE.Mesh(geometry, createOutlineMaterial());
+      planetOutline.position.set(p.x, p.y, p.z);
+      this.render.scene.add(planetOutline);
+      this.planetOutlines.push(planetOutline);
 
       if (GAME_CONFIG.shaders.atmosphere.enabled) {
         const atmosphereMat = createAtmosphereMaterial();

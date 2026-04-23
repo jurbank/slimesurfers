@@ -218,6 +218,15 @@ export const GAME_CONFIG = {
       driftSpeed: 0.012,
       color: 0xf7fbff,
     },
+    cel: {
+      enabled: true,
+      bands: 3.0,
+      softness: 0.02,
+      outlineThickness: 0.06,
+      outlineColor: [0.1, 0.1, 0.1] as const,
+      hatchStrength: 0.15,
+      hatchScale: 5.0,
+    },
   },
 
   // -- Debug -----------------------------------------------------------------

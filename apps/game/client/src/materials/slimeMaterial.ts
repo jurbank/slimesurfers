@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { slimeVertexShader, slimeFragmentShader } from "../shaders/slimeShader.ts";
 
 const TEX_SIZE = 64;
 
@@ -64,9 +66,24 @@ function makePatternTexture(color: number, patternId: number): THREE.DataTexture
   return tex;
 }
 
-export function createSlimeMaterial(color: number, patternId: number): THREE.MeshLambertMaterial {
-  if (patternId === 0) {
-    return new THREE.MeshLambertMaterial({ color });
-  }
-  return new THREE.MeshLambertMaterial({ map: makePatternTexture(color, patternId) });
+export function createSlimeMaterial(color: number, patternId: number): THREE.ShaderMaterial {
+  const tex = patternId === 0 ? null : makePatternTexture(color, patternId);
+  const colorVec = new THREE.Color(color);
+
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: tex },
+      color: { value: new THREE.Vector3(colorVec.r, colorVec.g, colorVec.b) },
+      emissive: { value: new THREE.Vector3(0, 0, 0) },
+      emissiveIntensity: { value: 0 },
+      hasMap: { value: patternId !== 0 },
+      opacity: { value: 1.0 },
+      celBands: { value: GAME_CONFIG.shaders.cel.bands },
+      celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
+      celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
+      celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
+    },
+    vertexShader: slimeVertexShader,
+    fragmentShader: slimeFragmentShader,
+  });
 }

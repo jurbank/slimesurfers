@@ -1,3 +1,5 @@
+import { celCommonChunks } from "./celShader.ts";
+
 export const planetVertexShader = `
   attribute vec3 color;
   attribute vec3 smoothNormal;
@@ -24,6 +26,7 @@ export const planetVertexShader = `
 `;
 
 export const planetFragmentShader = `
+  ${celCommonChunks}
   uniform sampler2D paintMask;
   uniform float time;
   uniform float edgeNoiseScale;
@@ -95,6 +98,11 @@ export const planetFragmentShader = `
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
     float terrainDiff = max(dot(vSmoothNormal, lightDir), 0.0);
     float paintDiff = max(dot(slimyNormal, lightDir), 0.0);
+
+    // Apply cel shading
+    terrainDiff = getCelLighting(terrainDiff);
+    paintDiff = getCelLighting(paintDiff);
+
     float specular = pow(
       max(dot(reflect(-lightDir, slimyNormal), viewDir), 0.0),
       slimeSpecularPower
@@ -117,8 +125,13 @@ export const planetFragmentShader = `
       + vec3(clearCoat * slimeShineStrength * 0.65)
       + paintColor * fresnel * slimeFresnelStrength
       + wetEdgeTint * edgeFresnel * edgeBand * slimeEdgeWetness * 0.9;
+    
     vec3 shadedTerrain = vColor * (terrainDiff + ambient);
+    shadedTerrain *= getHatching(gl_FragCoord.xy / 1000.0, terrainDiff);
+
     vec3 shadedPaint = (goopBase * (paintDiff + ambient)) + goopHighlight * glossyMask;
+    shadedPaint *= getHatching(gl_FragCoord.xy / 1000.0, paintDiff);
+
     shadedPaint = mix(shadedPaint, shadedPaint + wetEdgeTint * 0.08, edgeBand);
     shadedPaint *= 1.0 - pooledCenter * slimePoolDarkening * 0.18;
     vec3 finalColor = mix(shadedTerrain, shadedPaint, mask * paintBlendStrength);
