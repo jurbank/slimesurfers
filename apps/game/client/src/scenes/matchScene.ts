@@ -770,9 +770,12 @@ export class MatchScene {
         }
         this.lastAimDir = this.camera.update(
           predictedLocalState.pos,
+          predictedLocalState.vel,
           yawForward,
           this.input.getPitch(),
           planetCenter,
+          predictedLocalState.movementState === PlayerMovementState.Airborne,
+          dt,
         );
       }
 

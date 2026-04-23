@@ -8,6 +8,15 @@ const AIM_DISTANCE = 500; // parallax raycast distance
 const COLLISION_RADIUS = 1;
 const SURFACE_GAP = 0.3;
 
+const BASE_FOV = 75;
+const MAX_FOV_GAIN = 14; // degrees added at max speed (~38 wu/s ski speed)
+const SPEED_FOV_RATE = 0.37; // fov per wu/s
+const PULL_BACK_RATE = 0.12; // extra arm units per wu/s
+const MAX_BANK_ANGLE = 0.05; // radians (~7°) at full lateral speed
+const BANK_SPEED_NORM = 18; // lateral wu/s that gives full bank
+const LANDING_DIP_MAX = 2.0; // max CAMERA_UP reduction on landing
+const LANDING_DIP_SPEED_SCALE = 0.07; // dip = min(speed * scale, max)
+
 export class CameraSystem {
   readonly camera: THREE.PerspectiveCamera;
 
@@ -21,9 +30,15 @@ export class CameraSystem {
   private readonly _cameraWorldForward = new THREE.Vector3();
   private readonly _aimPoint = new THREE.Vector3();
 
+  // Motion effect state
+  private _smoothSpeed = 0;
+  private _smoothLateral = 0;
+  private _landingDip = 0;
+  private _wasAirborne = false;
+
   constructor() {
     this.camera = new THREE.PerspectiveCamera(
-      75,
+      BASE_FOV,
       window.innerWidth / window.innerHeight,
       0.1,
       2000,
@@ -49,9 +64,12 @@ export class CameraSystem {
    */
   update(
     playerPos: { x: number; y: number; z: number },
+    playerVel: { x: number; y: number; z: number },
     yawForward: { x: number; y: number; z: number },
     pitch: number,
     nearestPlanetCenter: THREE.Vector3,
+    isAirborne: boolean,
+    dt: number,
   ): { x: number; y: number; z: number } {
     this._playerPos.set(playerPos.x, playerPos.y, playerPos.z);
     this._playerUp.subVectors(this._playerPos, nearestPlanetCenter).normalize();
@@ -64,11 +82,51 @@ export class CameraSystem {
     // Right = cross(up, forward) — right-handed frame, matches simulation convention.
     this._right.crossVectors(this._playerUp, this._camForward).normalize();
 
-    // Build base arm: behind, above, and laterally offset (over-the-shoulder).
+    // -- Motion effects -------------------------------------------------------
+
+    // Forward speed only — effects shouldn't trigger when moving backwards.
+    const forwardSpeed = Math.max(
+      0,
+      playerVel.x * this._camForward.x +
+        playerVel.y * this._camForward.y +
+        playerVel.z * this._camForward.z,
+    );
+
+    // Speed smoothing: accelerate fast, decelerate slowly for a trailing-off feel.
+    const speedLerpRate = forwardSpeed > this._smoothSpeed ? 8 : 4;
+    this._smoothSpeed += (forwardSpeed - this._smoothSpeed) * Math.min(1, dt * speedLerpRate);
+
+    // Lateral velocity (signed, right = positive) drives banking.
+    const lateral =
+      playerVel.x * this._right.x + playerVel.y * this._right.y + playerVel.z * this._right.z;
+    this._smoothLateral += (lateral - this._smoothLateral) * Math.min(1, dt * 9);
+
+    // Landing dip: impulse on airborne → grounded transition, exponential decay.
+    // Use total speed here since landing impact doesn't depend on direction.
+    const totalSpeed = Math.sqrt(
+      playerVel.x * playerVel.x + playerVel.y * playerVel.y + playerVel.z * playerVel.z,
+    );
+    if (this._wasAirborne && !isAirborne) {
+      this._landingDip = Math.min(totalSpeed * LANDING_DIP_SPEED_SCALE, LANDING_DIP_MAX);
+    }
+    this._wasAirborne = isAirborne;
+    this._landingDip *= Math.max(0, 1 - dt * 9);
+
+    // FOV: expands smoothly with speed, capped.
+    const targetFov = BASE_FOV + Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN);
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
+    this.camera.updateProjectionMatrix();
+
+    // Dynamic arm: pull back and drop the camera slightly on landing.
+    const dynamicBack = CAMERA_BACK + this._smoothSpeed * PULL_BACK_RATE;
+    const dynamicUp = CAMERA_UP - this._landingDip;
+
+    // -- Arm construction -----------------------------------------------------
+
     this._arm
       .copy(this._camForward)
-      .multiplyScalar(-CAMERA_BACK)
-      .addScaledVector(this._playerUp, CAMERA_UP)
+      .multiplyScalar(-dynamicBack)
+      .addScaledVector(this._playerUp, dynamicUp)
       .addScaledVector(this._right, CAMERA_SIDE);
 
     // Pitch the arm around the right axis.
@@ -124,7 +182,15 @@ export class CameraSystem {
       this.camera.position.copy(this._playerPos).add(this._arm);
     }
 
+    // Banking: tilt camera.up around the forward axis based on lateral speed.
+    // Must be applied before lookAt so Three.js uses the banked up vector.
+    const bankAngle =
+      -Math.max(-1, Math.min(1, this._smoothLateral / BANK_SPEED_NORM)) * MAX_BANK_ANGLE;
     this.camera.up.copy(this._playerUp);
+    if (Math.abs(bankAngle) > 0.0005) {
+      this.camera.up.applyAxisAngle(this._camForward, bankAngle);
+    }
+
     this._lookAt.copy(this._playerPos).addScaledVector(this._playerUp, 1.5);
     this.camera.lookAt(this._lookAt);
 
