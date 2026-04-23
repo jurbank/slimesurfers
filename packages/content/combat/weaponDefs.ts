@@ -5,7 +5,7 @@ import {
 
 export type WeaponId = WeaponIdValue;
 
-export type WeaponBehavior = "projectile" | "chargedHitscan";
+export type WeaponBehavior = "projectile" | "chargedHitscan" | "sprayHitscan";
 
 export interface WeaponDefinition {
   id: WeaponId;
@@ -32,6 +32,12 @@ export interface WeaponDefinition {
   hitscanTrailMinDist?: number;
   /** Trail length (world units) at full charge for chargedHitscan weapons. */
   hitscanTrailMaxDist?: number;
+  /** Delay before a held trigger starts emitting spray shots. */
+  spinUpMs?: number;
+  /** Maximum distance for spray hitscan traces. */
+  sprayRange?: number;
+  /** Half-angle of spray spread, in degrees. */
+  sprayConeHalfAngleDeg?: number;
 }
 
 export interface WeaponPickupSpawnDefinition {
@@ -53,7 +59,7 @@ export const DEFAULT_WEAPON_ID = WeaponId.MachineGun;
 export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
   [WeaponId.MachineGun]: {
     id: WeaponId.MachineGun,
-    displayName: "Machine Gun",
+    displayName: "Pew Pew",
     behavior: "projectile",
     projectileSpeed: 55,
     projectileLifetimeMs: 6000,
@@ -66,6 +72,26 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     blastImpulse: 0,
     paintRadiusMultiplier: 1,
     pickupColor: 0x3fe7ff,
+  },
+  [WeaponId.HeavyMachineGun]: {
+    id: WeaponId.HeavyMachineGun,
+    displayName: "Heavy Machine Gun",
+    behavior: "sprayHitscan",
+    projectileSpeed: 0,
+    projectileLifetimeMs: 0,
+    projectileCollisionRadius: 0,
+    fireCooldownMs: 60,
+    slimeCost: 0,
+    directDamage: 15,
+    splashDamage: 0,
+    splashRadius: 0,
+    blastImpulse: 0,
+    paintRadiusMultiplier: 0.8,
+    pickupColor: 0xffd447,
+    disposableShots: 48,
+    spinUpMs: 320,
+    sprayRange: 42,
+    sprayConeHalfAngleDeg: 11,
   },
   [WeaponId.Bazooka]: {
     id: WeaponId.Bazooka,
@@ -108,6 +134,13 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
 };
 
 export const WEAPON_PICKUP_SPAWNS: WeaponPickupSpawnDefinition[] = [
+  {
+    id: "heavy-machinegun-ridge",
+    weaponId: WeaponId.HeavyMachineGun,
+    planetId: "planet-0",
+    normal: { x: -0.18, y: 0.97, z: 0.16 },
+    respawnSeconds: 14,
+  },
   {
     id: "bazooka-east",
     weaponId: WeaponId.Bazooka,

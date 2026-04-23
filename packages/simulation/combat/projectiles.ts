@@ -121,6 +121,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function fract(value: number): number {
+  return value - Math.floor(value);
+}
+
+function seededUnit(seed: number): number {
+  return fract(Math.sin(seed * 12.9898 + 78.233) * 43758.5453123);
+}
+
 function rotateToward(from: Vec3Data, toward: Vec3Data, maxAngleRad: number): SimVec3 {
   const cosAngle = clamp(dot(from, toward), -1, 1);
   const angle = Math.acos(cosAngle);
@@ -148,6 +156,61 @@ function closestPointOnSegment(point: Vec3Data, start: Vec3Data, end: Vec3Data):
   return add(start, scale(segment, t));
 }
 
+function closestPointsBetweenSegments(
+  startA: Vec3Data,
+  endA: Vec3Data,
+  startB: Vec3Data,
+  endB: Vec3Data,
+): { pointA: SimVec3; pointB: SimVec3 } {
+  const segmentA = sub(endA, startA);
+  const segmentB = sub(endB, startB);
+  const betweenStarts = sub(startA, startB);
+  const a = dot(segmentA, segmentA);
+  const e = dot(segmentB, segmentB);
+  const f = dot(segmentB, betweenStarts);
+
+  let s = 0;
+  let t = 0;
+
+  if (a <= 1e-8 && e <= 1e-8) {
+    return {
+      pointA: { x: startA.x, y: startA.y, z: startA.z },
+      pointB: { x: startB.x, y: startB.y, z: startB.z },
+    };
+  }
+
+  if (a <= 1e-8) {
+    t = clamp(f / e, 0, 1);
+  } else {
+    const c = dot(segmentA, betweenStarts);
+    if (e <= 1e-8) {
+      s = clamp(-c / a, 0, 1);
+    } else {
+      const b = dot(segmentA, segmentB);
+      const denom = a * e - b * b;
+      if (Math.abs(denom) > 1e-8) {
+        s = clamp((b * f - c * e) / denom, 0, 1);
+      }
+
+      const tNumerator = b * s + f;
+      if (tNumerator <= 0) {
+        t = 0;
+        s = clamp(-c / a, 0, 1);
+      } else if (tNumerator >= e) {
+        t = 1;
+        s = clamp((b - c) / a, 0, 1);
+      } else {
+        t = tNumerator / e;
+      }
+    }
+  }
+
+  return {
+    pointA: add(startA, scale(segmentA, s)),
+    pointB: add(startB, scale(segmentB, t)),
+  };
+}
+
 function closestPointOnPlayerCapsule(
   point: Vec3Data,
   player: SimPlayerState,
@@ -160,6 +223,26 @@ function closestPointOnPlayerCapsule(
   const up = normalize(sub(player.pos, planet.center));
   const capsuleTop = add(player.pos, scale(up, cfg.player.projectileMuzzleHeight));
   return closestPointOnSegment(point, player.pos, capsuleTop);
+}
+
+function getPlayerCapsuleSegment(
+  player: SimPlayerState,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): { bottom: SimVec3; top: SimVec3 } {
+  const planet = getPlayerPlanet(player, planets);
+  if (!planet) {
+    return {
+      bottom: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
+      top: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
+    };
+  }
+
+  const up = normalize(sub(player.pos, planet.center));
+  return {
+    bottom: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
+    top: add(player.pos, scale(up, cfg.player.projectileMuzzleHeight)),
+  };
 }
 
 function terrainClearance(
@@ -182,6 +265,17 @@ function pointOnSegment(start: Vec3Data, end: Vec3Data, t: number): SimVec3 {
     y: start.y + (end.y - start.y) * t,
     z: start.z + (end.z - start.z) * t,
   };
+}
+
+function makePerpendicularBasis(direction: Vec3Data): { tangentA: SimVec3; tangentB: SimVec3 } {
+  const reference = Math.abs(direction.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  const tangentA = normalize(cross(reference, direction));
+  const tangentB = normalize(cross(direction, tangentA));
+  return { tangentA, tangentB };
+}
+
+function resetWeaponTrigger(player: SimPlayerState): void {
+  player.weaponTriggerHeldSinceMs = -1;
 }
 
 function findTerrainImpactOnSegment(
@@ -257,6 +351,28 @@ function getProjectileMuzzlePosition(
 
   const up = normalize(sub(player.pos, planet.center));
   return add(player.pos, scale(up, cfg.player.projectileMuzzleHeight));
+}
+
+function applyImpactPaint(
+  simState: SimMatchState,
+  paintStamps: PaintStampMessage[],
+  planetId: string | undefined,
+  impactPos: Vec3Data,
+  player: SimPlayerState,
+  radiusMultiplier: number,
+): void {
+  if (!planetId) return;
+  const planetState = simState.planets.get(planetId);
+  if (!planetState) return;
+  const stamp = applyPaintImpact(simState, planetState, {
+    planetId,
+    pos: impactPos,
+    paintGroupId: player.paintGroupId,
+    slimeColor: player.slimeColor,
+    patternId: player.patternId,
+    radiusMultiplier,
+  });
+  if (stamp) paintStamps.push(stamp);
 }
 
 function getSlimeRechargeRate(
@@ -497,6 +613,7 @@ function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: Comba
   player.equippedWeaponId = DEFAULT_WEAPON_ID;
   player.disposableShotsRemaining = 0;
   player.lastFireTimeMs = -getWeaponDefinition(DEFAULT_WEAPON_ID).fireCooldownMs;
+  player.weaponTriggerHeldSinceMs = -1;
 }
 
 export function rechargePlayerSlime(
@@ -524,14 +641,121 @@ export function tryFireProjectile(
   nowMs: number,
   planets: PlanetData[],
   cfg: CombatConfig,
-): void {
-  if ((input.keys & InputKey.Fire) === 0) return;
-  if (player.movementState === PlayerMovementState.Dead) return;
+  recordKillEvent?: RecordKillEvent,
+): PaintStampMessage[] {
+  const paintStamps: PaintStampMessage[] = [];
+  if ((input.keys & InputKey.Fire) === 0) {
+    resetWeaponTrigger(player);
+    return paintStamps;
+  }
+  if (player.movementState === PlayerMovementState.Dead) {
+    resetWeaponTrigger(player);
+    return paintStamps;
+  }
   const weapon = getWeaponDefinition(getEquippedWeaponId(player));
-  if (weapon.behavior !== "projectile") return;
-  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return;
-  if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return;
-  if (player.slimeLevel < weapon.slimeCost) return;
+  if (weapon.behavior === "sprayHitscan") {
+    if (player.weaponTriggerHeldSinceMs < 0) {
+      player.weaponTriggerHeldSinceMs = nowMs;
+    }
+    if (nowMs - player.weaponTriggerHeldSinceMs < (weapon.spinUpMs ?? 0)) return paintStamps;
+    if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
+
+    const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
+    const aimDir = isFiniteVec3(input.aimPoint)
+      ? normalize(sub(input.aimPoint, muzzlePos))
+      : normalize(input.aimDir);
+    const { tangentA, tangentB } = makePerpendicularBasis(aimDir);
+    const spreadScale = Math.tan(((weapon.sprayConeHalfAngleDeg ?? 0) * Math.PI) / 180);
+    const spreadSeed = input.seq * 73856093 + player.paintGroupId * 19349663 + nowMs * 83492791;
+    const radius = Math.sqrt(seededUnit(spreadSeed + 1)) * spreadScale;
+    const angle = seededUnit(spreadSeed + 2) * Math.PI * 2;
+    const spreadDir = normalize(
+      add(
+        aimDir,
+        add(scale(tangentA, Math.cos(angle) * radius), scale(tangentB, Math.sin(angle) * radius)),
+      ),
+    );
+    const sprayEnd = add(muzzlePos, scale(spreadDir, weapon.sprayRange ?? 0));
+    const owner = simState.players.get(player.sessionId);
+
+    let bestPlayer:
+      | { impactPos: SimVec3; player: SimPlayerState; distance: number; planetId?: string }
+      | undefined;
+    simState.players.forEach((target) => {
+      if (target.sessionId === player.sessionId) return;
+      if (target.movementState === PlayerMovementState.Dead) return;
+      const capsule = getPlayerCapsuleSegment(target, planets, cfg);
+      const { pointA: impactPos, pointB: playerHitPoint } = closestPointsBetweenSegments(
+        muzzlePos,
+        sprayEnd,
+        capsule.bottom,
+        capsule.top,
+      );
+      if (distance(impactPos, playerHitPoint) > cfg.movement.collisionRadius) return;
+      const hitDistance = distance(muzzlePos, impactPos);
+      if (bestPlayer && hitDistance >= bestPlayer.distance) return;
+      bestPlayer = {
+        impactPos,
+        player: target,
+        distance: hitDistance,
+        planetId: getNearestPlanet(playerHitPoint, planets)?.id,
+      };
+    });
+
+    let bestTerrain: { impactPos: SimVec3; distance: number; planetId: string } | undefined;
+    for (const planet of planets) {
+      const impactPos = findTerrainImpactOnSegment(muzzlePos, sprayEnd, planet, 0, cfg);
+      if (!impactPos) continue;
+      const hitDistance = distance(muzzlePos, impactPos);
+      if (bestTerrain && hitDistance >= bestTerrain.distance) continue;
+      bestTerrain = { impactPos, distance: hitDistance, planetId: planet.id };
+    }
+
+    if (bestPlayer && (!bestTerrain || bestPlayer.distance <= bestTerrain.distance)) {
+      const killed = applyDamage(
+        bestPlayer.player,
+        owner,
+        weapon.directDamage,
+        cfg,
+        weapon.id,
+        recordKillEvent,
+      );
+      if (killed) addDeathBurstPaint(simState, paintStamps, bestPlayer.player, owner, planets, cfg);
+      applyImpactPaint(
+        simState,
+        paintStamps,
+        bestPlayer.planetId,
+        bestPlayer.impactPos,
+        player,
+        weapon.paintRadiusMultiplier,
+      );
+    } else if (bestTerrain) {
+      applyImpactPaint(
+        simState,
+        paintStamps,
+        bestTerrain.planetId,
+        bestTerrain.impactPos,
+        player,
+        weapon.paintRadiusMultiplier,
+      );
+    }
+
+    player.lastFireTimeMs = nowMs;
+    if (weapon.disposableShots !== undefined) {
+      player.disposableShotsRemaining = Math.max(0, player.disposableShotsRemaining - 1);
+      if (player.disposableShotsRemaining === 0) {
+        player.equippedWeaponId = DEFAULT_WEAPON_ID;
+        resetWeaponTrigger(player);
+      }
+    }
+    return paintStamps;
+  }
+
+  resetWeaponTrigger(player);
+  if (weapon.behavior !== "projectile") return paintStamps;
+  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
+  if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return paintStamps;
+  if (player.slimeLevel < weapon.slimeCost) return paintStamps;
 
   const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
   const aim = isFiniteVec3(input.aimPoint)
@@ -563,8 +787,10 @@ export function tryFireProjectile(
     player.disposableShotsRemaining = Math.max(0, player.disposableShotsRemaining - 1);
     if (player.disposableShotsRemaining === 0) {
       player.equippedWeaponId = DEFAULT_WEAPON_ID;
+      resetWeaponTrigger(player);
     }
   }
+  return paintStamps;
 }
 
 export function tickProjectiles(
@@ -867,6 +1093,7 @@ export function tryFireHitscan(
     player.disposableShotsRemaining = Math.max(0, player.disposableShotsRemaining - 1);
     if (player.disposableShotsRemaining === 0) {
       player.equippedWeaponId = DEFAULT_WEAPON_ID;
+      resetWeaponTrigger(player);
     }
   }
 

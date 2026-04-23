@@ -135,6 +135,7 @@ export interface SimPlayerState {
   deathCount: number;
   respawnTimer: number;
   lastFireTimeMs: number;
+  weaponTriggerHeldSinceMs: number;
 }
 
 // -- Match state -------------------------------------------------------------

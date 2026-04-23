@@ -772,6 +772,143 @@ describe("MatchSimulation", () => {
     );
   });
 
+  it("equips a heavy machine gun when the player touches its pickup", () => {
+    const simulation = new MatchSimulation();
+    const player = simulation.addPlayer("session-1", "Alpha");
+    const pickup = Array.from(simulation.matchState.pickups.values()).find(
+      (candidate) => candidate.weaponId === WeaponId.HeavyMachineGun && candidate.active,
+    );
+
+    if (!pickup) {
+      throw new Error("expected a heavy machine gun pickup");
+    }
+
+    player.pos = {
+      x: pickup.pos.x - pickup.normal.x * GAME_CONFIG.pickups.hoverHeight,
+      y: pickup.pos.y - pickup.normal.y * GAME_CONFIG.pickups.hoverHeight,
+      z: pickup.pos.z - pickup.normal.z * GAME_CONFIG.pickups.hoverHeight,
+    };
+    player.planetId = pickup.planetId;
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(player.equippedWeaponId).toBe(WeaponId.HeavyMachineGun);
+    expect(player.disposableShotsRemaining).toBe(
+      getWeaponDefinition(WeaponId.HeavyMachineGun).disposableShots,
+    );
+  });
+
+  it("spins up before a heavy machine gun starts spraying", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+    const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
+    shooter.equippedWeaponId = WeaponId.HeavyMachineGun;
+    shooter.disposableShotsRemaining = heavyMachineGun.disposableShots!;
+    target.pos = {
+      x: shooter.pos.x,
+      y: shooter.pos.y + 4,
+      z: shooter.pos.z + 10,
+    };
+    target.planetId = "";
+    target.movementState = PlayerMovementState.Airborne;
+
+    const ticksToSpinUp = Math.ceil((heavyMachineGun.spinUpMs ?? 0) / simulation.tickIntervalMs);
+    for (let seq = 1; seq <= ticksToSpinUp; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 0, y: 0, z: 1 },
+        aimPoint: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+        dt: simulation.tickIntervalMs / 1000,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(target.health).toBe(GAME_CONFIG.player.maxHealth);
+    expect(simulation.matchState.projectiles.size).toBe(0);
+
+    for (let seq = ticksToSpinUp + 1; seq <= ticksToSpinUp + 12; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 0, y: 0, z: 1 },
+        aimPoint: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+        dt: simulation.tickIntervalMs / 1000,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(simulation.matchState.projectiles.size).toBe(0);
+    expect(shooter.disposableShotsRemaining).toBeLessThan(heavyMachineGun.disposableShots!);
+    expect(
+      simulation
+        .drainPaintStampMessages()
+        .some((stamp) => stamp.paintGroupId === shooter.paintGroupId),
+    ).toBe(true);
+  });
+
+  it("lets the heavy machine gun hit a grounded player after spin-up", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+    const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
+    shooter.equippedWeaponId = WeaponId.HeavyMachineGun;
+    shooter.disposableShotsRemaining = heavyMachineGun.disposableShots!;
+
+    target.pos = {
+      x: shooter.pos.x,
+      y: shooter.pos.y,
+      z: shooter.pos.z + 10,
+    };
+    target.planetId = shooter.planetId;
+    target.movementState = PlayerMovementState.Idle;
+
+    const ticksToSpinUp = Math.ceil((heavyMachineGun.spinUpMs ?? 0) / simulation.tickIntervalMs);
+    for (let seq = 1; seq <= ticksToSpinUp + 16; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 0, y: 0, z: 1 },
+        aimPoint: {
+          x: target.pos.x,
+          y: target.pos.y + GAME_CONFIG.player.projectileMuzzleHeight * 0.7,
+          z: target.pos.z,
+        },
+        dt: simulation.tickIntervalMs / 1000,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
+    expect(simulation.matchState.projectiles.size).toBe(0);
+  });
+
+  it("reverts a heavy machine gun pickup to Pew Pew after the disposable spray runs out", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
+    shooter.equippedWeaponId = WeaponId.HeavyMachineGun;
+    shooter.disposableShotsRemaining = heavyMachineGun.disposableShots!;
+
+    const maxSeq =
+      Math.ceil((heavyMachineGun.spinUpMs ?? 0) / simulation.tickIntervalMs) +
+      (heavyMachineGun.disposableShots ?? 0) * 3;
+    for (let seq = 1; seq <= maxSeq; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 0, y: 0, z: 1 },
+        aimPoint: { x: shooter.pos.x, y: shooter.pos.y, z: shooter.pos.z + 40 },
+        dt: simulation.tickIntervalMs / 1000,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+      if (shooter.equippedWeaponId === DEFAULT_WEAPON_ID) break;
+    }
+
+    expect(shooter.equippedWeaponId).toBe(DEFAULT_WEAPON_ID);
+    expect(shooter.disposableShotsRemaining).toBe(0);
+  });
+
   it("applies bazooka splash damage to nearby players", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");

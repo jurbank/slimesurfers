@@ -1,5 +1,6 @@
 export const WeaponId = {
   MachineGun: "machineGun",
+  HeavyMachineGun: "heavyMachineGun",
   Bazooka: "bazooka",
   Sniper: "sniper",
 } as const;

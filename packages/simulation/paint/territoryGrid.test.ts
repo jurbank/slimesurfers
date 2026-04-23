@@ -47,6 +47,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     deathCount: 0,
     respawnTimer: 0,
     lastFireTimeMs: 0,
+    weaponTriggerHeldSinceMs: -1,
   };
 }
 

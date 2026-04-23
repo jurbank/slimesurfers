@@ -120,6 +120,7 @@ export function collectWeaponPickup(
 
     player.equippedWeaponId = pickup.weaponId;
     player.disposableShotsRemaining = getWeaponDefinition(pickup.weaponId).disposableShots ?? 0;
+    player.weaponTriggerHeldSinceMs = -1;
     player.slimeLevel = cfg.slime.maxLevel;
     pickup.active = false;
     pickup.respawnTimer = pickup.respawnDurationSeconds;

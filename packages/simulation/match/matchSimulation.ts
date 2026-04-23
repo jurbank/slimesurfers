@@ -303,6 +303,7 @@ function createSimPlayer(
     deathCount: 0,
     respawnTimer: 0,
     lastFireTimeMs: -1000,
+    weaponTriggerHeldSinceMs: -1,
   };
 }
 
@@ -486,7 +487,17 @@ export class MatchSimulation {
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, GAME_CONFIG);
-          tryFireProjectile(this.simState, player, input, actionNowMs, PLANETS, GAME_CONFIG);
+          for (const stamp of tryFireProjectile(
+            this.simState,
+            player,
+            input,
+            actionNowMs,
+            PLANETS,
+            GAME_CONFIG,
+            (event) => this.recordKillEvent(event),
+          )) {
+            this.recordPaintStamp(stamp);
+          }
           for (const stamp of tryFireHitscan(
             this.simState,
             player,
@@ -502,6 +513,7 @@ export class MatchSimulation {
         player.inputSeq = queue[queue.length - 1]!.seq;
         queue.length = 0;
       } else {
+        player.weaponTriggerHeldSinceMs = -1;
         const wasAirborne = player.movementState === PlayerMovementState.Airborne;
         stepPlayer(player, IDLE_INPUT, serverDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
         if (player.movementState === PlayerMovementState.Airborne) {
