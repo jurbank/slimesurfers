@@ -138,6 +138,7 @@ export const GAME_CONFIG = {
     standingHeight: 1.0,
     friendlyPaintSpeedMultiplier: 2.0,
     enemySpeedMultiplier: 0.7,
+    groundedDeceleration: 1,
     swimSpeedMultiplier: 3.2,
     swimAccelerationMultiplier: 1.0,
     swimDisturbanceMinSpeed: 1.5,

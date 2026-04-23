@@ -37,6 +37,7 @@ const TEST_CONFIG = {
     standingHeight: 1.0,
     friendlyPaintSpeedMultiplier: 1.5,
     enemySpeedMultiplier: 0.7,
+    groundedDeceleration: 6,
     swimSpeedMultiplier: 2.4,
     swimAccelerationMultiplier: 3.0,
     swimDisturbanceMinSpeed: 1.5,

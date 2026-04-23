@@ -55,6 +55,7 @@ export interface StepConfig {
     standingHeight: number;
     friendlyPaintSpeedMultiplier: number;
     enemySpeedMultiplier: number;
+    groundedDeceleration: number;
     swimSpeedMultiplier: number;
     swimAccelerationMultiplier: number;
     swimDisturbanceMinSpeed: number;
@@ -455,8 +456,10 @@ function stepOnSurface(
         vlen(glidedTangentVel) > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
     }
   } else if (onNeutralSurface && !onWater) {
-    assign(state.vel, sub(state.vel, tangentVel));
-    state.movementState = PlayerMovementState.Idle;
+    const decayed = scale(tangentVel, Math.max(0, 1 - cfg.movement.groundedDeceleration * dt));
+    assign(state.vel, add(sub(state.vel, tangentVel), decayed));
+    state.movementState =
+      vlen(decayed) > 1e-4 ? PlayerMovementState.Moving : PlayerMovementState.Idle;
   } else if (hasMoveInput || boostPressed) {
     const moveDir = hasMoveInput
       ? normalize(add(scale(right, moveX), scale(forward, moveZ)))
