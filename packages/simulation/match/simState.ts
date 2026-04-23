@@ -117,9 +117,11 @@ export interface SimPlayerState {
   lastAirTrickTimeMs: number;
   airTrickSpinDegrees: number;
   airTrickSpinMilestoneIndex: number;
+  airTrickSpinBlocked: boolean;
   airTrickFlipDegrees: number;
   airTrickFrontFlipMilestoneIndex: number;
   airTrickBackFlipMilestoneIndex: number;
+  airTrickFlipBlocked: boolean;
   airTrickPaintMultiplier: number;
   // Gameplay
   equippedWeaponId: WeaponId;

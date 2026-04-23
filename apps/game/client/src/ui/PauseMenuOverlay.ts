@@ -24,8 +24,10 @@ function describeMoveInput(trick: AirTrickDefinition): string {
   if (trick.kind === "sequence") {
     return trick.sequence?.map((key) => KEY_LABELS.get(key) ?? "?").join(" -> ") ?? "";
   }
-  if (trick.kind === "spin") return "Hold A / D";
-  if (trick.kind === "flip") return (trick.degrees ?? 0) > 0 ? "Hold W" : "Hold S";
+  const reps = Math.round(Math.abs(trick.degrees ?? 360) / 360);
+  const suffix = reps > 1 ? ` ×${reps}` : "";
+  if (trick.kind === "spin") return `A / D${suffix}`;
+  if (trick.kind === "flip") return (trick.degrees ?? 0) > 0 ? `W${suffix}` : `S${suffix}`;
   return "";
 }
 
