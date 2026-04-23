@@ -1,4 +1,6 @@
 // Basic profanity filter utility
+import { generateGuestPlayerName } from "./guestPlayerNames.ts";
+
 export const PLAYER_NAME_MAX_LENGTH = 20;
 
 const BAD_WORDS = [
@@ -174,7 +176,7 @@ const LEETSPEAK_CHARS: Record<string, string> = {
 };
 
 function fallbackName(): string {
-  return `Surfer${Math.floor(Math.random() * 1000)}`;
+  return generateGuestPlayerName();
 }
 
 function stripControlCharacters(text: string): string {

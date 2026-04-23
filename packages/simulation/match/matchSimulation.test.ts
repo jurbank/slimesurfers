@@ -176,7 +176,7 @@ describe("MatchSimulation", () => {
     const cleanedName = simulation.addPlayer("session-2", "  Alpha<script>  ", "3");
     const requestedColor = simulation.addPlayer("session-3", "Bravo", 3);
 
-    expect(invalidName.name).toBe("Player 1");
+    expect(invalidName.name).toBe("Slime Rider");
     expect(cleanedName.name).toBe("Alphascript");
     expect(cleanedName.paletteIndex).toBe(1);
     expect(requestedColor.paletteIndex).toBe(3);

@@ -29,6 +29,7 @@ import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
 import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
 import { cleanName } from "@splat/content/utils/profanity.ts";
+import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
 import {
   NO_TEAM_ID,
   PlayerMovementState,
@@ -260,7 +261,7 @@ function createSimPlayer(
 
   return {
     sessionId,
-    name: cleanName(name, `Player ${playerIndex + 1}`),
+    name: cleanName(name, generateGuestPlayerName(playerIndex)),
     teamId: slot.teamId,
     paintGroupId: slot.paintGroupId,
     paletteIndex: slot.paletteIndex,

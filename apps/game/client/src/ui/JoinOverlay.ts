@@ -1,8 +1,11 @@
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 import { isProfane } from "@splat/content/utils/profanity.ts";
+import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 const SLOTS = FFA_MODE.slots;
+const GUEST_PLAYER_NAME_STORAGE_KEY = "splat.guestPlayerName";
+const MOBILE_VIEWPORT_MAX_WIDTH_PX = 768;
 
 export class JoinOverlay {
   private readonly root: HTMLDivElement;
@@ -12,10 +15,12 @@ export class JoinOverlay {
   private readonly progressContainer: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
+  private readonly guestPlayerName: string;
   private selectedIndex = 0;
   private isLoading = true;
 
   constructor() {
+    this.guestPlayerName = JoinOverlay.getGuestPlayerName();
     this.root = document.createElement("div");
     Object.assign(this.root.style, {
       position: "fixed",
@@ -56,7 +61,7 @@ export class JoinOverlay {
 
     this.nameInput = document.createElement("input");
     this.nameInput.type = "text";
-    this.nameInput.placeholder = "Enter your name";
+    this.nameInput.placeholder = this.guestPlayerName;
     this.nameInput.maxLength = 20;
     Object.assign(this.nameInput.style, {
       padding: "10px 16px",
@@ -140,6 +145,7 @@ export class JoinOverlay {
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
+    this.focusNameInput();
   }
 
   setProgress(percent: number): void {
@@ -185,7 +191,7 @@ export class JoinOverlay {
         this.statusText.style.color = "#ff4444";
         return;
       }
-      const name = rawName || `Player${Math.floor(Math.random() * 1000)}`;
+      const name = rawName || this.guestPlayerName;
       callback(name, this.selectedIndex);
     };
     this.joinBtn.addEventListener("click", submit);
@@ -234,5 +240,21 @@ export class JoinOverlay {
       hint.style.opacity = "0";
       setTimeout(() => hint.remove(), 1000);
     }, 4000);
+  }
+
+  private static getGuestPlayerName(): string {
+    const existing = sessionStorage.getItem(GUEST_PLAYER_NAME_STORAGE_KEY);
+    if (existing) return existing;
+
+    const seed =
+      crypto.getRandomValues(new Uint32Array(1))[0] ?? Math.floor(Math.random() * 10_000);
+    const name = generateGuestPlayerName(seed);
+    sessionStorage.setItem(GUEST_PLAYER_NAME_STORAGE_KEY, name);
+    return name;
+  }
+
+  private focusNameInput(): void {
+    if (window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH_PX) return;
+    requestAnimationFrame(() => this.nameInput.focus());
   }
 }

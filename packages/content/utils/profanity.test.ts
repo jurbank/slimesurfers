@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+import { generateGuestPlayerName } from "./guestPlayerNames.ts";
 import { cleanName, isProfane, normalizePlayerName } from "./profanity.ts";
 
 test("isProfane identifies bad words", () => {
@@ -16,7 +17,7 @@ test("isProfane identifies bad words", () => {
 
 test("cleanName replaces bad names", () => {
   const cleaned = cleanName("fuck");
-  expect(cleaned).toMatch(/^Surfer\d+$/);
+  expect(cleaned).toMatch(/^[A-Za-z]+ [A-Za-z]+$/);
 
   expect(cleanName("GoodPlayer")).toBe("GoodPlayer");
 });
@@ -33,4 +34,10 @@ test("cleanName falls back for invalid or profane names", () => {
   expect(cleanName("<>", "Player 1")).toBe("Player 1");
   expect(cleanName(null, "Player 2")).toBe("Player 2");
   expect(cleanName("f.u.c.k", "Player 3")).toBe("Player 3");
+});
+
+test("generateGuestPlayerName combines the lexicon deterministically", () => {
+  expect(generateGuestPlayerName(0)).toBe("Slime Rider");
+  expect(generateGuestPlayerName(12)).toBe("Slime Bandit");
+  expect(generateGuestPlayerName(25)).toBe("Turbo Wizard");
 });
