@@ -136,6 +136,7 @@ export const GAME_CONFIG = {
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
     standingHeight: 1.0,
+    friendlyPaintSpeedMultiplier: 2.0,
     enemySpeedMultiplier: 0.7,
     swimSpeedMultiplier: 3.2,
     swimAccelerationMultiplier: 1.0,

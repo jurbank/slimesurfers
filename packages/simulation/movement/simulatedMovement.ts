@@ -53,6 +53,7 @@ export interface StepConfig {
     anchorGravityMultiplier: number;
     collisionRadius: number;
     standingHeight: number;
+    friendlyPaintSpeedMultiplier: number;
     enemySpeedMultiplier: number;
     swimSpeedMultiplier: number;
     swimAccelerationMultiplier: number;
@@ -349,6 +350,8 @@ function stepOnSurface(
     speedMultiplier = cfg.movement.swimSpeedMultiplier;
   } else if (onEnemyPaint) {
     speedMultiplier = cfg.movement.enemySpeedMultiplier;
+  } else if (onFriendlyPaint) {
+    speedMultiplier = cfg.movement.friendlyPaintSpeedMultiplier;
   }
   if (!skiActive && anchorPressed) {
     const moveDir = hasMoveInput

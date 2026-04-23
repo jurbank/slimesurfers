@@ -50,11 +50,11 @@ function resetAirTrickState(player: SimPlayerState): void {
   player.lastAirTrickTimeMs = -Infinity;
   player.airTrickSpinDegrees = 0;
   player.airTrickSpinMilestoneIndex = 0;
-  player.airTrickSpinBlocked = false;
+  player.airTrickSpinBlocked = true;
   player.airTrickFlipDegrees = 0;
   player.airTrickFrontFlipMilestoneIndex = 0;
   player.airTrickBackFlipMilestoneIndex = 0;
-  player.airTrickFlipBlocked = false;
+  player.airTrickFlipBlocked = true;
   player.airTrickPaintMultiplier = 1;
 }
 

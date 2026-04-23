@@ -35,6 +35,7 @@ const TEST_CONFIG = {
     anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     standingHeight: 1.0,
+    friendlyPaintSpeedMultiplier: 1.5,
     enemySpeedMultiplier: 0.7,
     swimSpeedMultiplier: 2.4,
     swimAccelerationMultiplier: 3.0,
