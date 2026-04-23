@@ -33,7 +33,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     this.setSimulationInterval((dt) => this.tick(dt), this.simulation.tickIntervalMs);
   }
 
-  onJoin(client: Client, options: { name?: string; colorIndex?: number } = {}) {
+  onJoin(client: Client, options: { name?: unknown; colorIndex?: unknown } = {}) {
     const simPlayer = this.simulation.addPlayer(client.sessionId, options.name, options.colorIndex);
     addSimPlayerToRoomState(this.state, simPlayer);
     void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });

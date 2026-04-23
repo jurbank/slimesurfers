@@ -4,7 +4,7 @@ export const EMOTE_CONFIG = {
   postCooldownMs: 4000,
   displayDurationMs: 5500,
   fadeDurationMs: 650,
-  visibleDistance: 75,
+  visibleDistance: 65,
 } as const;
 
 export const EMOTE_DEFS = [

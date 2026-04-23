@@ -169,6 +169,19 @@ describe("MatchSimulation", () => {
     expect(simulation.players.size).toBe(0);
   });
 
+  it("sanitizes join names and ignores coerced color indices", () => {
+    const simulation = new MatchSimulation();
+
+    const invalidName = simulation.addPlayer("session-1", "<>");
+    const cleanedName = simulation.addPlayer("session-2", "  Alpha<script>  ", "3");
+    const requestedColor = simulation.addPlayer("session-3", "Bravo", 3);
+
+    expect(invalidName.name).toBe("Player 1");
+    expect(cleanedName.name).toBe("Alphascript");
+    expect(cleanedName.paletteIndex).toBe(1);
+    expect(requestedColor.paletteIndex).toBe(3);
+  });
+
   it("builds snapshot and leaderboard payloads from simulation state", () => {
     const simulation = new MatchSimulation();
     const player = simulation.addPlayer("session-1", "Alpha");
@@ -282,6 +295,84 @@ describe("MatchSimulation", () => {
 
     expect(guarded.buildSnapshotMessage().players[0]?.inputSeq).toBe(3);
     expect(snapshotX(guarded, "session-1")).toBeCloseTo(snapshotX(control, "session-1"), 5);
+  });
+
+  it("rejects malformed input before it reaches simulation", () => {
+    const guarded = new MatchSimulation();
+    guarded.addPlayer("session-1", "Alpha");
+
+    const control = new MatchSimulation();
+    control.addPlayer("session-1", "Alpha");
+
+    guarded.recordInput("session-1", {
+      seq: Number.POSITIVE_INFINITY,
+      keys: InputKey.Forward,
+      aimDir: { x: 0, y: 0, z: 1 },
+      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+    });
+    guarded.recordInput("session-1", {
+      seq: 1,
+      keys: InputKey.Forward,
+      aimDir: { x: Number.NaN, y: 0, z: 1 },
+      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
+    });
+    guarded.recordInput("session-1", {
+      seq: 2,
+      keys: InputKey.Forward,
+      aimDir: { x: 0, y: 0, z: 1 },
+      dt: Number.NaN,
+    });
+
+    guarded.tick(guarded.tickIntervalMs);
+    control.tick(control.tickIntervalMs);
+
+    expect(guarded.buildSnapshotMessage().players[0]?.inputSeq).toBe(0);
+    expect(snapshotX(guarded, "session-1")).toBeCloseTo(snapshotX(control, "session-1"), 5);
+    expect(guarded.matchState.projectiles.size).toBe(0);
+  });
+
+  it("does not grant extra movement time for buffered max-dt inputs", () => {
+    const guarded = new MatchSimulation();
+    guarded.addPlayer("session-1", "Alpha");
+
+    const control = new MatchSimulation();
+    control.addPlayer("session-1", "Alpha");
+
+    for (let seq = 1; seq <= NETWORK_CONFIG.input.maxBufferedInputs; seq++) {
+      guarded.recordInput("session-1", {
+        ...createForwardInput(seq),
+        dt: 999,
+      });
+    }
+    control.recordInput("session-1", createForwardInput(1));
+
+    guarded.tick(guarded.tickIntervalMs);
+    control.tick(control.tickIntervalMs);
+
+    expect(guarded.buildSnapshotMessage().players[0]?.inputSeq).toBe(
+      NETWORK_CONFIG.input.maxBufferedInputs,
+    );
+    expect(
+      Math.abs(snapshotX(guarded, "session-1") - snapshotX(control, "session-1")),
+    ).toBeLessThan(0.01);
+  });
+
+  it("does not let buffered fire inputs bypass server-time weapon cooldowns", () => {
+    const simulation = new MatchSimulation();
+    simulation.addPlayer("session-1", "Alpha");
+
+    for (let seq = 1; seq <= NETWORK_CONFIG.input.maxBufferedInputs; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 1, y: 0, z: 0 },
+        dt: 999,
+      });
+    }
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(simulation.matchState.projectiles.size).toBe(1);
   });
 
   it("spawns authoritative projectiles when fire input is processed", () => {
