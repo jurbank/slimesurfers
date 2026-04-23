@@ -4,17 +4,17 @@ This document is the fast-path reference for movement work. Use it before changi
 
 Related docs:
 
-- [COMBAT.md](/C:/Projects/j/jam2/packages/simulation/combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
-- [ARCHITECTURE.md](/C:/Projects/j/jam2/ARCHITECTURE.md) for core game/system architecture
-- [CAMERA.md](/C:/Projects/j/jam2/apps/game/client/src/systems/CAMERA.md) for camera related
+- [COMBAT.md](/C:/Projects/j/slimesurfers/packages/simulation/combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
+- [ARCHITECTURE.md](/C:/Projects/j/slimesurfers/ARCHITECTURE.md) for core game/system architecture
+- [CAMERA.md](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/CAMERA.md) for camera related
 
 ## Ownership
 
-- Authoritative player movement lives in [simulatedMovement.ts](/C:/Projects/j/jam2/packages/simulation/movement/simulatedMovement.ts).
-- The server drives that movement from [matchSimulation.ts](/C:/Projects/j/jam2/packages/simulation/match/matchSimulation.ts).
-- The client reuses the same `stepPlayer` function for local prediction in [runtimeState.ts](/C:/Projects/j/jam2/apps/game/client/src/network/runtimeState.ts).
-- Client input intent and aim direction come from [inputSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/inputSystem.ts).
-- Rendering code in [player.ts](/C:/Projects/j/jam2/apps/game/client/src/entities/player/player.ts) and [remotePlayer.ts](/C:/Projects/j/jam2/apps/game/client/src/entities/player/remotePlayer.ts) only displays movement state. It does not decide movement.
+- Authoritative player movement lives in [simulatedMovement.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.ts).
+- The server drives that movement from [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts).
+- The client reuses the same `stepPlayer` function for local prediction in [runtimeState.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/network/runtimeState.ts).
+- Client input intent and aim direction come from [inputSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/inputSystem.ts).
+- Rendering code in [player.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/player.ts) and [remotePlayer.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/remotePlayer.ts) only displays movement state. It does not decide movement.
 
 ## Source Of Truth
 
@@ -29,7 +29,7 @@ Related docs:
 2. The client sends `InputMessage` packets with `seq`, `keys`, `aimDir`, and `dt`.
 3. The server queues those inputs in `MatchSimulation.recordInput`.
 4. On each server tick, `MatchSimulation.tick` advances each player with `stepPlayer`.
-5. The same input stream may trigger `tryFireProjectile` after movement stepping. See [COMBAT.md](/C:/Projects/j/jam2/packages/simulation/combat/COMBAT.md).
+5. The same input stream may trigger `tryFireProjectile` after movement stepping. See [COMBAT.md](/C:/Projects/j/slimesurfers/packages/simulation/combat/COMBAT.md).
 6. The server publishes authoritative snapshots containing movement state and `inputSeq`.
 7. The client applies the snapshot in `ClientRuntimeState.reconcileLocalPlayer`.
 8. The client discards acknowledged inputs and replays any remaining pending inputs through `stepPlayer`.
@@ -98,15 +98,15 @@ Movement parameters dynamically adjust based on the surface grid underneath the 
 
 For most movement bugs, read these in order:
 
-1. [simulatedMovement.ts](/C:/Projects/j/jam2/packages/simulation/movement/simulatedMovement.ts)
-2. [matchSimulation.ts](/C:/Projects/j/jam2/packages/simulation/match/matchSimulation.ts)
-3. [runtimeState.ts](/C:/Projects/j/jam2/apps/game/client/src/network/runtimeState.ts)
-4. [inputSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/inputSystem.ts)
+1. [simulatedMovement.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.ts)
+2. [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts)
+3. [runtimeState.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/network/runtimeState.ts)
+4. [inputSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/inputSystem.ts)
 
 If the issue is visual-only after state looks correct, then inspect:
 
-1. [player.ts](/C:/Projects/j/jam2/apps/game/client/src/entities/player/player.ts)
-2. [remotePlayer.ts](/C:/Projects/j/jam2/apps/game/client/src/entities/player/remotePlayer.ts)
+1. [player.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/player.ts)
+2. [remotePlayer.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/remotePlayer.ts)
 
 ## Bug Triage
 
@@ -133,8 +133,8 @@ Classify the issue before editing:
 
 ## Tests
 
-- Movement unit tests live in [simulatedMovement.test.ts](/C:/Projects/j/jam2/packages/simulation/movement/simulatedMovement.test.ts).
-- Match-level integration coverage lives in [matchSimulation.test.ts](/C:/Projects/j/jam2/packages/simulation/match/matchSimulation.test.ts).
+- Movement unit tests live in [simulatedMovement.test.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.test.ts).
+- Match-level integration coverage lives in [matchSimulation.test.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.test.ts).
 
 Useful commands:
 

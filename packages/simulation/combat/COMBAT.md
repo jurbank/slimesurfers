@@ -4,19 +4,19 @@ This document is the fast-path reference for combat work. Use it before changing
 
 Related docs:
 
-- [MOVEMENT.md](/C:/Projects/j/jam2/packages/simulation/movement/MOVEMENT.md) for `aimDir`, grounded vs airborne state, and player rotation rules that directly affect firing behavior.
-- [CAMERA.md](/C:/Projects/j/jam2/apps/game/client/src/systems/CAMERA.md) for 3rd-person aiming, crosshair projection, and parallax correction.
-- [ARCHITECTURE.md](/C:/Projects/j/jam2/ARCHITECTURE.md) for core game/system architecture
+- [MOVEMENT.md](/C:/Projects/j/slimesurfers/packages/simulation/movement/MOVEMENT.md) for `aimDir`, grounded vs airborne state, and player rotation rules that directly affect firing behavior.
+- [CAMERA.md](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/CAMERA.md) for 3rd-person aiming, crosshair projection, and parallax correction.
+- [ARCHITECTURE.md](/C:/Projects/j/slimesurfers/ARCHITECTURE.md) for core game/system architecture
 
 ## Ownership
 
-- Authoritative combat rules live in [projectiles.ts](/C:/Projects/j/jam2/packages/simulation/combat/projectiles.ts).
-- The server invokes combat from [matchSimulation.ts](/C:/Projects/j/jam2/packages/simulation/match/matchSimulation.ts).
-- Shared input shape comes from [clientMessages.ts](/C:/Projects/j/jam2/packages/protocol/network/clientMessages.ts).
-- Authoritative projectile snapshots and paint stamp messages are defined in [serverMessages.ts](/C:/Projects/j/jam2/packages/protocol/network/serverMessages.ts).
-- Territory ownership and paint scoring effects are applied by [stampPaint.ts](/C:/Projects/j/jam2/packages/simulation/paint/stampPaint.ts).
-- Client-side projectile visuals live in [projectileSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/projectileSystem.ts).
-- Client-side paint visuals live in [paintSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/paintSystem.ts).
+- Authoritative combat rules live in [projectiles.ts](/C:/Projects/j/slimesurfers/packages/simulation/combat/projectiles.ts).
+- The server invokes combat from [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts).
+- Shared input shape comes from [clientMessages.ts](/C:/Projects/j/slimesurfers/packages/protocol/network/clientMessages.ts).
+- Authoritative projectile snapshots and paint stamp messages are defined in [serverMessages.ts](/C:/Projects/j/slimesurfers/packages/protocol/network/serverMessages.ts).
+- Territory ownership and paint scoring effects are applied by [stampPaint.ts](/C:/Projects/j/slimesurfers/packages/simulation/paint/stampPaint.ts).
+- Client-side projectile visuals live in [projectileSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/projectileSystem.ts).
+- Client-side paint visuals live in [paintSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/paintSystem.ts).
 
 ## Source Of Truth
 
@@ -100,7 +100,7 @@ Related docs:
 - `MatchSimulation.tick` steps movement before firing, so a shot uses the post-movement player state for that input.
 - Combat can update `player.rot` to face the shot direction on fire.
 - `planetId` matters for spawned projectile context and respawn destination.
-- Bugs that look like bad shooting can actually be aim-basis or reconciliation issues in [MOVEMENT.md](/C:/Projects/j/jam2/packages/simulation/movement/MOVEMENT.md).
+- Bugs that look like bad shooting can actually be aim-basis or reconciliation issues in [MOVEMENT.md](/C:/Projects/j/slimesurfers/packages/simulation/movement/MOVEMENT.md).
 
 ## Invariants
 
@@ -144,15 +144,15 @@ To eliminate perceived input lag, the client should predict the results of its o
 
 For most combat bugs, read these in order:
 
-1. [projectiles.ts](/C:/Projects/j/jam2/packages/simulation/combat/projectiles.ts)
-2. [matchSimulation.ts](/C:/Projects/j/jam2/packages/simulation/match/matchSimulation.ts)
-3. [serverMessages.ts](/C:/Projects/j/jam2/packages/protocol/network/serverMessages.ts)
-4. [stampPaint.ts](/C:/Projects/j/jam2/packages/simulation/paint/stampPaint.ts)
+1. [projectiles.ts](/C:/Projects/j/slimesurfers/packages/simulation/combat/projectiles.ts)
+2. [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts)
+3. [serverMessages.ts](/C:/Projects/j/slimesurfers/packages/protocol/network/serverMessages.ts)
+4. [stampPaint.ts](/C:/Projects/j/slimesurfers/packages/simulation/paint/stampPaint.ts)
 
 If the issue is visual-only after authoritative state looks correct, then inspect:
 
-1. [projectileSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/projectileSystem.ts)
-2. [paintSystem.ts](/C:/Projects/j/jam2/apps/game/client/src/systems/paintSystem.ts)
+1. [projectileSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/projectileSystem.ts)
+2. [paintSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/paintSystem.ts)
 
 ## Bug Triage
 

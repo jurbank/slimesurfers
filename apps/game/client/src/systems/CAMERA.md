@@ -4,9 +4,9 @@ Fast-path reference for camera follow logic, planet-relative orientation, and oc
 
 Related docs:
 
-- [MOVEMENT.md](/C:/Projects/j/jam2/packages/simulation/movement/MOVEMENT.md) for `aimDir`, grounded vs airborne state, and player rotation rules that directly affect firing behavior.
-- [COMBAT.md](/C:/Projects/j/jam2/packages/simulation/combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
-- [ARCHITECTURE.md](/C:/Projects/j/jam2/ARCHITECTURE.md) for core game/system architecture
+- [MOVEMENT.md](/C:/Projects/j/slimesurfers/packages/simulation/movement/MOVEMENT.md) for `aimDir`, grounded vs airborne state, and player rotation rules that directly affect firing behavior.
+- [COMBAT.md](/C:/Projects/j/slimesurfers/packages/simulation/combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
+- [ARCHITECTURE.md](/C:/Projects/j/slimesurfers/ARCHITECTURE.md) for core game/system architecture
 
 ## Ownership
 

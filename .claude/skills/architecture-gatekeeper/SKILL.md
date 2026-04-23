@@ -1,12 +1,12 @@
 ---
 name: architecture-gatekeeper
-description: "Review jam2 changes against architecture boundaries. Use for package ownership, server authority, simulation vs protocol vs room logic, schema-vs-message decisions, source-of-truth drift, and premature abstraction checks."
+description: "Review slimesurfers changes against architecture boundaries. Use for package ownership, server authority, simulation vs protocol vs room logic, schema-vs-message decisions, source-of-truth drift, and premature abstraction checks."
 argument-hint: "Describe the change, PR, or file set you want checked against the architecture"
 ---
 
 # Architecture Gatekeeper
 
-Use this skill when you need to check whether a change still fits jam2's intended architecture before or after implementation.
+Use this skill when you need to check whether a change still fits slimesurfers's intended architecture before or after implementation.
 
 This skill is for changes involving:
 
@@ -39,7 +39,7 @@ This skill is for changes involving:
    - `apps/game/client` for rendering, prediction, reconciliation, and UI
 
 3. Identify the authoritative owner of the behavior.
-   Confirm who decides the affected gameplay truth. In jam2, the server is authoritative for player-affecting gameplay state, scoring, territory ownership, match timing, and input validation. If a client or schema layer starts acting like the authority, flag it.
+   Confirm who decides the affected gameplay truth. In slimesurfers, the server is authoritative for player-affecting gameplay state, scoring, territory ownership, match timing, and input validation. If a client or schema layer starts acting like the authority, flag it.
 
 4. Check whether the change preserves clean package boundaries.
    Review imports and logic placement for drift. Ask:

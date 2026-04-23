@@ -1,12 +1,12 @@
 ---
 name: glsl-syntax-validator
-description: "Validate GLSL changes in jam2. Use for embedded shader strings, Three.js ShaderMaterial code, onBeforeCompile fragment injections, uniform/varying mismatches, and syntax or scope errors in apps/game/client/src/shaders/shaders.ts."
+description: "Validate GLSL changes in slimesurfers. Use for embedded shader strings, Three.js ShaderMaterial code, onBeforeCompile fragment injections, uniform/varying mismatches, and syntax or scope errors in apps/game/client/src/shaders/shaders.ts."
 argument-hint: "Describe the shader change, material, or GLSL block you want validated"
 ---
 
 # GLSL Syntax Validator
 
-Use this skill when you need to review or fix shader syntax in jam2 before or after editing GLSL, including nearby Three.js wiring that can break shader compilation.
+Use this skill when you need to review or fix shader syntax in slimesurfers before or after editing GLSL, including nearby Three.js wiring that can break shader compilation.
 
 In this repo, shader code currently lives primarily in embedded template strings inside `apps/game/client/src/shaders/shaders.ts`, including both direct `THREE.ShaderMaterial` programs and `onBeforeCompile` patch injections into Three.js built-in materials.
 

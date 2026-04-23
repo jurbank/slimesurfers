@@ -1,12 +1,12 @@
 ---
 name: three-js-render-auditor
-description: "Audit Three.js rendering changes in jam2. Use for scene graph ownership, material render states, shader integration, per-frame object churn, resource disposal, transparency ordering, and client-side rendering regressions."
+description: "Audit Three.js rendering changes in slimesurfers. Use for scene graph ownership, material render states, shader integration, per-frame object churn, resource disposal, transparency ordering, and client-side rendering regressions."
 argument-hint: "Describe the render change, scene path, or visual bug you want audited"
 ---
 
 # Three.js Render Auditor
 
-Use this skill when you need to review or fix rendering changes in jam2's Three.js client.
+Use this skill when you need to review or fix rendering changes in slimesurfers's Three.js client.
 
 This skill is for changes involving:
 

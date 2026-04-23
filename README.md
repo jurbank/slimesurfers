@@ -1,4 +1,4 @@
-# jam2
+# slimesurfers
 
 Server-authoritative online battle arena prototype inspired by Splatoon, built around spherical planets and territory control.
 

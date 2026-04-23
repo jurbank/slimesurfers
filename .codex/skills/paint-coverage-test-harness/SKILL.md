@@ -1,12 +1,12 @@
 ---
 name: paint-coverage-test-harness
-description: "Build and extend paint coverage tests in jam2. Use for territory ownership, paint scoring, stamp throttling, paintSeq ordering, bounded stamp history, and optional Colyseus paint replication checks."
+description: "Build and extend paint coverage tests in slimesurfers. Use for territory ownership, paint scoring, stamp throttling, paintSeq ordering, bounded stamp history, and optional Colyseus paint replication checks."
 argument-hint: "Describe the paint behavior, bug, or file set you want the harness to cover"
 ---
 
 # Paint Coverage Test Harness
 
-Use this skill when you need to add, audit, or repair tests around authoritative paint coverage in jam2.
+Use this skill when you need to add, audit, or repair tests around authoritative paint coverage in slimesurfers.
 
 This skill is for changes involving:
 

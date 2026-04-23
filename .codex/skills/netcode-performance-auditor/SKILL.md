@@ -1,12 +1,12 @@
 ---
 name: netcode-performance-auditor
-description: "Audit netcode and multiplayer performance in jam2. Use for snapshot and reconciliation issues, interpolation bugs, schema-vs-message cost, room pressure, input rate and buffering risks, tick cadence drift, replication size, and missing network observability."
+description: "Audit netcode and multiplayer performance in slimesurfers. Use for snapshot and reconciliation issues, interpolation bugs, schema-vs-message cost, room pressure, input rate and buffering risks, tick cadence drift, replication size, and missing network observability."
 argument-hint: "Describe the netcode change, lag symptom, room issue, or file set you want audited"
 ---
 
 # Netcode Performance Auditor
 
-Use this skill when you need to review or fix networking behavior and multiplayer performance risks in jam2.
+Use this skill when you need to review or fix networking behavior and multiplayer performance risks in slimesurfers.
 
 This skill is for changes involving:
 
@@ -72,7 +72,7 @@ This skill is for changes involving:
    - fallback behavior when there is only one or stale snapshots
 
 6. Review schema-vs-message cost and ownership.
-   In jam2, persistent shared room state belongs in Colyseus schema replication, while input, snapshots, and transient broadcasts travel as custom messages. Flag changes that:
+   In slimesurfers, persistent shared room state belongs in Colyseus schema replication, while input, snapshots, and transient broadcasts travel as custom messages. Flag changes that:
    - duplicate gameplay truth across schema state and custom messages without a clear reason
    - push high-churn state into schema replication when message flow would be more appropriate
    - inflate custom payloads when compact schema state already exists for the use case

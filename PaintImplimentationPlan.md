@@ -83,7 +83,7 @@ For each planet:
 - clear it on match start/disconnect
 - stamp into it when a new `PaintStampMessage` arrives
 
-This is the natural replacement for the current per-stamp sphere meshes in [apps/game/client/src/systems/paintSystem.ts](C:/Projects/j/jam2/apps/game/client/src/systems/paintSystem.ts).
+This is the natural replacement for the current per-stamp sphere meshes in [apps/game/client/src/systems/paintSystem.ts](C:/Projects/j/slimesurfers/apps/game/client/src/systems/paintSystem.ts).
 
 ### 3. Project brushes from surface-space data
 
@@ -107,7 +107,7 @@ This is simpler than trying to raycast from the camera or reconstruct collision 
 
 Initial brush asset:
 
-- [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/jam2/apps/game/client/src/assets/paint/brush_mask.png) is the current soft brush mask for projection into the paint render target
+- [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/slimesurfers/apps/game/client/src/assets/paint/brush_mask.png) is the current soft brush mask for projection into the paint render target
 - this remains a client-only rendering asset and should not move into shared gameplay packages
 
 ### 4. Separate mask data from shading
@@ -151,7 +151,7 @@ The full version described here is intentionally richer than the first implement
 Recommended MVP:
 
 - one render target per planet
-- one projected brush texture using [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/jam2/apps/game/client/src/assets/paint/brush_mask.png)
+- one projected brush texture using [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/slimesurfers/apps/game/client/src/assets/paint/brush_mask.png)
 - one simple stamp write path on paint events only
 - one simple planet material blend using the paint mask
 - no generated normal map yet
@@ -319,7 +319,7 @@ The safest first implementation is:
 1. Keep `PaintStampMessage` unchanged.
 2. Replace the mesh-based `PaintSystem` with per-planet mask render targets.
 3. Convert stamp normals to spherical UVs.
-4. Use [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/jam2/apps/game/client/src/assets/paint/brush_mask.png) as the first projected brush input.
+4. Use [apps/game/client/src/assets/paint/brush_mask.png](/C:/Projects/j/slimesurfers/apps/game/client/src/assets/paint/brush_mask.png) as the first projected brush input.
 5. Blend a paint color layer over the existing planet material.
 6. Add edge noise only after the basic mask path works.
 

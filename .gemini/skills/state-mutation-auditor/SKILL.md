@@ -1,6 +1,6 @@
 ---
 name: state-mutation-auditor
-description: "Audit authoritative state mutations in jam2. Use for simulation changes, Colyseus schema updates, match state bugs, projectile or paint scoring issues, input sequencing, respawn logic, and server-client state divergence."
+description: "Audit authoritative state mutations in slimesurfers. Use for simulation changes, Colyseus schema updates, match state bugs, projectile or paint scoring issues, input sequencing, respawn logic, and server-client state divergence."
 argument-hint: "Describe the change, file set, or bug you want audited"
 ---
 

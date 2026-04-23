@@ -1,6 +1,6 @@
 ---
 name: config-centralizer-validator
-description: "Validate centralized config usage in jam2. Use for hardcoded gameplay or network constants, duplicated literals, config drift across client/server/simulation, derived config like planet positions, and deciding whether a value belongs in GAME_CONFIG, NETWORK_CONFIG, or mode definitions."
+description: "Validate centralized config usage in slimesurfers. Use for hardcoded gameplay or network constants, duplicated literals, config drift across client/server/simulation, derived config like planet positions, and deciding whether a value belongs in GAME_CONFIG, NETWORK_CONFIG, or mode definitions."
 argument-hint: "Describe the change, file set, or constant you want validated"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "Describe the change, file set, or constant you want validated"
 
 Use this skill when you need to check whether a value is stored in the right authoritative config surface, whether a new constant is duplicated or drifting, and whether a change stays consistent across the client, server, and simulation.
 
-In jam2, the main centralized config owners are:
+In slimesurfers, the main centralized config owners are:
 
 - `packages/content/config/gameConfig.ts` for shared gameplay-feel constants
 - `packages/content/config/networkConfig.ts` for room, networking, simulation cadence, reconciliation, and limits

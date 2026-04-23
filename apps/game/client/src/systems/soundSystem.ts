@@ -14,7 +14,7 @@ interface ActiveMusic {
 }
 
 const FADE_DURATION = 1.5;
-const STORAGE_KEY = "jam2.audioSettings";
+const STORAGE_KEY = "slimesurfers.audioSettings";
 
 interface StoredAudioSettings {
   muted?: Partial<Record<SoundCategory, boolean>>;

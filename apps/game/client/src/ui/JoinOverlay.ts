@@ -31,7 +31,7 @@ export class JoinOverlay {
     });
 
     const title = document.createElement("h1");
-    title.textContent = "SPLAT";
+    title.textContent = "Slime Surfers";
     Object.assign(title.style, { margin: "0 0 8px", fontSize: "2.5rem", letterSpacing: "0.15em" });
 
     this.progressContainer = document.createElement("div");
