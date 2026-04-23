@@ -10,6 +10,8 @@ export const MessageType = {
   Input: "input",
   /** Player wants to change their display name */
   Rename: "rename",
+  /** Player wants to show selected emotes above their character */
+  EmotePost: "emotePost",
 
   // Server -> Client
   /**
@@ -23,6 +25,8 @@ export const MessageType = {
   PaintStamps: "paintStamps",
   /** Batched transient air-trick events for client animation and feedback */
   TrickEvents: "trickEvents",
+  /** Batched transient emote bubbles for client UI */
+  EmoteEvents: "emoteEvents",
   /** Match phase transition (lobby -> countdown -> active -> ended) */
   MatchPhase: "matchPhase",
 } as const;
@@ -32,6 +36,8 @@ export type {
   LeaderboardEntry,
   LeaderboardMessage,
   MatchPhaseMessage,
+  EmoteEventBatchMessage,
+  EmoteEventMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
   PlayerSnapshot,

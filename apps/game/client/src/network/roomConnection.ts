@@ -2,8 +2,10 @@ import { getStateCallbacks, type Room } from "@colyseus/sdk";
 import { colyseusClient } from "./colyseusClient.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
-import type { InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import type {
+  EmoteEventBatchMessage,
+  EmoteEventMessage,
   LeaderboardMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
@@ -26,6 +28,7 @@ export interface RoomCallbacks {
   // focused on persistent room membership and shared territory state.
   onPaintStamps(stamps: PaintStampMessage[]): void;
   onTrickEvents(events: TrickEventMessage[]): void;
+  onEmoteEvents(events: EmoteEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
   onDisconnect(): void;
@@ -66,6 +69,10 @@ export class RoomConnection {
       callbacks.onTrickEvents(message.events);
     });
 
+    this.room.onMessage(MessageType.EmoteEvents, (message: EmoteEventBatchMessage) => {
+      callbacks.onEmoteEvents(message.events);
+    });
+
     const $ = getStateCallbacks(this.room);
 
     $(this.room.state.players).onAdd((player: PlayerState, sessionId: string) => {
@@ -99,5 +106,10 @@ export class RoomConnection {
 
   sendInput(msg: InputMessage): void {
     this.room?.send(MessageType.Input, msg);
+  }
+
+  sendEmotePost(emoteIds: string[]): void {
+    const message: EmotePostMessage = { emoteIds };
+    this.room?.send(MessageType.EmotePost, message);
   }
 }

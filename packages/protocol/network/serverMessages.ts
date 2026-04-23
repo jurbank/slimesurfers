@@ -108,6 +108,18 @@ export interface TrickEventBatchMessage {
   events: TrickEventMessage[];
 }
 
+// -- Emotes -----------------------------------------------------------------
+
+export interface EmoteEventMessage {
+  playerId: string;
+  emoteIds: string[];
+  seq: number;
+}
+
+export interface EmoteEventBatchMessage {
+  events: EmoteEventMessage[];
+}
+
 // -- Leaderboard -------------------------------------------------------------
 
 export interface LeaderboardEntry {

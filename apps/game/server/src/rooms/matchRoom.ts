@@ -1,5 +1,6 @@
 import { Room, type Client } from "@colyseus/core";
-import type { InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
+import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
@@ -14,6 +15,8 @@ import {
 
 export class MatchRoom extends Room<{ state: GameState }> {
   private simulation = new MatchSimulation();
+  private emoteSeq = 0;
+  private readonly lastEmotePostMs = new Map<string, number>();
 
   onCreate() {
     this.setState(createRoomState(this.simulation.matchState));
@@ -21,6 +24,10 @@ export class MatchRoom extends Room<{ state: GameState }> {
 
     this.onMessage(MessageType.Input, (client: Client, msg: InputMessage) => {
       this.simulation.recordInput(client.sessionId, msg);
+    });
+
+    this.onMessage(MessageType.EmotePost, (client: Client, msg: EmotePostMessage) => {
+      this.handleEmotePost(client, msg);
     });
 
     this.setSimulationInterval((dt) => this.tick(dt), this.simulation.tickIntervalMs);
@@ -42,7 +49,38 @@ export class MatchRoom extends Room<{ state: GameState }> {
   onLeave(client: Client) {
     this.simulation.removePlayer(client.sessionId);
     this.state.players.delete(client.sessionId);
+    this.lastEmotePostMs.delete(client.sessionId);
     void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+  }
+
+  private handleEmotePost(client: Client, msg: EmotePostMessage): void {
+    if (!this.state.players.has(client.sessionId)) return;
+    if (!Array.isArray(msg.emoteIds)) return;
+    if (msg.emoteIds.length > EMOTE_CONFIG.maxPostPayloadIds) return;
+
+    const now = Date.now();
+    const lastPostMs = this.lastEmotePostMs.get(client.sessionId) ?? 0;
+    if (now - lastPostMs < EMOTE_CONFIG.postCooldownMs) return;
+    this.lastEmotePostMs.set(client.sessionId, now);
+
+    const emoteIds: string[] = [];
+    for (const emoteId of msg.emoteIds) {
+      if (typeof emoteId !== "string" || !isEmoteId(emoteId)) continue;
+      if (emoteIds.includes(emoteId)) continue;
+      emoteIds.push(emoteId);
+      if (emoteIds.length >= EMOTE_CONFIG.maxSelected) break;
+    }
+    if (emoteIds.length === 0) return;
+
+    this.broadcast(MessageType.EmoteEvents, {
+      events: [
+        {
+          playerId: client.sessionId,
+          emoteIds,
+          seq: ++this.emoteSeq,
+        },
+      ],
+    });
   }
 
   private tick(dt: number): void {

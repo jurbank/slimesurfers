@@ -7,7 +7,11 @@ import {
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
-import type { SnapshotMessage, TrickEventMessage } from "@splat/protocol/network/serverMessages.ts";
+import type {
+  EmoteEventMessage,
+  SnapshotMessage,
+  TrickEventMessage,
+} from "@splat/protocol/network/serverMessages.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
 import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
@@ -17,6 +21,7 @@ import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
+import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { SoundSystem } from "../systems/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -27,6 +32,7 @@ import { CombatHud } from "../ui/CombatHud.ts";
 import { SkiDebugHud } from "../ui/SkiDebugHud.ts";
 import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
 import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
+import { EmoteMenuOverlay } from "../ui/EmoteMenuOverlay.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
 import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
 import { createWaterMaterial } from "../materials/waterMaterial.ts";
@@ -83,6 +89,7 @@ export class MatchScene {
   private readonly pickups: PickupSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly trickText: TrickTextSystem;
+  private readonly emoteBubbles: EmoteBubbleSystem;
   private readonly sound: SoundSystem;
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
@@ -90,6 +97,7 @@ export class MatchScene {
   private readonly skiDebugHud: SkiDebugHud;
   private readonly leaderboard: LeaderboardOverlay;
   private readonly pauseMenu: PauseMenuOverlay;
+  private readonly emoteMenu: EmoteMenuOverlay;
 
   private localPlayer: LocalPlayer | null = null;
   private localPlayerColor = -1;
@@ -130,6 +138,7 @@ export class MatchScene {
 
     if (paused) {
       this.pauseMenu.show();
+      this.emoteMenu.close(false);
       this.input.setEnabled(false);
       return;
     }
@@ -303,6 +312,7 @@ export class MatchScene {
     this.pickups = new PickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.trickText = new TrickTextSystem();
+    this.emoteBubbles = new EmoteBubbleSystem();
     this.sound = new SoundSystem();
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
@@ -311,8 +321,10 @@ export class MatchScene {
     this.skiDebugHud.setVisible(import.meta.env.VITE_DEV_MODE === "true");
     this.leaderboard = new LeaderboardOverlay();
     this.pauseMenu = new PauseMenuOverlay(this.sound);
+    this.emoteMenu = new EmoteMenuOverlay();
     this.pauseMenu.onResume(() => this.setPaused(false));
     this.pauseMenu.onToggle(() => this.setPaused(!this.pauseMenu.isVisible()));
+    this.emoteMenu.onPost((emoteIds) => this.connection.sendEmotePost(emoteIds));
     this.input.onPointerLockExit(() => this.setPaused(true));
     this.render.renderer.domElement.addEventListener("pointerdown", () => this.sound.resume(), {
       once: true,
@@ -648,6 +660,12 @@ export class MatchScene {
     }
   }
 
+  private handleEmoteEvents(events: EmoteEventMessage[]): void {
+    for (const event of events) {
+      this.emoteBubbles.show(event.playerId, event.emoteIds);
+    }
+  }
+
   onDisconnect(cb: () => void): void {
     this.onDisconnectCb = cb;
   }
@@ -684,6 +702,7 @@ export class MatchScene {
           this.remotePlayers.delete(sessionId);
         }
         this.trickText.clear();
+        this.emoteBubbles.clearPlayer(sessionId);
       },
       onPaintStamps: (stamps) => {
         for (const stamp of stamps) {
@@ -696,6 +715,9 @@ export class MatchScene {
       },
       onTrickEvents: (events) => {
         this.handleTrickEvents(events);
+      },
+      onEmoteEvents: (events) => {
+        this.handleEmoteEvents(events);
       },
       onSnapshot: (snapshot, receivedAtMs) => {
         const localSessionId = this.connection.sessionId;
@@ -721,6 +743,8 @@ export class MatchScene {
         this.pickups.clear();
         this.projectiles.clear();
         this.trickText.clear();
+        this.emoteBubbles.clear();
+        this.emoteMenu.close(false);
         this.lastLocalHealth = null;
         this.combatHud.clear();
         this.setPaused(false);
@@ -1030,6 +1054,9 @@ export class MatchScene {
       this.pickups.update(now);
       this.projectiles.update(now);
       this.trickText.update(dt * 1000, this.camera.camera, (sessionId) =>
+        this.getPlayerMesh(sessionId),
+      );
+      this.emoteBubbles.update(dt * 1000, this.camera.camera, (sessionId) =>
         this.getPlayerMesh(sessionId),
       );
       this.sound.updateListener(this.camera.camera);

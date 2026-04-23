@@ -81,3 +81,8 @@ export interface InputMessage {
 export interface RenameMessage {
   name: string;
 }
+
+/** Sent when the player wants to show selected emotes above their character. */
+export interface EmotePostMessage {
+  emoteIds: string[];
+}
