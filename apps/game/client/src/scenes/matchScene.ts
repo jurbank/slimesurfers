@@ -790,6 +790,7 @@ export class MatchScene {
       let { keys: keyBits, pressedKeys } = this.input.buildInputBits();
       let lockedTargetId: string | undefined;
       let guaranteedHoming: boolean | undefined;
+      let chargeProgress: number | undefined;
 
       if (isHomingCapable) {
         if (rawFire && this.fireHoldStartMs === null) {
@@ -868,6 +869,11 @@ export class MatchScene {
 
         if (fireJustReleased && this.fireHoldStartMs !== null) {
           keyBits |= InputKey.Fire;
+          const sniperHoldMs = now - this.fireHoldStartMs;
+          chargeProgress =
+            sniperHoldMs >= SNIPER_HOLD_THRESHOLD_MS
+              ? Math.min(1, (sniperHoldMs - SNIPER_HOLD_THRESHOLD_MS) / SNIPER_CHARGE_MS)
+              : 0;
           this.fireHoldStartMs = null;
           this.camera.setFovScale(1.0);
           this.combatHud.hideSniperScope();
@@ -910,6 +916,7 @@ export class MatchScene {
         dt,
         lockedTargetId,
         guaranteedHoming,
+        chargeProgress,
       };
       this.connection.sendInput(input);
       this.runtime.recordLocalInput(input, this.planetPaint);

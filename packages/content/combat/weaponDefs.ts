@@ -28,6 +28,10 @@ export interface WeaponDefinition {
   homingCapable?: boolean;
   /** Half-angle of the kill cone for chargedHitscan weapons, in degrees. */
   hitscanConeHalfAngleDeg?: number;
+  /** Trail length (world units) at zero charge for chargedHitscan weapons. */
+  hitscanTrailMinDist?: number;
+  /** Trail length (world units) at full charge for chargedHitscan weapons. */
+  hitscanTrailMaxDist?: number;
 }
 
 export interface WeaponPickupSpawnDefinition {
@@ -98,6 +102,8 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     pickupColor: 0xb63542,
     disposableShots: 5,
     hitscanConeHalfAngleDeg: 2.5,
+    hitscanTrailMinDist: 20,
+    hitscanTrailMaxDist: 80,
   },
 };
 

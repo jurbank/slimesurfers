@@ -5,7 +5,6 @@ const HOMING_TURN_RATE_GUARANTEED = 15; // rad/s
 const GUARANTEED_SPEED_MULTIPLIER = 1.8;
 const HITSCAN_TRAIL_STEP = 2.0; // world units between trail stamps
 const HITSCAN_TRAIL_RADIUS_MULT = 0.3; // narrow trail width
-const HITSCAN_TRAIL_MAX_DIST = 120; // max trail length when beam misses terrain
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import {
   InputKey,
@@ -778,7 +777,11 @@ export function tryFireHitscan(
   // Trail: march from muzzle along the aim ray, projecting each sample radially onto the
   // terrain surface. Works whether or not the beam hits terrain — the surface projection
   // paints the "shadow" of the beam path on the ground.
-  const trailRayEnd = add(muzzlePos, scale(aimDir, HITSCAN_TRAIL_MAX_DIST));
+  const chargeP = Math.max(0, Math.min(1, input.chargeProgress ?? 1));
+  const trailMinDist = weapon.hitscanTrailMinDist ?? 20;
+  const trailMaxDist = weapon.hitscanTrailMaxDist ?? 80;
+  const trailDist = trailMinDist + chargeP * (trailMaxDist - trailMinDist);
+  const trailRayEnd = add(muzzlePos, scale(aimDir, trailDist));
   let trailEnd = trailRayEnd;
   let trailPlanet: PlanetData | undefined;
   for (const planet of planets) {

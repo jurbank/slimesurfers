@@ -73,6 +73,8 @@ export interface InputMessage {
   lockedTargetId?: string;
   /** True when the target was within the inner guarantee zone at release. */
   guaranteedHoming?: boolean;
+  /** Charge progress [0–1] at the moment of release, for chargedHitscan weapons. */
+  chargeProgress?: number;
 }
 
 /** Sent when the player wants to change their display name */
