@@ -120,6 +120,26 @@ export interface EmoteEventBatchMessage {
   events: EmoteEventMessage[];
 }
 
+// -- Kill feed ---------------------------------------------------------------
+
+export interface KillEventMessage {
+  seq: number;
+  killerSessionId?: string;
+  killerName?: string;
+  killerSlimeColor?: number;
+  killerPatternId?: number;
+  victimSessionId: string;
+  victimName: string;
+  victimSlimeColor: number;
+  victimPatternId: number;
+  weaponId?: WeaponId;
+  isSelfKill: boolean;
+}
+
+export interface KillEventBatchMessage {
+  events: KillEventMessage[];
+}
+
 // -- Leaderboard -------------------------------------------------------------
 
 export interface LeaderboardEntry {

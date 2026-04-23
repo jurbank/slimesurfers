@@ -27,12 +27,16 @@ export const MessageType = {
   TrickEvents: "trickEvents",
   /** Batched transient emote bubbles for client UI */
   EmoteEvents: "emoteEvents",
+  /** Batched transient kill-feed events for client UI */
+  KillEvents: "killEvents",
   /** Match phase transition (lobby -> countdown -> active -> ended) */
   MatchPhase: "matchPhase",
 } as const;
 
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 export type {
+  KillEventBatchMessage,
+  KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
   MatchPhaseMessage,

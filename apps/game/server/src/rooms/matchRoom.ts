@@ -97,6 +97,9 @@ export class MatchRoom extends Room<{ state: GameState }> {
     if (broadcasts.leaderboard) {
       this.broadcast(MessageType.Leaderboard, broadcasts.leaderboard);
     }
+    if (broadcasts.killEvents.length > 0) {
+      this.broadcast(MessageType.KillEvents, { events: broadcasts.killEvents });
+    }
     if (broadcasts.paintStamps.length > 0) {
       this.broadcast(MessageType.PaintStamps, { stamps: broadcasts.paintStamps });
     }

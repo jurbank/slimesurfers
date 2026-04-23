@@ -12,7 +12,10 @@ import {
   type Vec3Data,
 } from "@splat/protocol/network/clientMessages.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
-import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
+import type {
+  KillEventMessage,
+  PaintStampMessage,
+} from "@splat/protocol/network/serverMessages.ts";
 import type { PlanetData } from "../movement/simulatedMovement.ts";
 import { getPaintAtPoint } from "../paint/paintDetection.ts";
 import { applyPaintImpact } from "../paint/stampPaint.ts";
@@ -67,6 +70,9 @@ export interface CombatConfig {
     rockLevel: number;
   };
 }
+
+type PendingKillEvent = Omit<KillEventMessage, "seq">;
+type RecordKillEvent = (event: PendingKillEvent) => void;
 
 function add(a: Vec3Data, b: Vec3Data): SimVec3 {
   return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
@@ -354,6 +360,8 @@ function applyDamage(
   owner: SimPlayerState | undefined,
   damage: number,
   cfg: CombatConfig,
+  weaponId: WeaponId | undefined,
+  recordKillEvent?: RecordKillEvent,
 ): boolean {
   if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return false;
 
@@ -368,6 +376,18 @@ function applyDamage(
   if (owner) {
     owner.killCount++;
   }
+  recordKillEvent?.({
+    killerSessionId: owner?.sessionId,
+    killerName: owner?.name,
+    killerSlimeColor: owner?.slimeColor,
+    killerPatternId: owner?.patternId,
+    victimSessionId: player.sessionId,
+    victimName: player.name,
+    victimSlimeColor: player.slimeColor,
+    victimPatternId: player.patternId,
+    weaponId,
+    isSelfKill: owner?.sessionId === player.sessionId,
+  });
   return true;
 }
 
@@ -382,6 +402,8 @@ function applySplashDamage(
   planets: PlanetData[],
   cfg: CombatConfig,
   excludedPlayerIds: Set<string>,
+  weaponId: WeaponId | undefined,
+  recordKillEvent?: RecordKillEvent,
 ): void {
   if (splashRadius <= 0 || splashDamage <= 0) return;
 
@@ -400,6 +422,8 @@ function applySplashDamage(
       owner,
       Math.max(1, Math.round(splashDamage * damageScale)),
       cfg,
+      weaponId,
+      recordKillEvent,
     );
     if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
   });
@@ -548,6 +572,7 @@ export function tickProjectiles(
   dtMs: number,
   planets: PlanetData[],
   cfg: CombatConfig,
+  recordKillEvent?: RecordKillEvent,
 ): PaintStampMessage[] {
   const paintStamps: PaintStampMessage[] = [];
   simState.players.forEach((player) => {
@@ -616,7 +641,14 @@ export function tickProjectiles(
       const playerHitPoint = closestPointOnPlayerCapsule(impactPos, player, planets, cfg);
       if (distance(impactPos, playerHitPoint) > hitDistance) return;
 
-      const killed = applyDamage(player, owner, weapon.directDamage, cfg);
+      const killed = applyDamage(
+        player,
+        owner,
+        weapon.directDamage,
+        cfg,
+        weapon.id,
+        recordKillEvent,
+      );
       if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
       const splashExclusions = new Set<string>([player.sessionId]);
       applySplashDamage(
@@ -630,6 +662,8 @@ export function tickProjectiles(
         planets,
         cfg,
         splashExclusions,
+        weapon.id,
+        recordKillEvent,
       );
       applyBlastImpulse(
         simState,
@@ -693,6 +727,8 @@ export function tickProjectiles(
             planets,
             cfg,
             new Set<string>(),
+            weapon.id,
+            recordKillEvent,
           );
           applyBlastImpulse(
             simState,
@@ -724,6 +760,7 @@ export function tryFireHitscan(
   nowMs: number,
   planets: PlanetData[],
   cfg: CombatConfig,
+  recordKillEvent?: RecordKillEvent,
 ): PaintStampMessage[] {
   const paintStamps: PaintStampMessage[] = [];
   if ((input.keys & InputKey.Fire) === 0) return paintStamps;
@@ -754,7 +791,7 @@ export function tryFireHitscan(
     if (nearestPlanet && findTerrainImpactOnSegment(muzzlePos, target.pos, nearestPlanet, 0, cfg))
       return;
 
-    const killed = applyDamage(target, owner, weapon.directDamage, cfg);
+    const killed = applyDamage(target, owner, weapon.directDamage, cfg, weapon.id, recordKillEvent);
     if (killed) addDeathBurstPaint(simState, paintStamps, target, owner, planets, cfg);
 
     const planet = getNearestPlanet(target.pos, planets);

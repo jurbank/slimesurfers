@@ -1055,6 +1055,46 @@ describe("MatchSimulation", () => {
     expect(targetEntry?.deathCount).toBe(1);
   });
 
+  it("emits kill events with weapon and identity data for confirmed eliminations", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+
+    for (let shot = 0; shot < 3; shot++) {
+      simulation.matchState.projectiles.set(`kill-feed-${shot}`, {
+        id: `kill-feed-${shot}`,
+        ownerId: shooter.sessionId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: shooter.patternId,
+        pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: target.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    const killEvents = simulation.drainKillEventMessages();
+
+    expect(killEvents).toHaveLength(1);
+    expect(killEvents[0]).toMatchObject({
+      killerSessionId: shooter.sessionId,
+      killerName: shooter.name,
+      killerSlimeColor: shooter.slimeColor,
+      killerPatternId: shooter.patternId,
+      victimSessionId: target.sessionId,
+      victimName: target.name,
+      victimSlimeColor: target.slimeColor,
+      victimPatternId: target.patternId,
+      weaponId: WeaponId.MachineGun,
+      isSelfKill: false,
+    });
+    expect(killEvents[0]?.seq).toBeGreaterThan(0);
+    expect(simulation.drainKillEventMessages()).toHaveLength(0);
+  });
+
   it("counts respawn time down over intermediate ticks before reviving the player", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");

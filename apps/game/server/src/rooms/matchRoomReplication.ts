@@ -1,5 +1,6 @@
 import { ArraySchema, MapSchema } from "@colyseus/schema";
 import type {
+  KillEventMessage,
   LeaderboardMessage,
   MatchPhaseMessage,
   PaintStampMessage,
@@ -18,6 +19,7 @@ import type {
 } from "@splat/simulation/match/simState.ts";
 
 export interface MatchRoomTickBroadcasts {
+  killEvents: KillEventMessage[];
   leaderboard?: LeaderboardMessage;
   matchPhase?: MatchPhaseMessage;
   paintStamps: PaintStampMessage[];
@@ -145,6 +147,7 @@ export function buildTickBroadcasts(
   const simState = simulation.matchState;
 
   return {
+    killEvents: simulation.drainKillEventMessages(),
     matchPhase: result.shouldBroadcastMatchPhase
       ? {
           phase: simState.matchPhase,

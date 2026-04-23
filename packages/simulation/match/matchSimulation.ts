@@ -5,6 +5,7 @@ import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
+  KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
   PaintStampMessage,
@@ -312,8 +313,10 @@ export class MatchSimulation {
   private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
   private readonly pendingPaintStamps: PaintStampMessage[] = [];
   private readonly pendingTrickEvents: TrickEventMessage[] = [];
+  private readonly pendingKillEvents: KillEventMessage[] = [];
   private playerCount = 0;
   private tickCount = 0;
+  private killSeq = 0;
 
   constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
     this.mode = mode;
@@ -402,6 +405,10 @@ export class MatchSimulation {
     return this.pendingTrickEvents.splice(0, this.pendingTrickEvents.length);
   }
 
+  drainKillEventMessages(): KillEventMessage[] {
+    return this.pendingKillEvents.splice(0, this.pendingKillEvents.length);
+  }
+
   private recordPaintStamp(message: PaintStampMessage): void {
     this.pendingPaintStamps.push(message);
 
@@ -411,6 +418,13 @@ export class MatchSimulation {
       planetMessages.splice(0, planetMessages.length - GAME_CONFIG.paint.maxVisualStampsPerPlanet);
     }
     this.recentPaintStamps.set(message.planetId, planetMessages);
+  }
+
+  private recordKillEvent(message: Omit<KillEventMessage, "seq">): void {
+    this.pendingKillEvents.push({
+      ...message,
+      seq: ++this.killSeq,
+    });
   }
 
   recordInput(sessionId: string, msg: unknown): void {
@@ -480,6 +494,7 @@ export class MatchSimulation {
             actionNowMs,
             PLANETS,
             GAME_CONFIG,
+            (event) => this.recordKillEvent(event),
           )) {
             this.recordPaintStamp(stamp);
           }
@@ -514,7 +529,9 @@ export class MatchSimulation {
       }
     });
 
-    const paintStamps = tickProjectiles(this.simState, dtMs, PLANETS, GAME_CONFIG);
+    const paintStamps = tickProjectiles(this.simState, dtMs, PLANETS, GAME_CONFIG, (event) =>
+      this.recordKillEvent(event),
+    );
     for (const stamp of paintStamps) {
       this.recordPaintStamp(stamp);
     }

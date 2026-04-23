@@ -9,6 +9,7 @@ import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import type {
   EmoteEventMessage,
+  KillEventMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
@@ -719,6 +720,9 @@ export class MatchScene {
       onEmoteEvents: (events) => {
         this.handleEmoteEvents(events);
       },
+      onKillEvents: (events: KillEventMessage[]) => {
+        this.leaderboard.pushKillEvents(events, this.connection.sessionId);
+      },
       onSnapshot: (snapshot, receivedAtMs) => {
         const localSessionId = this.connection.sessionId;
         for (const player of snapshot.players) {
@@ -744,6 +748,7 @@ export class MatchScene {
         this.projectiles.clear();
         this.trickText.clear();
         this.emoteBubbles.clear();
+        this.leaderboard.clear();
         this.emoteMenu.close(false);
         this.lastLocalHealth = null;
         this.combatHud.clear();
@@ -1053,6 +1058,7 @@ export class MatchScene {
 
       this.pickups.update(now);
       this.projectiles.update(now);
+      this.leaderboard.tick(now);
       this.trickText.update(dt * 1000, this.camera.camera, (sessionId) =>
         this.getPlayerMesh(sessionId),
       );

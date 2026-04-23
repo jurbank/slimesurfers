@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
+import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import {
@@ -58,7 +59,44 @@ describe("matchRoomReplication", () => {
     expect(broadcasts.leaderboard?.entries[0]?.killCount).toBe(0);
     expect(broadcasts.leaderboard?.entries[0]?.deathCount).toBe(0);
     expect(broadcasts.matchPhase?.phase).toBe(MatchPhase.Active);
+    expect(broadcasts.killEvents).toHaveLength(0);
     expect(broadcasts.paintStamps).toHaveLength(0);
+  });
+
+  it("drains kill events into outbound broadcasts", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+
+    for (let shot = 0; shot < 3; shot++) {
+      simulation.matchState.projectiles.set(`replication-kill-${shot}`, {
+        id: `replication-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: shooter.patternId,
+        pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: target.planetId,
+        lifeMs: 1000,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    const broadcasts = buildTickBroadcasts(
+      {
+        shouldBroadcastLeaderboard: false,
+        shouldBroadcastMatchPhase: false,
+        shouldBroadcastSnapshot: false,
+      },
+      simulation,
+    );
+
+    expect(broadcasts.killEvents).toHaveLength(1);
+    expect(broadcasts.killEvents[0]?.killerSessionId).toBe(shooter.sessionId);
+    expect(broadcasts.killEvents[0]?.victimSessionId).toBe(target.sessionId);
+    expect(simulation.drainKillEventMessages()).toHaveLength(0);
   });
 
   it("syncs authoritative territory scores and cell ownership into room schema state", () => {

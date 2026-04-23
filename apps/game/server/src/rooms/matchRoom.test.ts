@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
+import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
+import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { MatchRoom } from "./matchRoom.ts";
 
 interface FakeClientMessage {
@@ -107,5 +110,51 @@ describe("MatchRoom", () => {
     harness.room.onLeave(alpha.client as never);
 
     expect(harness.room.state.players.has("session-1")).toBe(false);
+  });
+
+  it("broadcasts kill-feed events from simulation ticks", () => {
+    const harness = createRoomHarness();
+    const alpha = createFakeClient("session-1");
+    const bravo = createFakeClient("session-2");
+
+    harness.room.onJoin(alpha.client as never, { name: "Alpha" });
+    harness.room.onJoin(bravo.client as never, { name: "Bravo" });
+
+    const simulation = (harness.room as unknown as { simulation: MatchSimulation }).simulation;
+    const shooter = simulation.players.get("session-1");
+    const target = simulation.players.get("session-2");
+    if (!shooter || !target) {
+      throw new Error("expected joined players in simulation");
+    }
+
+    for (let shot = 0; shot < 3; shot++) {
+      simulation.matchState.projectiles.set(`room-kill-${shot}`, {
+        id: `room-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: shooter.patternId,
+        pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: target.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      (harness.room as unknown as { tick(dt: number): void }).tick(simulation.tickIntervalMs);
+    }
+
+    const killBroadcast = harness.broadcasts.find(
+      (broadcast) => broadcast.type === MessageType.KillEvents,
+    );
+    expect(killBroadcast).toBeDefined();
+    expect(killBroadcast?.payload).toMatchObject({
+      events: [
+        {
+          killerSessionId: shooter.sessionId,
+          victimSessionId: target.sessionId,
+          weaponId: WeaponId.MachineGun,
+        },
+      ],
+    });
   });
 });

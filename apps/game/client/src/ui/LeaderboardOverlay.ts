@@ -1,19 +1,39 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type {
+  KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
 } from "@splat/protocol/network/serverMessages.ts";
+import { formatKillFeedLine, type FormattedKillFeedLine } from "./formatKillFeedLine.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 const MAX_DISPLAY_ENTRIES = 10;
+const MAX_KILL_FEED_ITEMS = 5;
+const KILL_FEED_LIFETIME_MS = 4000;
+const KILL_FEED_ENTER_MS = 180;
+const KILL_FEED_FADE_MS = 900;
 const TOTAL_CELLS =
   GAME_CONFIG.paint.territoryRows * GAME_CONFIG.paint.territoryCols * GAME_CONFIG.planet.count;
+
+interface ActiveKillFeedItem {
+  createdAtMs: number;
+  expiresAtMs: number;
+  id: number;
+  row: HTMLDivElement;
+}
 
 export class LeaderboardOverlay {
   private readonly root: HTMLDivElement;
   private readonly title: HTMLDivElement;
   private readonly list: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
+  private readonly killFeedSection: HTMLDivElement;
+  private readonly killFeedHeader: HTMLDivElement;
+  private readonly killFeedList: HTMLDivElement;
+
+  private readonly activeKillFeed: ActiveKillFeedItem[] = [];
+  private isLeaderboardVisible = false;
+  private lastKillTemplateId: string | null = null;
 
   constructor() {
     this.root = document.createElement("div");
@@ -61,7 +81,32 @@ export class LeaderboardOverlay {
       display: "flex",
     });
 
-    this.root.append(this.title, this.list, this.progressBar);
+    this.killFeedSection = document.createElement("div");
+    Object.assign(this.killFeedSection.style, {
+      display: "none",
+      marginTop: "12px",
+      paddingTop: "10px",
+      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+    });
+
+    this.killFeedHeader = document.createElement("div");
+    this.killFeedHeader.textContent = "Kill Log";
+    Object.assign(this.killFeedHeader.style, {
+      fontSize: "0.72rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.12em",
+      color: "#9fb3c8",
+      marginBottom: "8px",
+    });
+
+    this.killFeedList = document.createElement("div");
+    Object.assign(this.killFeedList.style, {
+      display: "grid",
+      gap: "6px",
+    });
+
+    this.killFeedSection.append(this.killFeedHeader, this.killFeedList);
+    this.root.append(this.title, this.list, this.progressBar, this.killFeedSection);
     document.body.appendChild(this.root);
   }
 
@@ -70,13 +115,14 @@ export class LeaderboardOverlay {
     this.progressBar.replaceChildren();
 
     if (message.entries.length === 0) {
-      this.root.style.display = "none";
+      this.isLeaderboardVisible = false;
+      this.updateVisibility();
       return;
     }
 
     const isTeamMode = message.teamScores && message.teamScores.length > 0;
+    this.isLeaderboardVisible = true;
 
-    // Header for the grid
     const header = document.createElement("div");
     Object.assign(header.style, {
       display: "grid",
@@ -110,11 +156,62 @@ export class LeaderboardOverlay {
       this.renderFFAProgressBar(message);
     }
 
-    this.root.style.display = "block";
+    this.updateVisibility();
+  }
+
+  pushKillEvents(events: KillEventMessage[], localSessionId: string | null): void {
+    const nowMs = performance.now();
+
+    for (const event of events) {
+      const formatted = formatKillFeedLine(event, localSessionId, this.lastKillTemplateId);
+      this.lastKillTemplateId = formatted.templateId;
+      const row = this.createKillFeedRow(formatted);
+      this.killFeedList.prepend(row);
+      this.activeKillFeed.unshift({
+        createdAtMs: nowMs,
+        expiresAtMs: nowMs + KILL_FEED_LIFETIME_MS,
+        id: event.seq,
+        row,
+      });
+    }
+
+    while (this.activeKillFeed.length > MAX_KILL_FEED_ITEMS) {
+      const removed = this.activeKillFeed.pop();
+      removed?.row.remove();
+    }
+
+    this.updateKillFeedStyles(nowMs);
+    this.updateVisibility();
+  }
+
+  tick(nowMs: number): void {
+    let didChange = false;
+    for (let index = this.activeKillFeed.length - 1; index >= 0; index--) {
+      const item = this.activeKillFeed[index];
+      if (!item || item.expiresAtMs > nowMs) continue;
+      item.row.remove();
+      this.activeKillFeed.splice(index, 1);
+      didChange = true;
+    }
+
+    if (this.activeKillFeed.length > 0) {
+      this.updateKillFeedStyles(nowMs);
+    } else if (didChange) {
+      this.updateVisibility();
+    }
+  }
+
+  clear(): void {
+    this.list.replaceChildren();
+    this.progressBar.replaceChildren();
+    this.killFeedList.replaceChildren();
+    this.activeKillFeed.length = 0;
+    this.lastKillTemplateId = null;
+    this.isLeaderboardVisible = false;
+    this.updateVisibility();
   }
 
   private renderTeamGroups(message: LeaderboardMessage, localSessionId: string | null): void {
-    // Group entries by team
     const teams = new Map<number, LeaderboardEntry[]>();
     for (const entry of message.entries) {
       const list = teams.get(entry.teamId) || [];
@@ -122,7 +219,6 @@ export class LeaderboardOverlay {
       teams.set(entry.teamId, list);
     }
 
-    // Render each team group
     message.teamScores.forEach((teamScore, teamId) => {
       const teamColor = GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
       const colorHex = `#${teamColor.toString(16).padStart(6, "0")}`;
@@ -143,7 +239,6 @@ export class LeaderboardOverlay {
       this.list.appendChild(teamHeader);
 
       const teamEntries = teams.get(teamId) || [];
-      // Limit team entries if there are many
       teamEntries.slice(0, 5).forEach((entry) => this.renderEntry(entry, localSessionId));
     });
   }
@@ -225,8 +320,6 @@ export class LeaderboardOverlay {
 
   private renderFFAProgressBar(message: LeaderboardMessage): void {
     let totalClaimed = 0;
-
-    // Sort by sessionId to ensure a stable segment order in the progress bar
     const stableEntries = [...message.entries].sort((a, b) =>
       a.sessionId.localeCompare(b.sessionId),
     );
@@ -235,7 +328,6 @@ export class LeaderboardOverlay {
       const width = (entry.paintScore / TOTAL_CELLS) * 100;
       totalClaimed += width;
       if (width > 0.5) {
-        // Only show visible segments
         const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);
         this.progressBar.appendChild(segment);
       }
@@ -268,5 +360,66 @@ export class LeaderboardOverlay {
       });
       this.progressBar.appendChild(segment);
     }
+  }
+
+  private createKillFeedRow(formatted: FormattedKillFeedLine): HTMLDivElement {
+    const row = document.createElement("div");
+    Object.assign(row.style, {
+      padding: "7px 9px",
+      borderRadius: "8px",
+      fontSize: "0.78rem",
+      lineHeight: "1.3",
+      color: "#d9e4ee",
+      background: this.killFeedBackground(formatted.involvement),
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      boxShadow: "0 8px 18px rgba(0, 0, 0, 0.18)",
+      transform: "translateY(-8px)",
+      opacity: "0",
+      transition: "opacity 120ms linear, transform 120ms ease-out",
+      overflow: "hidden",
+    });
+
+    for (const segment of formatted.segments) {
+      const span = document.createElement("span");
+      span.textContent = segment.text;
+      if (segment.color !== undefined) {
+        span.style.color = `#${segment.color.toString(16).padStart(6, "0")}`;
+        span.style.fontWeight = "700";
+      }
+      row.appendChild(span);
+    }
+
+    return row;
+  }
+
+  private updateKillFeedStyles(nowMs: number): void {
+    for (const item of this.activeKillFeed) {
+      const remainingMs = Math.max(0, item.expiresAtMs - nowMs);
+      const ageMs = Math.max(0, nowMs - item.createdAtMs);
+      const enterProgress = Math.min(1, ageMs / KILL_FEED_ENTER_MS);
+      const fadeProgress =
+        remainingMs >= KILL_FEED_FADE_MS ? 1 : Math.max(0, remainingMs / KILL_FEED_FADE_MS);
+      const opacity = Math.max(0, Math.min(1, enterProgress * fadeProgress));
+      const translateY = (1 - enterProgress) * -8 + (1 - fadeProgress) * 6;
+      item.row.style.opacity = opacity.toFixed(3);
+      item.row.style.transform = `translateY(${translateY.toFixed(1)}px)`;
+    }
+    this.updateVisibility();
+  }
+
+  private killFeedBackground(involvement: FormattedKillFeedLine["involvement"]): string {
+    if (involvement === "killer") {
+      return "linear-gradient(135deg, rgba(29, 71, 54, 0.92), rgba(13, 24, 27, 0.92))";
+    }
+    if (involvement === "victim") {
+      return "linear-gradient(135deg, rgba(87, 36, 36, 0.92), rgba(26, 15, 20, 0.92))";
+    }
+    return "rgba(17, 24, 34, 0.86)";
+  }
+
+  private updateVisibility(): void {
+    this.killFeedSection.style.display = this.activeKillFeed.length > 0 ? "block" : "none";
+    this.root.style.display =
+      this.isLeaderboardVisible || this.activeKillFeed.length > 0 ? "block" : "none";
   }
 }

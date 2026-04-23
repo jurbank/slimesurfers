@@ -6,6 +6,8 @@ import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/cli
 import type {
   EmoteEventBatchMessage,
   EmoteEventMessage,
+  KillEventBatchMessage,
+  KillEventMessage,
   LeaderboardMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
@@ -29,6 +31,7 @@ export interface RoomCallbacks {
   onPaintStamps(stamps: PaintStampMessage[]): void;
   onTrickEvents(events: TrickEventMessage[]): void;
   onEmoteEvents(events: EmoteEventMessage[]): void;
+  onKillEvents(events: KillEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
   onDisconnect(): void;
@@ -71,6 +74,10 @@ export class RoomConnection {
 
     this.room.onMessage(MessageType.EmoteEvents, (message: EmoteEventBatchMessage) => {
       callbacks.onEmoteEvents(message.events);
+    });
+
+    this.room.onMessage(MessageType.KillEvents, (message: KillEventBatchMessage) => {
+      callbacks.onKillEvents(message.events);
     });
 
     const $ = getStateCallbacks(this.room);
