@@ -39,6 +39,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     airTrickFlipBlocked: false,
     airTrickPaintMultiplier: 1,
     equippedWeaponId: DEFAULT_WEAPON_ID,
+    disposableShotsRemaining: 0,
     health: 100,
     slimeLevel: GAME_CONFIG.slime.maxLevel,
     paintScore: 0,

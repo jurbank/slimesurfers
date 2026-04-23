@@ -1,4 +1,8 @@
 import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+
+const HOMING_TURN_RATE_STANDARD = 5; // rad/s
+const HOMING_TURN_RATE_GUARANTEED = 15; // rad/s
+const GUARANTEED_SPEED_MULTIPLIER = 1.8;
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import {
   InputKey,
@@ -107,6 +111,24 @@ function cross(a: Vec3Data, b: Vec3Data): SimVec3 {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function rotateToward(from: Vec3Data, toward: Vec3Data, maxAngleRad: number): SimVec3 {
+  const cosAngle = clamp(dot(from, toward), -1, 1);
+  const angle = Math.acos(cosAngle);
+  if (angle < 1e-6) return { x: toward.x, y: toward.y, z: toward.z };
+  const ax = cross(from, toward);
+  const axLen = length(ax);
+  if (axLen < 1e-8) return { x: from.x, y: from.y, z: from.z };
+  const axis = scale(ax, 1 / axLen);
+  const rotAngle = Math.min(angle, maxAngleRad);
+  const cosR = Math.cos(rotAngle);
+  const sinR = Math.sin(rotAngle);
+  const axDotV = dot(axis, from);
+  return add(
+    add(scale(from, cosR), scale(cross(axis, from), sinR)),
+    scale(axis, axDotV * (1 - cosR)),
+  );
 }
 
 function closestPointOnSegment(point: Vec3Data, start: Vec3Data, end: Vec3Data): SimVec3 {
@@ -446,7 +468,9 @@ function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: Comba
   player.movementState = PlayerMovementState.Idle;
   player.swimState = PlayerSwimState.None;
   player.isCarving = false;
-  player.lastFireTimeMs = -getWeaponDefinition(getEquippedWeaponId(player)).fireCooldownMs;
+  player.equippedWeaponId = DEFAULT_WEAPON_ID;
+  player.disposableShotsRemaining = 0;
+  player.lastFireTimeMs = -getWeaponDefinition(DEFAULT_WEAPON_ID).fireCooldownMs;
 }
 
 export function rechargePlayerSlime(
@@ -487,6 +511,10 @@ export function tryFireProjectile(
   const aim = isFiniteVec3(input.aimPoint)
     ? normalize(sub(input.aimPoint, muzzlePos))
     : normalize(input.aimDir);
+  const isGuaranteed = input.guaranteedHoming === true;
+  const speed =
+    weapon.projectileSpeed *
+    (input.lockedTargetId && isGuaranteed ? GUARANTEED_SPEED_MULTIPLIER : 1);
   const projectile: SimProjectileState = {
     id: `projectile-${simState.nextProjectileId++}`,
     ownerId: player.sessionId,
@@ -495,14 +523,22 @@ export function tryFireProjectile(
     slimeColor: player.slimeColor,
     patternId: player.patternId,
     pos: muzzlePos,
-    vel: scale(aim, weapon.projectileSpeed),
+    vel: scale(aim, speed),
     planetId: player.planetId,
     lifeMs: weapon.projectileLifetimeMs,
     spawnTimeMs: nowMs,
+    homingTargetId: input.lockedTargetId,
+    guaranteedHoming: input.guaranteedHoming,
   };
   simState.projectiles.set(projectile.id, projectile);
   player.slimeLevel = clamp(player.slimeLevel - weapon.slimeCost, 0, cfg.slime.maxLevel);
   player.lastFireTimeMs = nowMs;
+  if (weapon.disposableShots !== undefined) {
+    player.disposableShotsRemaining = Math.max(0, player.disposableShotsRemaining - 1);
+    if (player.disposableShotsRemaining === 0) {
+      player.equippedWeaponId = DEFAULT_WEAPON_ID;
+    }
+  }
 }
 
 export function tickProjectiles(
@@ -530,6 +566,27 @@ export function tickProjectiles(
         : clamp(simState.elapsedMs - projectile.spawnTimeMs, 0, dtMs);
     const startPos = { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z };
     projectile.lifeMs = Math.max(0, projectile.lifeMs - projectileDtMs);
+
+    if (projectile.homingTargetId) {
+      const target = simState.players.get(projectile.homingTargetId);
+      if (target && target.movementState !== PlayerMovementState.Dead) {
+        const currentSpeed = length(projectile.vel);
+        if (currentSpeed > 1e-8) {
+          const currentDir = scale(projectile.vel, 1 / currentSpeed);
+          const toTarget = sub(target.pos, projectile.pos);
+          const toTargetLen = length(toTarget);
+          if (toTargetLen > 1e-8) {
+            const targetDir = scale(toTarget, 1 / toTargetLen);
+            const turnRate = projectile.guaranteedHoming
+              ? HOMING_TURN_RATE_GUARANTEED
+              : HOMING_TURN_RATE_STANDARD;
+            const newDir = rotateToward(currentDir, targetDir, turnRate * (projectileDtMs / 1000));
+            assign(projectile.vel, scale(newDir, currentSpeed));
+          }
+        }
+      }
+    }
+
     projectile.pos = add(projectile.pos, scale(projectile.vel, projectileDtMs / 1000));
     if (projectile.lifeMs === 0) {
       removedIds.push(projectileId);

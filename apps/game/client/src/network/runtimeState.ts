@@ -18,6 +18,7 @@ const MAX_PENDING_INPUTS = 60;
 export interface RuntimePlayerState extends PlayerPhysics {
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
   health: number;
   slimeLevel: number;
   inputSeq: number;
@@ -54,6 +55,7 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     skiJumpCharge: state.skiJumpCharge,
     isShooting: state.isShooting,
     equippedWeaponId: state.equippedWeaponId,
+    disposableShotsRemaining: state.disposableShotsRemaining,
     health: state.health,
     slimeLevel: state.slimeLevel,
     inputSeq: state.inputSeq,
@@ -81,6 +83,7 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     skiJumpCharge: snapshot.skiJumpCharge ?? 0,
     isShooting: snapshot.isShooting,
     equippedWeaponId: snapshot.equippedWeaponId ?? DEFAULT_WEAPON_ID,
+    disposableShotsRemaining: snapshot.disposableShotsRemaining ?? 0,
     health: snapshot.health,
     slimeLevel: snapshot.slimeLevel,
     inputSeq: snapshot.inputSeq,
@@ -121,6 +124,7 @@ function interpolateState(
     skiJumpCharge: lerp(older.skiJumpCharge, newer.skiJumpCharge, t),
     isShooting: newer.isShooting,
     equippedWeaponId: newer.equippedWeaponId,
+    disposableShotsRemaining: newer.disposableShotsRemaining,
     health: newer.health,
     slimeLevel: newer.slimeLevel,
     inputSeq: newer.inputSeq,

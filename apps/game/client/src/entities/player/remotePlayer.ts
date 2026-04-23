@@ -4,6 +4,7 @@ import {
   getWeaponDefinition,
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
@@ -99,6 +100,27 @@ export class RemotePlayer {
 
   isAimTargetVisible(): boolean {
     return this.mesh.visible && this.liveMesh.visible;
+  }
+
+  setAcquired(acquired: boolean, guaranteed = false): void {
+    this.jsrOutline.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const mat = child.material;
+      if (!(mat instanceof THREE.ShaderMaterial)) return;
+      const uniform = mat.uniforms["outlineColor"];
+      if (!uniform) return;
+      const v = uniform.value as THREE.Vector3;
+      if (acquired) {
+        if (guaranteed) {
+          v.set(1.0, 0.55, 0.0);
+        } else {
+          v.set(1.0, 0.08, 0.08);
+        }
+      } else {
+        const [r, g, b] = GAME_CONFIG.shaders.cel.outlineColor;
+        v.set(r ?? 0, g ?? 0, b ?? 0);
+      }
+    });
   }
 
   triggerTrick(trickId: string): void {

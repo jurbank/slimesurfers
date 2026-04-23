@@ -22,6 +22,10 @@ export interface WeaponDefinition {
   blastImpulse: number;
   paintRadiusMultiplier: number;
   pickupColor: number;
+  /** If set, this weapon is disposable: the player gets this many shots then reverts to the default weapon. */
+  disposableShots?: number;
+  /** If true, holding fire enables target acquisition and launches a homing projectile on release. */
+  homingCapable?: boolean;
 }
 
 export interface WeaponPickupSpawnDefinition {
@@ -65,13 +69,15 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     projectileLifetimeMs: 2400,
     projectileCollisionRadius: 0.5,
     fireCooldownMs: 850,
-    slimeCost: 25,
+    slimeCost: 0,
     directDamage: 100,
     splashDamage: 45,
     splashRadius: 3.4,
     blastImpulse: 40,
     paintRadiusMultiplier: 2.4,
     pickupColor: 0xff9b3d,
+    disposableShots: 3,
+    homingCapable: true,
   },
   [WeaponId.Sniper]: {
     id: WeaponId.Sniper,
@@ -81,13 +87,14 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     projectileLifetimeMs: 0,
     projectileCollisionRadius: 0,
     fireCooldownMs: 1200,
-    slimeCost: 45,
+    slimeCost: 0,
     directDamage: 100,
     splashDamage: 0,
     splashRadius: 0,
     blastImpulse: 0,
     paintRadiusMultiplier: 0.8,
     pickupColor: 0xb63542,
+    disposableShots: 2,
   },
 };
 

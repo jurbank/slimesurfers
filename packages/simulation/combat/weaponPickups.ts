@@ -1,5 +1,6 @@
 import {
   WEAPON_PICKUP_SPAWNS,
+  getWeaponDefinition,
   type WeaponPickupSpawnDefinition,
 } from "@splat/content/combat/weaponDefs.ts";
 import { PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
@@ -118,6 +119,7 @@ export function collectWeaponPickup(
     if (distanceSquared(player.pos, pickupBasePos) > collectDistanceSq) return;
 
     player.equippedWeaponId = pickup.weaponId;
+    player.disposableShotsRemaining = getWeaponDefinition(pickup.weaponId).disposableShots ?? 0;
     player.slimeLevel = cfg.slime.maxLevel;
     pickup.active = false;
     pickup.respawnTimer = pickup.respawnDurationSeconds;

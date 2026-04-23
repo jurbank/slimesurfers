@@ -35,6 +35,7 @@ export class CameraSystem {
   private _smoothLateral = 0;
   private _landingDip = 0;
   private _wasAirborne = false;
+  private _fovScale = 1.0;
 
   constructor() {
     this.camera = new THREE.PerspectiveCamera(
@@ -112,8 +113,9 @@ export class CameraSystem {
     this._wasAirborne = isAirborne;
     this._landingDip *= Math.max(0, 1 - dt * 9);
 
-    // FOV: expands smoothly with speed, capped.
-    const targetFov = BASE_FOV + Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN);
+    // FOV: expands smoothly with speed, capped, then scaled by zoom override.
+    const targetFov =
+      (BASE_FOV + Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN)) * this._fovScale;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
     this.camera.updateProjectionMatrix();
 
@@ -205,5 +207,9 @@ export class CameraSystem {
       .normalize();
 
     return { x: this._aimPoint.x, y: this._aimPoint.y, z: this._aimPoint.z };
+  }
+
+  setFovScale(scale: number): void {
+    this._fovScale = scale;
   }
 }

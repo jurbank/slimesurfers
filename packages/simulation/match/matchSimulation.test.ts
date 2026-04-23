@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
@@ -368,37 +368,26 @@ describe("MatchSimulation", () => {
     expect(simulation.matchState.projectiles.size).toBe(0);
   });
 
-  it("consumes slime on accepted shots and rejects firing without enough slime", () => {
+  it("counts down disposable shots and reverts to default weapon when exhausted", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const bazooka = getWeaponDefinition(WeaponId.Bazooka);
     shooter.equippedWeaponId = WeaponId.Bazooka;
-    shooter.slimeLevel = bazooka.slimeCost;
+    shooter.disposableShotsRemaining = bazooka.disposableShots!;
 
-    simulation.recordInput("session-1", {
-      seq: 1,
-      keys: InputKey.Fire,
-      aimDir: { x: 1, y: 0, z: 0 },
-      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
-    });
-    simulation.tick(simulation.tickIntervalMs);
+    for (let seq = 1; seq <= bazooka.disposableShots!; seq++) {
+      simulation.recordInput("session-1", {
+        seq,
+        keys: InputKey.Fire,
+        aimDir: { x: 1, y: 0, z: 0 },
+        dt: bazooka.fireCooldownMs / 1000 + 0.1,
+      });
+      simulation.tick(bazooka.fireCooldownMs + 100);
+    }
 
-    expect(simulation.matchState.nextProjectileId).toBe(1);
-    expect(shooter.slimeLevel).toBeCloseTo(
-      GAME_CONFIG.slime.passiveRechargePerSecond / NETWORK_CONFIG.simulation.tickRateHz,
-      5,
-    );
-
-    simulation.recordInput("session-1", {
-      seq: 2,
-      keys: InputKey.Fire,
-      aimDir: { x: 1, y: 0, z: 0 },
-      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
-    });
-    simulation.tick(simulation.tickIntervalMs);
-
-    expect(simulation.matchState.nextProjectileId).toBe(1);
-    expect(shooter.slimeLevel).toBeLessThan(bazooka.slimeCost);
+    expect(simulation.matchState.nextProjectileId).toBe(bazooka.disposableShots!);
+    expect(shooter.equippedWeaponId).toBe(DEFAULT_WEAPON_ID);
+    expect(shooter.disposableShotsRemaining).toBe(0);
   });
 
   it("keeps ski mode active and fires on the same tick", () => {

@@ -370,6 +370,11 @@ export class InputSystem {
     return this.buildInputBits().keys;
   }
 
+  isFireDown(): boolean {
+    if (!this.enabled) return false;
+    return this.firePressed || ((this.mobileControls?.buildKeyBits() ?? 0) & InputKey.Fire) !== 0;
+  }
+
   /**
    * Computes aim direction by incrementally rotating a persistent basis.
    * This is robust against any orientation because it uses parallel transport.

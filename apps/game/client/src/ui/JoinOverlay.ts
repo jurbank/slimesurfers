@@ -1,4 +1,5 @@
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
+import { isProfane } from "@splat/content/utils/profanity.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 const SLOTS = FFA_MODE.slots;
@@ -178,7 +179,13 @@ export class JoinOverlay {
 
   onJoin(callback: (name: string, colorIndex: number) => void): void {
     const submit = (): void => {
-      const name = this.nameInput.value.trim() || `Player${Math.floor(Math.random() * 1000)}`;
+      const rawName = this.nameInput.value.trim();
+      if (rawName && isProfane(rawName)) {
+        this.statusText.textContent = "Please choose a cleaner name!";
+        this.statusText.style.color = "#ff4444";
+        return;
+      }
+      const name = rawName || `Player${Math.floor(Math.random() * 1000)}`;
       callback(name, this.selectedIndex);
     };
     this.joinBtn.addEventListener("click", submit);

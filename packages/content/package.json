@@ -7,7 +7,8 @@
     "./config/gameConfig.ts": "./config/gameConfig.ts",
     "./config/networkConfig.ts": "./config/networkConfig.ts",
     "./modes/gameModes.ts": "./modes/gameModes.ts",
-    "./tricks/airTrickDefs.ts": "./tricks/airTrickDefs.ts"
+    "./tricks/airTrickDefs.ts": "./tricks/airTrickDefs.ts",
+    "./utils/profanity.ts": "./utils/profanity.ts"
   },
   "dependencies": {
     "@splat/protocol": "workspace:*"

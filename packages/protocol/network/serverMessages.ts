@@ -27,6 +27,7 @@ export interface PlayerSnapshot {
   skiJumpCharge: number;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
   health: number;
   slimeLevel: number;
   respawnTimer: number;
@@ -61,6 +62,8 @@ export interface ProjectileSnapshot {
   vel: Vec3Data;
   planetId: string;
   lifeMs: number;
+  homingTargetId?: string;
+  guaranteedHoming?: boolean;
 }
 
 export interface PickupSnapshot {

@@ -69,6 +69,10 @@ export interface InputMessage {
    * Clamped server-side to [0, 1/tickRateHz * 2] to prevent abuse.
    */
   dt: number;
+  /** Session ID of the homing target, set only when releasing a bazooka lock. */
+  lockedTargetId?: string;
+  /** True when the target was within the inner guarantee zone at release. */
+  guaranteedHoming?: boolean;
 }
 
 /** Sent when the player wants to change their display name */

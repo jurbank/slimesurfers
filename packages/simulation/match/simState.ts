@@ -53,6 +53,8 @@ export interface SimProjectileState {
   planetId: string;
   lifeMs: number;
   spawnTimeMs?: number;
+  homingTargetId?: string;
+  guaranteedHoming?: boolean;
 }
 
 export interface SimWeaponPickupState {
@@ -125,6 +127,7 @@ export interface SimPlayerState {
   airTrickPaintMultiplier: number;
   // Gameplay
   equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
   health: number;
   slimeLevel: number;
   paintScore: number;

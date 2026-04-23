@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
+import {
+  DEFAULT_WEAPON_ID,
+  getWeaponDefinition,
+  type WeaponId,
+} from "@splat/content/combat/weaponDefs.ts";
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
@@ -45,6 +49,13 @@ import {
 
 const PLANET_CENTERS = PLANET_POSITIONS.map((p) => new THREE.Vector3(p.x, p.y, p.z));
 const CROSSHAIR_AIM_DISTANCE = 500;
+
+const BAZOOKA_HOLD_THRESHOLD_MS = 500;
+const ACQUISITION_RAMP_MS = 2000;
+const ACQUISITION_OUTER_MIN_HALF = 20;
+const ACQUISITION_OUTER_MAX_HALF = 90;
+const ACQUISITION_INNER_HALF = 14;
+const ACQUISITION_FOV_SCALE = 0.72;
 
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
   let nearest = PLANET_CENTERS[0];
@@ -97,6 +108,14 @@ export class MatchScene {
   private readonly crosshairRayDir = new THREE.Vector3();
   private readonly aimPoint = new THREE.Vector3();
   private readonly aimToPlayer = new THREE.Vector3();
+
+  // Bazooka homing acquisition state
+  private fireHoldStartMs: number | null = null;
+  private prevFireDown = false;
+  private acquisitionLockedTargetId: string | null = null;
+  private acquisitionIsGuaranteed = false;
+  private readonly acquisitionTestVec = new THREE.Vector3();
+  private readonly losDir = new THREE.Vector3();
   private readonly terrainSample = new THREE.Vector3();
   private readonly resolvedAimDir = new THREE.Vector3();
 
@@ -176,6 +195,26 @@ export class MatchScene {
     }
 
     return null;
+  }
+
+  private isTargetOccludedByTerrain(targetWorldPos: THREE.Vector3): boolean {
+    const cameraPos = this.camera.camera.position;
+    const totalDist = cameraPos.distanceTo(targetWorldPos);
+    if (totalDist < 1e-4) return false;
+    this.losDir.subVectors(targetWorldPos, cameraPos).normalize();
+    const stepDistance = Math.max(0.5, GAME_CONFIG.movement.collisionRadius);
+    for (let d = stepDistance; d < totalDist - stepDistance; d += stepDistance) {
+      this.terrainSample.copy(cameraPos).addScaledVector(this.losDir, d);
+      const planetCenter = nearestPlanetCenter(this.terrainSample);
+      const dx = this.terrainSample.x - planetCenter.x;
+      const dy = this.terrainSample.y - planetCenter.y;
+      const dz = this.terrainSample.z - planetCenter.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist < 1e-6) return true;
+      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, GAME_CONFIG);
+      if (dist <= surfaceRadius) return true;
+    }
+    return false;
   }
 
   private updateDebugLines(): void {
@@ -738,7 +777,95 @@ export class MatchScene {
         };
       }
 
-      const { keys: keyBits, pressedKeys } = this.input.buildInputBits();
+      const rawFire = this.input.isFireDown();
+      const equippedDef = getWeaponDefinition(localState.equippedWeaponId);
+      const isHomingCapable = equippedDef.homingCapable === true;
+      const fireJustReleased = this.prevFireDown && !rawFire;
+      this.prevFireDown = rawFire;
+
+      let { keys: keyBits, pressedKeys } = this.input.buildInputBits();
+      let lockedTargetId: string | undefined;
+      let guaranteedHoming: boolean | undefined;
+
+      if (isHomingCapable) {
+        if (rawFire && this.fireHoldStartMs === null) {
+          this.fireHoldStartMs = now;
+        }
+
+        if (fireJustReleased && this.fireHoldStartMs !== null) {
+          const holdMs = now - this.fireHoldStartMs;
+          keyBits |= InputKey.Fire;
+          if (holdMs >= BAZOOKA_HOLD_THRESHOLD_MS && this.acquisitionLockedTargetId !== null) {
+            lockedTargetId = this.acquisitionLockedTargetId;
+            guaranteedHoming = this.acquisitionIsGuaranteed || undefined;
+          }
+          this.fireHoldStartMs = null;
+          this.acquisitionLockedTargetId = null;
+          this.acquisitionIsGuaranteed = false;
+          this.camera.setFovScale(1.0);
+          this.combatHud.hideAcquisitionOverlay();
+          for (const remote of this.remotePlayers.values()) remote.setAcquired(false);
+        } else if (rawFire && this.fireHoldStartMs !== null) {
+          keyBits &= ~InputKey.Fire;
+          const holdMs = now - this.fireHoldStartMs;
+          if (holdMs >= BAZOOKA_HOLD_THRESHOLD_MS) {
+            this.camera.setFovScale(ACQUISITION_FOV_SCALE);
+            const acquisitionMs = holdMs - BAZOOKA_HOLD_THRESHOLD_MS;
+            const holdProgress = Math.min(1, acquisitionMs / ACQUISITION_RAMP_MS);
+            const outerHalf =
+              ACQUISITION_OUTER_MIN_HALF +
+              holdProgress * (ACQUISITION_OUTER_MAX_HALF - ACQUISITION_OUTER_MIN_HALF);
+            const cx = window.innerWidth * 0.5;
+            const cy = window.innerHeight * 0.5;
+            let newLockedId: string | null = null;
+            let newGuaranteed = false;
+            for (const [sid, remote] of this.remotePlayers) {
+              if (!remote.isAimTargetVisible()) continue;
+              this.acquisitionTestVec.copy(remote.mesh.position).project(this.camera.camera);
+              if (this.acquisitionTestVec.z > 1) continue;
+              const sx = (this.acquisitionTestVec.x * 0.5 + 0.5) * window.innerWidth;
+              const sy = (-this.acquisitionTestVec.y * 0.5 + 0.5) * window.innerHeight;
+              const dx = Math.abs(sx - cx);
+              const dy = Math.abs(sy - cy);
+              if (
+                dx <= outerHalf &&
+                dy <= outerHalf &&
+                !this.isTargetOccludedByTerrain(remote.mesh.position)
+              ) {
+                newLockedId = sid;
+                newGuaranteed = dx <= ACQUISITION_INNER_HALF && dy <= ACQUISITION_INNER_HALF;
+                break;
+              }
+            }
+            if (newLockedId !== this.acquisitionLockedTargetId) {
+              if (this.acquisitionLockedTargetId !== null) {
+                this.remotePlayers.get(this.acquisitionLockedTargetId)?.setAcquired(false);
+              }
+              this.acquisitionLockedTargetId = newLockedId;
+            }
+            if (newLockedId !== null) {
+              this.acquisitionIsGuaranteed = newGuaranteed;
+              this.remotePlayers.get(newLockedId)?.setAcquired(true, newGuaranteed);
+            }
+            this.combatHud.showAcquisitionOverlay(
+              holdProgress,
+              this.acquisitionLockedTargetId !== null,
+              this.acquisitionIsGuaranteed,
+            );
+          }
+        } else if (!rawFire && this.fireHoldStartMs === null) {
+          this.camera.setFovScale(1.0);
+          this.combatHud.hideAcquisitionOverlay();
+        }
+      } else if (this.fireHoldStartMs !== null) {
+        this.fireHoldStartMs = null;
+        this.acquisitionLockedTargetId = null;
+        this.acquisitionIsGuaranteed = false;
+        this.camera.setFovScale(1.0);
+        this.combatHud.hideAcquisitionOverlay();
+        for (const remote of this.remotePlayers.values()) remote.setAcquired(false);
+      }
+
       if (keyBits & InputKey.Fire) {
         const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
         this.sound.playSfx("pow", { cooldownMs: fireCooldownMs });
@@ -751,6 +878,8 @@ export class MatchScene {
         aimDir,
         aimPoint: { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z },
         dt,
+        lockedTargetId,
+        guaranteedHoming,
       };
       this.connection.sendInput(input);
       this.runtime.recordLocalInput(input, this.planetPaint);
@@ -804,13 +933,21 @@ export class MatchScene {
           this.combatHud.flashDamage();
         }
         this.lastLocalHealth = predictedLocalState.health;
+        const equippedDef = getWeaponDefinition(predictedLocalState.equippedWeaponId);
+        const disposableTotal = equippedDef.disposableShots ?? 0;
+        const weaponLabel =
+          disposableTotal > 0
+            ? `${getWeaponDefinition(DEFAULT_WEAPON_ID).displayName} / ${equippedDef.displayName}`
+            : equippedDef.displayName;
         this.combatHud.update(
-          getWeaponDefinition(predictedLocalState.equippedWeaponId).displayName,
+          weaponLabel,
           predictedLocalState.health,
           GAME_CONFIG.player.maxHealth,
           predictedLocalState.slimeLevel,
           GAME_CONFIG.slime.maxLevel,
           predictedLocalState.respawnTimer,
+          predictedLocalState.disposableShotsRemaining,
+          disposableTotal,
         );
       } else {
         this.lastLocalHealth = null;

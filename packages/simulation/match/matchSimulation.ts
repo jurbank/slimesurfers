@@ -22,6 +22,7 @@ import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
 import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
+import { cleanName } from "@splat/content/utils/profanity.ts";
 import {
   NO_TEAM_ID,
   PlayerMovementState,
@@ -175,7 +176,7 @@ function createSimPlayer(
     sessionId,
     name:
       typeof name === "string" && name.trim().length > 0
-        ? name.trim().slice(0, 20)
+        ? cleanName(name.trim().slice(0, 20))
         : `Player ${playerIndex + 1}`,
     teamId: slot.teamId,
     paintGroupId: slot.paintGroupId,
@@ -211,6 +212,7 @@ function createSimPlayer(
     airTrickFlipBlocked: false,
     airTrickPaintMultiplier: 1,
     equippedWeaponId: DEFAULT_WEAPON_ID,
+    disposableShotsRemaining: 0,
     health: GAME_CONFIG.player.maxHealth,
     slimeLevel: GAME_CONFIG.slime.maxLevel,
     paintScore: 0,
@@ -444,6 +446,7 @@ export class MatchSimulation {
         skiJumpCharge: player.skiJumpCharge,
         isShooting: isPlayerShooting(player, this.simState.elapsedMs),
         equippedWeaponId: player.equippedWeaponId,
+        disposableShotsRemaining: player.disposableShotsRemaining,
         health: player.health,
         slimeLevel: player.slimeLevel,
         respawnTimer: player.respawnTimer,
@@ -466,6 +469,8 @@ export class MatchSimulation {
         vel: { x: projectile.vel.x, y: projectile.vel.y, z: projectile.vel.z },
         planetId: projectile.planetId,
         lifeMs: projectile.lifeMs,
+        homingTargetId: projectile.homingTargetId,
+        guaranteedHoming: projectile.guaranteedHoming,
       });
     });
 
