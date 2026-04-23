@@ -16,6 +16,9 @@ export class CombatHud {
   private readonly acquisitionRoot: HTMLDivElement;
   private readonly acquisitionOuterBox: HTMLDivElement;
   private readonly acquisitionInnerBox: HTMLDivElement;
+  private readonly sniperScopeRoot: HTMLDivElement;
+  private readonly sniperRing: HTMLDivElement;
+  private readonly sniperDot: HTMLDivElement;
 
   constructor() {
     this.root = document.createElement("div");
@@ -220,6 +223,43 @@ export class CombatHud {
 
     this.acquisitionRoot.append(this.acquisitionInnerBox, this.acquisitionOuterBox);
     document.body.appendChild(this.acquisitionRoot);
+
+    this.sniperScopeRoot = document.createElement("div");
+    Object.assign(this.sniperScopeRoot.style, {
+      position: "fixed",
+      inset: "0",
+      pointerEvents: "none",
+      display: "none",
+      zIndex: "19",
+      background:
+        "radial-gradient(circle at center, transparent 28%, rgba(0,0,0,0.75) 65%, rgba(0,0,0,0.92) 100%)",
+    });
+
+    this.sniperRing = document.createElement("div");
+    Object.assign(this.sniperRing.style, {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      width: "200px",
+      height: "200px",
+      borderRadius: "50%",
+      border: "1px solid rgba(255, 255, 255, 0.55)",
+      boxSizing: "border-box",
+    });
+
+    this.sniperDot = document.createElement("div");
+    Object.assign(this.sniperDot.style, {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      borderRadius: "50%",
+      background: "rgba(255, 30, 30, 0.85)",
+      transform: "translate(-50%, -50%)",
+    });
+
+    this.sniperScopeRoot.append(this.sniperRing, this.sniperDot);
+    document.body.appendChild(this.sniperScopeRoot);
   }
 
   update(
@@ -296,6 +336,21 @@ export class CombatHud {
     this.acquisitionRoot.style.display = "none";
   }
 
+  showSniperScope(chargeProgress: number): void {
+    this.sniperScopeRoot.style.display = "block";
+    const size = 2 + chargeProgress * 18;
+    const alpha = 0.7 + chargeProgress * 0.3;
+    const glowSize = 2 + chargeProgress * 10;
+    this.sniperDot.style.width = `${size}px`;
+    this.sniperDot.style.height = `${size}px`;
+    this.sniperDot.style.background = `rgba(255, ${Math.round(30 - chargeProgress * 30)}, ${Math.round(30 - chargeProgress * 30)}, ${alpha})`;
+    this.sniperDot.style.boxShadow = `0 0 ${glowSize}px ${Math.round(glowSize * 0.5)}px rgba(255, 0, 0, ${chargeProgress * 0.7})`;
+  }
+
+  hideSniperScope(): void {
+    this.sniperScopeRoot.style.display = "none";
+  }
+
   flashDamage(): void {
     this.flash.style.opacity = "1";
     setTimeout(() => {
@@ -307,5 +362,6 @@ export class CombatHud {
     this.root.style.display = "none";
     this.crosshair.style.display = "none";
     this.flash.style.opacity = "0";
+    this.sniperScopeRoot.style.display = "none";
   }
 }

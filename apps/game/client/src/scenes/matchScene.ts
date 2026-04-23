@@ -57,6 +57,10 @@ const ACQUISITION_OUTER_MAX_HALF = 90;
 const ACQUISITION_INNER_HALF = 14;
 const ACQUISITION_FOV_SCALE = 0.72;
 
+const SNIPER_HOLD_THRESHOLD_MS = 200;
+const SNIPER_CHARGE_MS = 1500;
+const SNIPER_FOV_SCALE = 0.4;
+
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
   let nearest = PLANET_CENTERS[0];
   let minDist = Infinity;
@@ -857,12 +861,38 @@ export class MatchScene {
           this.camera.setFovScale(1.0);
           this.combatHud.hideAcquisitionOverlay();
         }
+      } else if (equippedDef.behavior === "chargedHitscan") {
+        if (rawFire && this.fireHoldStartMs === null) {
+          this.fireHoldStartMs = now;
+        }
+
+        if (fireJustReleased && this.fireHoldStartMs !== null) {
+          keyBits |= InputKey.Fire;
+          this.fireHoldStartMs = null;
+          this.camera.setFovScale(1.0);
+          this.combatHud.hideSniperScope();
+        } else if (rawFire && this.fireHoldStartMs !== null) {
+          keyBits &= ~InputKey.Fire;
+          const holdMs = now - this.fireHoldStartMs;
+          if (holdMs >= SNIPER_HOLD_THRESHOLD_MS) {
+            this.camera.setFovScale(SNIPER_FOV_SCALE);
+            const chargeProgress = Math.min(
+              1,
+              (holdMs - SNIPER_HOLD_THRESHOLD_MS) / SNIPER_CHARGE_MS,
+            );
+            this.combatHud.showSniperScope(chargeProgress);
+          }
+        } else if (!rawFire && this.fireHoldStartMs === null) {
+          this.camera.setFovScale(1.0);
+          this.combatHud.hideSniperScope();
+        }
       } else if (this.fireHoldStartMs !== null) {
         this.fireHoldStartMs = null;
         this.acquisitionLockedTargetId = null;
         this.acquisitionIsGuaranteed = false;
         this.camera.setFovScale(1.0);
         this.combatHud.hideAcquisitionOverlay();
+        this.combatHud.hideSniperScope();
         for (const remote of this.remotePlayers.values()) remote.setAcquired(false);
       }
 

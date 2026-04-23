@@ -26,6 +26,8 @@ export interface WeaponDefinition {
   disposableShots?: number;
   /** If true, holding fire enables target acquisition and launches a homing projectile on release. */
   homingCapable?: boolean;
+  /** Half-angle of the kill cone for chargedHitscan weapons, in degrees. */
+  hitscanConeHalfAngleDeg?: number;
 }
 
 export interface WeaponPickupSpawnDefinition {
@@ -86,15 +88,16 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     projectileSpeed: 0,
     projectileLifetimeMs: 0,
     projectileCollisionRadius: 0,
-    fireCooldownMs: 1200,
+    fireCooldownMs: 1500,
     slimeCost: 0,
-    directDamage: 100,
+    directDamage: 9999,
     splashDamage: 0,
     splashRadius: 0,
     blastImpulse: 0,
-    paintRadiusMultiplier: 0.8,
+    paintRadiusMultiplier: 1.5,
     pickupColor: 0xb63542,
-    disposableShots: 2,
+    disposableShots: 5,
+    hitscanConeHalfAngleDeg: 2.5,
   },
 };
 
@@ -112,6 +115,13 @@ export const WEAPON_PICKUP_SPAWNS: WeaponPickupSpawnDefinition[] = [
     planetId: "planet-0",
     normal: { x: -0.84, y: 0.5, z: -0.2 },
     respawnSeconds: 10,
+  },
+  {
+    id: "sniper-north",
+    weaponId: WeaponId.Sniper,
+    planetId: "planet-0",
+    normal: { x: 0.15, y: 0.98, z: 0.12 },
+    respawnSeconds: 15,
   },
 ];
 

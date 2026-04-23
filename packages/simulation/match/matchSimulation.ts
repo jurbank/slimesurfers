@@ -11,7 +11,12 @@ import type {
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
-import { rechargePlayerSlime, tickProjectiles, tryFireProjectile } from "../combat/projectiles.ts";
+import {
+  rechargePlayerSlime,
+  tickProjectiles,
+  tryFireHitscan,
+  tryFireProjectile,
+} from "../combat/projectiles.ts";
 import {
   collectWeaponPickup,
   createWeaponPickups,
@@ -385,6 +390,16 @@ export class MatchSimulation {
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, processedNowMs, GAME_CONFIG);
           tryFireProjectile(this.simState, player, input, processedNowMs, PLANETS, GAME_CONFIG);
+          for (const stamp of tryFireHitscan(
+            this.simState,
+            player,
+            input,
+            processedNowMs,
+            PLANETS,
+            GAME_CONFIG,
+          )) {
+            this.recordPaintStamp(stamp);
+          }
         }
         player.inputSeq = queue[queue.length - 1]!.seq;
         queue.length = 0;

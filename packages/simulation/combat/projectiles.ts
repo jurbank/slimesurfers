@@ -3,6 +3,9 @@ import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/we
 const HOMING_TURN_RATE_STANDARD = 5; // rad/s
 const HOMING_TURN_RATE_GUARANTEED = 15; // rad/s
 const GUARANTEED_SPEED_MULTIPLIER = 1.8;
+const HITSCAN_TRAIL_STEP = 2.0; // world units between trail stamps
+const HITSCAN_TRAIL_RADIUS_MULT = 0.3; // narrow trail width
+const HITSCAN_TRAIL_MAX_DIST = 120; // max trail length when beam misses terrain
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import {
   InputKey,
@@ -710,6 +713,121 @@ export function tickProjectiles(
 
   for (const projectileId of removedIds) {
     simState.projectiles.delete(projectileId);
+  }
+
+  return paintStamps;
+}
+
+export function tryFireHitscan(
+  simState: SimMatchState,
+  player: SimPlayerState,
+  input: InputMessage,
+  nowMs: number,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+): PaintStampMessage[] {
+  const paintStamps: PaintStampMessage[] = [];
+  if ((input.keys & InputKey.Fire) === 0) return paintStamps;
+  if (player.movementState === PlayerMovementState.Dead) return paintStamps;
+  const weapon = getWeaponDefinition(getEquippedWeaponId(player));
+  if (weapon.behavior !== "chargedHitscan") return paintStamps;
+  if (weapon.hitscanConeHalfAngleDeg === undefined) return paintStamps;
+  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
+
+  const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
+  const aimDir = isFiniteVec3(input.aimPoint)
+    ? normalize(sub(input.aimPoint, muzzlePos))
+    : normalize(input.aimDir);
+
+  const cosHalfAngle = Math.cos((weapon.hitscanConeHalfAngleDeg * Math.PI) / 180);
+  const owner = simState.players.get(player.sessionId);
+
+  simState.players.forEach((target) => {
+    if (target.sessionId === player.sessionId) return;
+    if (target.movementState === PlayerMovementState.Dead) return;
+
+    const toTarget = sub(target.pos, muzzlePos);
+    const dist = length(toTarget);
+    if (dist < 1e-8) return;
+    if (dot(scale(toTarget, 1 / dist), aimDir) < cosHalfAngle) return;
+
+    const nearestPlanet = getNearestPlanet(muzzlePos, planets);
+    if (nearestPlanet && findTerrainImpactOnSegment(muzzlePos, target.pos, nearestPlanet, 0, cfg))
+      return;
+
+    const killed = applyDamage(target, owner, weapon.directDamage, cfg);
+    if (killed) addDeathBurstPaint(simState, paintStamps, target, owner, planets, cfg);
+
+    const planet = getNearestPlanet(target.pos, planets);
+    if (planet) {
+      const planetState = simState.planets.get(planet.id);
+      if (planetState) {
+        const stamp = applyPaintImpact(simState, planetState, {
+          planetId: planet.id,
+          pos: target.pos,
+          paintGroupId: player.paintGroupId,
+          slimeColor: player.slimeColor,
+          patternId: player.patternId,
+          radiusMultiplier: weapon.paintRadiusMultiplier,
+        });
+        if (stamp) paintStamps.push(stamp);
+      }
+    }
+  });
+
+  // Trail: march from muzzle along the aim ray, projecting each sample radially onto the
+  // terrain surface. Works whether or not the beam hits terrain — the surface projection
+  // paints the "shadow" of the beam path on the ground.
+  const trailRayEnd = add(muzzlePos, scale(aimDir, HITSCAN_TRAIL_MAX_DIST));
+  let trailEnd = trailRayEnd;
+  let trailPlanet: PlanetData | undefined;
+  for (const planet of planets) {
+    const impactPos = findTerrainImpactOnSegment(muzzlePos, trailRayEnd, planet, 0, cfg);
+    if (impactPos) {
+      trailEnd = impactPos;
+      trailPlanet = planet;
+      break;
+    }
+  }
+  if (!trailPlanet) trailPlanet = getNearestPlanet(muzzlePos, planets);
+
+  if (trailPlanet) {
+    const trailVec = sub(trailEnd, muzzlePos);
+    const trailLen = length(trailVec);
+    const planetState = simState.planets.get(trailPlanet.id);
+    if (trailLen >= 1e-8 && planetState) {
+      const trailDir = scale(trailVec, 1 / trailLen);
+      const steps = Math.ceil(trailLen / HITSCAN_TRAIL_STEP);
+      for (let i = 0; i <= steps; i++) {
+        const d = Math.min(i * HITSCAN_TRAIL_STEP, trailLen);
+        const samplePos = add(muzzlePos, scale(trailDir, d));
+        const fromCenter = sub(samplePos, trailPlanet.center);
+        const fromCenterLen = length(fromCenter);
+        if (fromCenterLen < 1e-8) continue;
+        const normal = scale(fromCenter, 1 / fromCenterLen);
+        const surfacePos = add(
+          trailPlanet.center,
+          scale(normal, getTerrainRadius(normal.x, normal.y, normal.z, cfg)),
+        );
+        const stamp = applyPaintImpact(simState, planetState, {
+          planetId: trailPlanet.id,
+          pos: surfacePos,
+          paintGroupId: player.paintGroupId,
+          slimeColor: player.slimeColor,
+          patternId: player.patternId,
+          radiusMultiplier: HITSCAN_TRAIL_RADIUS_MULT,
+        });
+        if (stamp) paintStamps.push(stamp);
+      }
+    }
+  }
+
+  player.lastFireTimeMs = nowMs;
+  if (weapon.disposableShots !== undefined) {
+    player.disposableShotsRemaining = Math.max(0, player.disposableShotsRemaining - 1);
+    if (player.disposableShotsRemaining === 0) {
+      player.equippedWeaponId = DEFAULT_WEAPON_ID;
+    }
   }
 
   return paintStamps;
