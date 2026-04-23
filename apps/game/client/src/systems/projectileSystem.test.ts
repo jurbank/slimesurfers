@@ -15,6 +15,7 @@ it("renders newly observed projectiles from their inferred spawn point", () => {
     ownerId: "session-1",
     weaponId: WeaponId.MachineGun,
     paintGroupId: 0,
+    slimeColor: 0x00ff00,
     patternId: 0,
     pos: { x: weapon.projectileSpeed * (ageMs / 1000), y: 1, z: 2 },
     vel: { x: weapon.projectileSpeed, y: 0, z: 0 },

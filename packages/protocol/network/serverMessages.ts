@@ -30,6 +30,9 @@ export interface PlayerSnapshot {
   health: number;
   slimeLevel: number;
   respawnTimer: number;
+  /** Visual identity */
+  slimeColor: number;
+  patternId: number;
   /** The last InputMessage.seq the server processed for this player */
   inputSeq: number;
 }
@@ -52,6 +55,7 @@ export interface ProjectileSnapshot {
   ownerId: string;
   weaponId: WeaponId;
   paintGroupId: number;
+  slimeColor: number;
   patternId: number;
   pos: Vec3Data;
   vel: Vec3Data;

@@ -73,8 +73,8 @@ export function createSlimeMaterial(color: number, patternId: number): THREE.Sha
   return new THREE.ShaderMaterial({
     uniforms: {
       map: { value: tex },
-      color: { value: new THREE.Vector3(colorVec.r, colorVec.g, colorVec.b) },
-      emissive: { value: new THREE.Vector3(0, 0, 0) },
+      uColor: { value: colorVec },
+      emissive: { value: new THREE.Color(0, 0, 0) },
       emissiveIntensity: { value: 0 },
       hasMap: { value: patternId !== 0 },
       opacity: { value: 1.0 },

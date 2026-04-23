@@ -45,7 +45,6 @@ import {
 } from "@splat/simulation/match/simState.ts";
 
 const PLANET_CENTERS = PLANET_POSITIONS.map((p) => new THREE.Vector3(p.x, p.y, p.z));
-const FALLBACK_PLAYER_COLOR = 0xffffff;
 const CROSSHAIR_AIM_DISTANCE = 500;
 
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
@@ -79,6 +78,7 @@ export class MatchScene {
   private readonly pauseMenu: PauseMenuOverlay;
 
   private localPlayer: LocalPlayer | null = null;
+  private localPlayerColor = -1;
   private localPlayerPatternId = -1;
   private localTrail: SkiTrailSystem | null = null;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
@@ -535,20 +535,32 @@ export class MatchScene {
   }
 
   private ensureLocalPlayer(slimeColor: number, patternId: number): void {
-    // Recreate if pattern changed — handles snapshot-before-onPlayerAdded race
-    if (this.localPlayer && this.localPlayerPatternId === patternId) return;
+    if (
+      this.localPlayer &&
+      this.localPlayerPatternId === patternId &&
+      this.localPlayerColor === slimeColor
+    )
+      return;
     this.localPlayer?.dispose(this.render.scene);
     this.localTrail?.dispose();
     this.localPlayer = new LocalPlayer(this.render.scene, slimeColor, patternId);
     this.localTrail = new SkiTrailSystem(this.render.scene, slimeColor);
+    this.localPlayerColor = slimeColor;
     this.localPlayerPatternId = patternId;
   }
 
   private ensureRemotePlayer(sessionId: string, slimeColor: number, patternId: number): void {
     const existing = this.remotePlayers.get(sessionId);
-    if (existing && this.playerPatterns.get(sessionId) === patternId) return;
+    if (
+      existing &&
+      this.playerPatterns.get(sessionId) === patternId &&
+      this.playerColors.get(sessionId) === slimeColor
+    )
+      return;
     existing?.dispose(this.render.scene);
     this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor, patternId));
+    this.playerColors.set(sessionId, slimeColor);
+    this.playerPatterns.set(sessionId, patternId);
   }
 
   private syncProjectiles(snapshot: SnapshotMessage, receivedAtMs: number): void {
@@ -556,7 +568,7 @@ export class MatchScene {
     const localSessionId = this.connection.sessionId;
     for (const projectile of snapshot.projectiles) {
       liveProjectileIds.add(projectile.id);
-      const color = this.playerColors.get(projectile.ownerId) ?? FALLBACK_PLAYER_COLOR;
+      const color = projectile.slimeColor;
       const isNew = this.projectiles.syncProjectile(projectile.id, projectile, color, receivedAtMs);
       if (isNew && projectile.ownerId !== localSessionId) {
         this.sound.playSfxAt(
@@ -637,6 +649,7 @@ export class MatchScene {
         if (sessionId === this.connection.sessionId) {
           this.localPlayer?.dispose(this.render.scene);
           this.localPlayer = null;
+          this.localPlayerColor = -1;
           this.lastLocalHealth = null;
           this.combatHud.clear();
         } else {
@@ -661,8 +674,8 @@ export class MatchScene {
         const localSessionId = this.connection.sessionId;
         for (const player of snapshot.players) {
           const isLocal = player.sessionId === localSessionId;
-          const slimeColor = this.playerColors.get(player.sessionId) ?? FALLBACK_PLAYER_COLOR;
-          const patternId = this.playerPatterns.get(player.sessionId) ?? 0;
+          const slimeColor = player.slimeColor;
+          const patternId = player.patternId;
           if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
           else this.ensureRemotePlayer(player.sessionId, slimeColor, patternId);
           this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetPaint);
@@ -789,8 +802,7 @@ export class MatchScene {
           new THREE.Vector3(aimDir.x, aimDir.y, aimDir.z),
         );
         if (this.localTrail) {
-          const localColor = this.playerColors.get(localSessionId) ?? FALLBACK_PLAYER_COLOR;
-          this.localTrail.update(predictedLocalState, planetCenter, localColor);
+          this.localTrail.update(predictedLocalState, planetCenter, predictedLocalState.slimeColor);
         }
         this.lastAimDir = this.camera.update(
           predictedLocalState.pos,

@@ -445,6 +445,8 @@ export class MatchSimulation {
         health: player.health,
         slimeLevel: player.slimeLevel,
         respawnTimer: player.respawnTimer,
+        slimeColor: player.slimeColor,
+        patternId: player.patternId,
         inputSeq: player.inputSeq,
       });
     });
@@ -456,6 +458,7 @@ export class MatchSimulation {
         ownerId: projectile.ownerId,
         weaponId: projectile.weaponId,
         paintGroupId: projectile.paintGroupId,
+        slimeColor: projectile.slimeColor,
         patternId: projectile.patternId,
         pos: { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z },
         vel: { x: projectile.vel.x, y: projectile.vel.y, z: projectile.vel.z },

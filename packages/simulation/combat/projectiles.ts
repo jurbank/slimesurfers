@@ -492,6 +492,7 @@ export function tryFireProjectile(
     ownerId: player.sessionId,
     weaponId: weapon.id,
     paintGroupId: player.paintGroupId,
+    slimeColor: player.slimeColor,
     patternId: player.patternId,
     pos: muzzlePos,
     vel: scale(aim, weapon.projectileSpeed),
@@ -589,7 +590,7 @@ export function tickProjectiles(
             planetId: nearestPlanet.id,
             pos: impactPos,
             paintGroupId: projectile.paintGroupId,
-            slimeColor: owner?.slimeColor ?? 0xffffff,
+            slimeColor: projectile.slimeColor,
             patternId: projectile.patternId,
             radiusMultiplier: weapon.paintRadiusMultiplier,
           });
@@ -616,7 +617,7 @@ export function tickProjectiles(
               planetId: planet.id,
               pos: impactPos,
               paintGroupId: projectile.paintGroupId,
-              slimeColor: owner?.slimeColor ?? 0xffffff,
+              slimeColor: projectile.slimeColor,
               patternId: projectile.patternId,
               radiusMultiplier: weapon.paintRadiusMultiplier,
             });

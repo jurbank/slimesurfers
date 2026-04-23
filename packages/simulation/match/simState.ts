@@ -46,6 +46,7 @@ export interface SimProjectileState {
   ownerId: string;
   weaponId: WeaponId;
   paintGroupId: number;
+  slimeColor: number;
   patternId: number;
   pos: SimVec3;
   vel: SimVec3;

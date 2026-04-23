@@ -23,6 +23,8 @@ export interface RuntimePlayerState extends PlayerPhysics {
   inputSeq: number;
   respawnTimer: number;
   sessionId: string;
+  slimeColor: number;
+  patternId: number;
 }
 
 interface BufferedSnapshot {
@@ -56,6 +58,8 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     slimeLevel: state.slimeLevel,
     inputSeq: state.inputSeq,
     respawnTimer: state.respawnTimer,
+    slimeColor: state.slimeColor,
+    patternId: state.patternId,
   };
 }
 
@@ -81,6 +85,8 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     slimeLevel: snapshot.slimeLevel,
     inputSeq: snapshot.inputSeq,
     respawnTimer: snapshot.respawnTimer,
+    slimeColor: snapshot.slimeColor,
+    patternId: snapshot.patternId,
   };
 }
 
@@ -119,6 +125,8 @@ function interpolateState(
     slimeLevel: newer.slimeLevel,
     inputSeq: newer.inputSeq,
     respawnTimer: newer.respawnTimer,
+    slimeColor: newer.slimeColor,
+    patternId: newer.patternId,
   };
 }
 

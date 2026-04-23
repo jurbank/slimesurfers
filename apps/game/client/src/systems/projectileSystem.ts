@@ -47,9 +47,9 @@ export class ProjectileSystem {
       const visualY = projectile.pos.y - projectile.vel.y * ageSec;
       const visualZ = projectile.pos.z - projectile.vel.z * ageSec;
 
-      const mat = createSlimeMaterial(weapon.projectileColor || color, projectile.patternId);
+      const mat = createSlimeMaterial(color, projectile.patternId);
       if (mat.uniforms.emissive) {
-        const c = new THREE.Color(weapon.projectileColor || color);
+        const c = new THREE.Color(color);
         mat.uniforms.emissive.value.set(c.r, c.g, c.b);
         mat.uniforms.emissiveIntensity.value = 0.35;
       }
@@ -85,15 +85,15 @@ export class ProjectileSystem {
       state.receivedAtMs = nowMs;
 
       const mat = state.mesh.material;
-      if (mat instanceof THREE.ShaderMaterial && mat.uniforms.color) {
-        const c = new THREE.Color(weapon.projectileColor || color);
-        mat.uniforms.color.value.set(c.r, c.g, c.b);
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uColor) {
+        const c = new THREE.Color(color);
+        mat.uniforms.uColor.value.set(c.r, c.g, c.b);
         if (mat.uniforms.emissive) {
           mat.uniforms.emissive.value.set(c.r, c.g, c.b);
         }
       } else if (mat instanceof THREE.MeshLambertMaterial) {
-        mat.color.setHex(weapon.projectileColor || color);
-        mat.emissive.setHex(weapon.projectileColor || color);
+        mat.color.setHex(color);
+        mat.emissive.setHex(color);
       }
     }
     return isNew;
