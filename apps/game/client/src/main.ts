@@ -8,6 +8,8 @@ const devAutoJoinRetryMs = 1000;
 
 scene.start();
 
+const overlay = skipJoinScreen ? null : new JoinOverlay();
+
 const getDevPlayerName = (): string => {
   const storageKey = "splat.devPlayerName";
   const existing = sessionStorage.getItem(storageKey);
@@ -30,7 +32,16 @@ const connect = async (name: string, colorIndex: number, onError: () => void): P
   }
 };
 
-if (skipJoinScreen) {
+// Start preloading immediately
+void scene.preload((progress) => {
+  overlay?.setProgress(progress);
+}).then(() => {
+  if (skipJoinScreen) {
+    void startDevAutoJoin();
+  }
+});
+
+async function startDevAutoJoin(): Promise<void> {
   let retryTimeout: number | null = null;
   let reconnecting = false;
 
@@ -55,10 +66,10 @@ if (skipJoinScreen) {
     console.warn("Disconnected from game server. Retrying...");
     scheduleDevAutoJoin();
   });
-  void devAutoJoin();
-} else {
-  const overlay = new JoinOverlay();
+  await devAutoJoin();
+}
 
+if (!skipJoinScreen && overlay) {
   let pollInterval: number | null = null;
 
   const refreshTakenColors = async (): Promise<void> => {

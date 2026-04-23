@@ -8,8 +8,11 @@ export class JoinOverlay {
   private readonly nameInput: HTMLInputElement;
   private readonly joinBtn: HTMLButtonElement;
   private readonly statusText: HTMLParagraphElement;
+  private readonly progressContainer: HTMLDivElement;
+  private readonly progressBar: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
   private selectedIndex = 0;
+  private isLoading = true;
 
   constructor() {
     this.root = document.createElement("div");
@@ -30,6 +33,25 @@ export class JoinOverlay {
     const title = document.createElement("h1");
     title.textContent = "SPLAT";
     Object.assign(title.style, { margin: "0 0 8px", fontSize: "2.5rem", letterSpacing: "0.15em" });
+
+    this.progressContainer = document.createElement("div");
+    Object.assign(this.progressContainer.style, {
+      width: "220px",
+      height: "4px",
+      background: "#222",
+      borderRadius: "2px",
+      overflow: "hidden",
+      marginBottom: "8px",
+    });
+
+    this.progressBar = document.createElement("div");
+    Object.assign(this.progressBar.style, {
+      width: "0%",
+      height: "100%",
+      background: "#00e5ff",
+      transition: "width 0.2s ease-out",
+    });
+    this.progressContainer.appendChild(this.progressBar);
 
     this.nameInput = document.createElement("input");
     this.nameInput.type = "text";
@@ -86,28 +108,52 @@ export class JoinOverlay {
     });
 
     this.joinBtn = document.createElement("button");
-    this.joinBtn.textContent = "JOIN";
+    this.joinBtn.textContent = "LOADING...";
+    this.joinBtn.disabled = true;
     Object.assign(this.joinBtn.style, {
       padding: "10px 32px",
       fontSize: "1rem",
       fontWeight: "bold",
       borderRadius: "6px",
       border: "none",
-      background: "#00e5ff",
-      color: "#000",
-      cursor: "pointer",
+      background: "#333",
+      color: "#888",
+      cursor: "not-allowed",
       letterSpacing: "0.1em",
     });
 
     this.statusText = document.createElement("p");
     this.statusText.style.fontSize = "0.85rem";
     this.statusText.style.color = "#888";
-    this.statusText.textContent = "";
+    this.statusText.textContent = "Loading assets...";
 
-    this.root.append(title, this.nameInput, colorLabel, swatchRow, this.joinBtn, this.statusText);
+    this.root.append(
+      title,
+      this.progressContainer,
+      this.nameInput,
+      colorLabel,
+      swatchRow,
+      this.joinBtn,
+      this.statusText,
+    );
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
+  }
+
+  setProgress(percent: number): void {
+    this.progressBar.style.width = `${percent}%`;
+    if (percent >= 100 && this.isLoading) {
+      this.isLoading = false;
+      this.joinBtn.disabled = false;
+      this.joinBtn.textContent = "JOIN";
+      this.joinBtn.style.background = "#00e5ff";
+      this.joinBtn.style.color = "#000";
+      this.joinBtn.style.cursor = "pointer";
+      this.statusText.textContent = "";
+      this.progressContainer.style.opacity = "0";
+      setTimeout(() => this.progressContainer.remove(), 500);
+    }
   }
 
   private selectSwatch(index: number): void {

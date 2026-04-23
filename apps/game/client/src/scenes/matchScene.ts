@@ -287,8 +287,33 @@ export class MatchScene {
         ),
       });
     }
+  }
+
+  async preload(onProgress?: (progress: number) => void): Promise<void> {
+    const audioEntries = Object.entries(AUDIO);
+    const totalSteps = audioEntries.length + 2; // audio + sky + planets
+    let completedSteps = 0;
+
+    const increment = (): void => {
+      completedSteps++;
+      onProgress?.(Math.floor((completedSteps / totalSteps) * 100));
+    };
+
+    // 1. Audio
+    await Promise.all(
+      audioEntries.map(async ([key, { url, category }]) => {
+        await this.sound.preload(key, url, category);
+        increment();
+      }),
+    );
+
+    // 2. Sky (fast but good to separate)
     this.buildSkyReference();
+    increment();
+
+    // 3. Planets (heavy geometry)
     this.buildPlanets();
+    increment();
   }
 
   private buildSkyReference(): void {
@@ -585,11 +610,6 @@ export class MatchScene {
   }
 
   async connect(name: string, colorIndex: number): Promise<void> {
-    await Promise.all(
-      Object.entries(AUDIO).map(([key, { url, category }]) =>
-        this.sound.preload(key, url, category),
-      ),
-    );
     await this.connection.join(name, colorIndex, {
       onPlayerAdded: (
         sessionId: string,
