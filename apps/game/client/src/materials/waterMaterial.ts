@@ -4,7 +4,6 @@ import { waterVertexShader, waterFragmentShader } from "../shaders/waterShader.t
 
 export function createWaterMaterial(): THREE.ShaderMaterial {
   const cfg = GAME_CONFIG.shaders.water;
-
   return new THREE.ShaderMaterial({
     uniforms: {
       time: { value: 0 },

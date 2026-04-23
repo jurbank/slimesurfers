@@ -1,7 +1,6 @@
 import { celCommonChunks } from "./celShader.ts";
 
 export const planetVertexShader = `
-  attribute vec3 color;
   attribute vec3 smoothNormal;
 
   varying vec2 vUv;
@@ -10,7 +9,6 @@ export const planetVertexShader = `
   varying vec3 vSmoothLocalNormal;
   varying vec3 vSmoothNormal;
   varying vec3 vWorldPosition;
-  varying vec3 vColor;
 
   void main() {
     vUv = uv;
@@ -18,7 +16,6 @@ export const planetVertexShader = `
     vLocalNormal = normalize(normal);
     vSmoothLocalNormal = normalize(smoothNormal);
     vSmoothNormal = normalize(normalMatrix * smoothNormal);
-    vColor = color;
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -41,13 +38,25 @@ export const planetFragmentShader = `
   uniform float slimeEdgeWetness;
   uniform float slimePoolDarkening;
 
+  // Biome uniforms
+  uniform vec3 planetCenter;
+  uniform float planetRadius;
+  uniform float waterLevel;
+  uniform float sandBand;
+  uniform float snowLevel;
+  uniform float rockLevel;
+  uniform vec3 sandColor;
+  uniform vec3 grassColor;
+  uniform vec3 rockColor;
+  uniform vec3 snowColor;
+  uniform vec3 waterDeepColor;
+
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vLocalNormal;
   varying vec3 vSmoothLocalNormal;
   varying vec3 vSmoothNormal;
   varying vec3 vWorldPosition;
-  varying vec3 vColor;
 
   // 3D noise for seamless surface variation
   float hash(vec3 p) {
@@ -79,6 +88,28 @@ export const planetFragmentShader = `
     vec4 paintData = texture2D(paintMask, vUv);
     float mask = paintData.a;
     vec3 paintColor = paintData.rgb;
+
+    // Calculate displacement for smooth biome blending
+    float dist = length(vWorldPosition - planetCenter);
+    float displacement = dist - planetRadius;
+
+    // Variation noise for biomes
+    float varNoise = noise(vSmoothLocalNormal * 4.0);
+    vec3 sand = sandColor * (0.9 + varNoise * 0.15);
+    vec3 grass = grassColor * (0.85 + varNoise * 0.25);
+    vec3 rock = rockColor * (0.9 + varNoise * 0.1);
+    
+    // Smooth transitions between biomes
+    // Coastline is the most important one to be smooth
+    float beachT = smoothstep(waterLevel - 0.1, waterLevel + 0.1, displacement);
+    float grassT = smoothstep(waterLevel + sandBand - 0.2, waterLevel + sandBand + 0.2, displacement);
+    float rockT = smoothstep(rockLevel - 0.5, rockLevel + 0.5, displacement);
+    float snowT = smoothstep(snowLevel - 0.4, snowLevel + 0.4, displacement);
+
+    vec3 biomeColor = mix(waterDeepColor, sand, beachT);
+    biomeColor = mix(biomeColor, grass, grassT);
+    biomeColor = mix(biomeColor, rock, rockT);
+    biomeColor = mix(biomeColor, snowColor, snowT);
 
     vec3 smoothLocalNormal = normalize(vSmoothLocalNormal);
     vec3 flowSample = vec3(time * slimeFlowSpeed, -time * slimeFlowSpeed * 0.7, time * 0.13);
@@ -126,7 +157,7 @@ export const planetFragmentShader = `
       + paintColor * fresnel * slimeFresnelStrength
       + wetEdgeTint * edgeFresnel * edgeBand * slimeEdgeWetness * 0.9;
     
-    vec3 shadedTerrain = vColor * (terrainDiff + ambient);
+    vec3 shadedTerrain = biomeColor * (terrainDiff + ambient);
     shadedTerrain *= getHatching(gl_FragCoord.xy / 1000.0, terrainDiff);
 
     vec3 shadedPaint = (goopBase * (paintDiff + ambient)) + goopHighlight * glossyMask;
@@ -138,4 +169,5 @@ export const planetFragmentShader = `
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
+
 `;

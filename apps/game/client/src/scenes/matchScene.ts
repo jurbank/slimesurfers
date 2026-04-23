@@ -31,7 +31,6 @@ import {
   getTerrainHeight,
   getTerrainNormal,
   getTerrainRadius,
-  getBiome,
 } from "@splat/simulation/terrain/planetTerrain.ts";
 import {
   appendPaintStamp,
@@ -401,7 +400,6 @@ export class MatchScene {
     const posAttr = geometry.getAttribute("position");
     const vertexCount = posAttr.count;
     const faceCount = vertexCount / 3;
-    const colors = new Float32Array(vertexCount * 3);
     const smoothNormals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
 
@@ -449,40 +447,6 @@ export class MatchScene {
       }
     }
 
-    // Second pass: assign per-face colors from the face centroid
-    // All 3 vertices of a triangle get the same color for a crisp flat look
-    for (let f = 0; f < faceCount; f++) {
-      const i0 = f * 3;
-      const i1 = f * 3 + 1;
-      const i2 = f * 3 + 2;
-
-      // Face centroid in displaced space
-      const cx = (posAttr.getX(i0) + posAttr.getX(i1) + posAttr.getX(i2)) / 3;
-      const cy = (posAttr.getY(i0) + posAttr.getY(i1) + posAttr.getY(i2)) / 3;
-      const cz = (posAttr.getZ(i0) + posAttr.getZ(i1) + posAttr.getZ(i2)) / 3;
-
-      const cLen = Math.sqrt(cx * cx + cy * cy + cz * cz);
-      const cnx = cx / cLen;
-      const cny = cy / cLen;
-      const cnz = cz / cLen;
-
-      const displacement = getTerrainHeight(cnx, cny, cnz, GAME_CONFIG);
-      // Use centroid position as a pseudo-random seed for color variation
-      const variation = Math.abs(((cx * 73.17 + cy * 91.33 + cz * 127.51) % 1.0) + 0.5) % 1.0;
-      const biome = getBiome(displacement, GAME_CONFIG, variation);
-
-      const r = ((biome.color >> 16) & 0xff) / 255;
-      const g = ((biome.color >> 8) & 0xff) / 255;
-      const b = (biome.color & 0xff) / 255;
-
-      for (const vi of [i0, i1, i2]) {
-        colors[vi * 3] = r;
-        colors[vi * 3 + 1] = g;
-        colors[vi * 3 + 2] = b;
-      }
-    }
-
-    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute("smoothNormal", new THREE.Float32BufferAttribute(smoothNormals, 3));
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 

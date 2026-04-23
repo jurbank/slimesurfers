@@ -222,6 +222,12 @@ export const GAME_CONFIG = {
       driftSpeed: 0.012,
       color: 0xf7fbff,
     },
+    terrain: {
+      sandColor: 0xd4c078,
+      grassColor: 0x3da33d,
+      rockColor: 0x8a8a7a,
+      snowColor: 0xeef4f8,
+    },
     cel: {
       enabled: true,
       bands: 3.0,
