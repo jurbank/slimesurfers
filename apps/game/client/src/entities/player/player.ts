@@ -6,6 +6,7 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
+import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
@@ -33,6 +34,7 @@ export class LocalPlayer {
   private readonly outlineMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
+  private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly materials: THREE.Material[] = [];
   private readonly inverseMeshQuat = new THREE.Quaternion();
   private readonly localAimDir = new THREE.Vector3();
@@ -58,6 +60,11 @@ export class LocalPlayer {
     this.outlineMesh = rig.outlineMesh;
     this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
+    this.trickChargeEffect = new PlayerTrickChargeEffect(
+      rig.trickChargeAura,
+      rig.slimeMaterials,
+      slimeColor,
+    );
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
@@ -109,6 +116,7 @@ export class LocalPlayer {
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
+    this.trickChargeEffect.update(state, dt);
     this.updateWeapon(state.equippedWeaponId, aimDir);
 
     if (state.isCarving) {
@@ -159,8 +167,9 @@ export class LocalPlayer {
     this.skiLaunchTimer = 0.4;
   }
 
-  triggerTrick(trickId: string): void {
+  triggerTrick(trickId: string, combo?: number): void {
     this.trickAnimator.trigger(trickId);
+    this.trickChargeEffect.registerTrick(combo);
   }
 
   dispose(scene: THREE.Scene): void {

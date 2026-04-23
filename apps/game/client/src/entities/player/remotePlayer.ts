@@ -7,6 +7,7 @@ import {
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
+import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 interface PlayerTransformState {
@@ -28,6 +29,7 @@ export class RemotePlayer {
   private readonly snowboardMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
+  private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly trickAnimator = new PlayerTrickAnimator();
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
@@ -39,6 +41,11 @@ export class RemotePlayer {
     this.snowboardMesh = rig.snowboardMesh;
     this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
+    this.trickChargeEffect = new PlayerTrickChargeEffect(
+      rig.trickChargeAura,
+      rig.slimeMaterials,
+      slimeColor,
+    );
     // Detach disturbance from group so it stays visible when the player mesh is hidden.
     this.mesh.remove(this.disturbanceMesh);
     scene.add(this.disturbanceMesh);
@@ -66,6 +73,7 @@ export class RemotePlayer {
     this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
+    this.trickChargeEffect.update(state, dt);
     if (state.isCarving) {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
     }
@@ -123,8 +131,9 @@ export class RemotePlayer {
     });
   }
 
-  triggerTrick(trickId: string): void {
+  triggerTrick(trickId: string, combo?: number): void {
     this.trickAnimator.trigger(trickId);
+    this.trickChargeEffect.registerTrick(combo);
   }
 
   private updateWeapon(weaponId: WeaponId): void {

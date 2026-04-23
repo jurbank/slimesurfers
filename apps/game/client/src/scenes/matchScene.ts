@@ -643,9 +643,9 @@ export class MatchScene {
     for (const event of events) {
       const trick = getAirTrickDefinition(event.trickId);
       if (event.playerId === this.connection.sessionId) {
-        this.localPlayer?.triggerTrick(event.trickId);
+        this.localPlayer?.triggerTrick(event.trickId, event.combo);
       } else {
-        this.remotePlayers.get(event.playerId)?.triggerTrick(event.trickId);
+        this.remotePlayers.get(event.playerId)?.triggerTrick(event.trickId, event.combo);
       }
 
       const mesh = this.getPlayerMesh(event.playerId);

@@ -13,12 +13,15 @@ export interface PlayerMeshRig {
   outlineMesh: THREE.Group;
   jsrOutline: THREE.Group;
   disturbanceMesh: THREE.Mesh;
+  trickChargeAura: THREE.Group;
+  slimeMaterials: THREE.ShaderMaterial[];
 }
 
 export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
   const group = new THREE.Group();
   const liveMesh = new THREE.Group();
   const deadMesh = new THREE.Group();
+  const slimeMaterials: THREE.ShaderMaterial[] = [];
   group.add(liveMesh);
   group.add(deadMesh);
 
@@ -26,12 +29,14 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const bodyRadius = GAME_CONFIG.movement.collisionRadius;
   const bodyGeom = new THREE.SphereGeometry(bodyRadius, 32, 24);
   const bodyMat = createSlimeMaterial(slimeColor, patternId);
+  slimeMaterials.push(bodyMat);
   const body = new THREE.Mesh(bodyGeom, bodyMat);
   liveMesh.add(body);
 
   // 2. Bunny Ears
   const earGeom = new THREE.CapsuleGeometry(0.08, 0.3, 4, 8);
   const earMat = createSlimeMaterial(slimeColor, patternId);
+  slimeMaterials.push(earMat);
 
   const leftEar = new THREE.Mesh(earGeom, earMat);
   leftEar.position.set(-0.2, 0.4, 0);
@@ -204,6 +209,49 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   disturbanceMesh.visible = false;
   group.add(disturbanceMesh);
 
+  const trickChargeAura = new THREE.Group();
+  trickChargeAura.visible = false;
+
+  const auraShell = new THREE.Mesh(
+    new THREE.SphereGeometry(bodyRadius * 1.32, 24, 18),
+    new THREE.MeshBasicMaterial({
+      color: slimeColor,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.BackSide,
+    }),
+  );
+  trickChargeAura.add(auraShell);
+
+  const ringGeometry = new THREE.TorusGeometry(bodyRadius * 1.2, 0.055, 10, 42);
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: slimeColor,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const horizontalRing = new THREE.Mesh(ringGeometry, ringMaterial);
+  horizontalRing.rotation.x = Math.PI / 2;
+  trickChargeAura.add(horizontalRing);
+
+  const verticalRing = new THREE.Mesh(
+    ringGeometry,
+    new THREE.MeshBasicMaterial({
+      color: slimeColor,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  verticalRing.rotation.y = Math.PI / 2;
+  trickChargeAura.add(verticalRing);
+
+  liveMesh.add(trickChargeAura);
+
   return {
     group,
     liveMesh,
@@ -213,5 +261,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     outlineMesh,
     jsrOutline,
     disturbanceMesh,
+    trickChargeAura,
+    slimeMaterials,
   };
 }
