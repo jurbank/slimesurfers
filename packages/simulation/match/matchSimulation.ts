@@ -259,6 +259,17 @@ function createSimPlayer(
     PLANET_POSITIONS.find((planet) => planet.id === spawnPlanetId) ?? PLANET_POSITIONS[0]!;
   const angle = (playerIndex / Math.max(1, maxPlayers)) * Math.PI * 2;
   const spread = GAME_CONFIG.planet.radius * 0.15;
+  const spawnOffsetX = Math.cos(angle) * spread;
+  const spawnOffsetZ = Math.sin(angle) * spread;
+  const spawnDirLen = Math.hypot(spawnOffsetX, GAME_CONFIG.planet.radius, spawnOffsetZ);
+  const spawnNormal = {
+    x: spawnOffsetX / spawnDirLen,
+    y: GAME_CONFIG.planet.radius / spawnDirLen,
+    z: spawnOffsetZ / spawnDirLen,
+  };
+  const spawnRadius =
+    getTerrainRadius(spawnNormal.x, spawnNormal.y, spawnNormal.z, GAME_CONFIG) +
+    GAME_CONFIG.movement.standingHeight;
 
   return {
     sessionId,
@@ -269,10 +280,9 @@ function createSimPlayer(
     patternId: mode.slots[slot.paletteIndex]?.patternId ?? 0,
     slimeColor: mode.slots[slot.paletteIndex]?.color ?? 0xffffff,
     pos: {
-      x: planetPos.x + Math.cos(angle) * spread,
-      y:
-        planetPos.y + getTerrainRadius(0, 1, 0, GAME_CONFIG) + GAME_CONFIG.movement.collisionRadius,
-      z: planetPos.z + Math.sin(angle) * spread,
+      x: planetPos.x + spawnNormal.x * spawnRadius,
+      y: planetPos.y + spawnNormal.y * spawnRadius,
+      z: planetPos.z + spawnNormal.z * spawnRadius,
     },
     vel: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0, w: 1 },

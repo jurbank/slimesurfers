@@ -133,6 +133,21 @@ export class JoinOverlay {
     this.statusText.style.color = "#888";
     this.statusText.textContent = "Loading assets...";
 
+    const twitterLink = document.createElement("a");
+    twitterLink.href = "https://x.com/johnurbank";
+    twitterLink.target = "_blank";
+    twitterLink.textContent = "Follow me on X @johnurbank";
+    Object.assign(twitterLink.style, {
+      position: "absolute",
+      bottom: "20px",
+      fontSize: "0.8rem",
+      color: "#666",
+      textDecoration: "none",
+      transition: "color 0.2s",
+    });
+    twitterLink.addEventListener("mouseenter", () => (twitterLink.style.color = "#00e5ff"));
+    twitterLink.addEventListener("mouseleave", () => (twitterLink.style.color = "#666"));
+
     this.root.append(
       title,
       this.progressContainer,
@@ -141,6 +156,7 @@ export class JoinOverlay {
       swatchRow,
       this.joinBtn,
       this.statusText,
+      twitterLink,
     );
     document.body.appendChild(this.root);
 

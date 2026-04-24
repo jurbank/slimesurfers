@@ -93,7 +93,7 @@ function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): Pain
     GAME_CONFIG.tricks.maxRadiusMultiplier,
     (GAME_CONFIG.tricks.radiusMultiplier +
       Math.max(0, player.airTrickCombo - 1) * GAME_CONFIG.tricks.comboRadiusBonus) *
-    player.airTrickPaintMultiplier,
+      player.airTrickPaintMultiplier,
   );
   const stamps: PaintStampMessage[] = [];
 

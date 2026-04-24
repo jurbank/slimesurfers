@@ -169,6 +169,22 @@ describe("MatchSimulation", () => {
     expect(simulation.players.size).toBe(0);
   });
 
+  it("spawns players on their actual terrain contact using standing height", () => {
+    const simulation = new MatchSimulation();
+    const player = simulation.addPlayer("session-1", "Alpha");
+    const planet =
+      PLANET_POSITIONS.find((entry) => entry.id === player.planetId) ?? PLANET_POSITIONS[0]!;
+    const dx = player.pos.x - planet.x;
+    const dy = player.pos.y - planet.y;
+    const dz = player.pos.z - planet.z;
+    const len = Math.hypot(dx, dy, dz);
+    const up = { x: dx / len, y: dy / len, z: dz / len };
+    const expectedRadius =
+      getTerrainRadius(up.x, up.y, up.z, GAME_CONFIG) + GAME_CONFIG.movement.standingHeight;
+
+    expect(len).toBeCloseTo(expectedRadius, 5);
+  });
+
   it("sanitizes join names and ignores coerced color indices", () => {
     const simulation = new MatchSimulation();
 

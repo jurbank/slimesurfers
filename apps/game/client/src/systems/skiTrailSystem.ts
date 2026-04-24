@@ -190,7 +190,7 @@ export class SkiTrailSystem {
         posArr[(i * 2 + 1) * 3] =
         posArr[(i * 2 + 1) * 3 + 1] =
         posArr[(i * 2 + 1) * 3 + 2] =
-        0;
+          0;
       alphaArr[i * 2] = alphaArr[i * 2 + 1] = 0;
     }
 
