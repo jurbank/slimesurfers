@@ -507,27 +507,29 @@ export class MatchSimulation {
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, GAME_CONFIG);
-          for (const stamp of tryFireProjectile(
-            this.simState,
-            player,
-            input,
-            actionNowMs,
-            PLANETS,
-            GAME_CONFIG,
-            (event) => this.recordKillEvent(event),
-          )) {
-            this.recordPaintStamp(stamp);
-          }
-          for (const stamp of tryFireHitscan(
-            this.simState,
-            player,
-            input,
-            actionNowMs,
-            PLANETS,
-            GAME_CONFIG,
-            (event) => this.recordKillEvent(event),
-          )) {
-            this.recordPaintStamp(stamp);
+          if (this.simState.matchPhase === MatchPhase.Active) {
+            for (const stamp of tryFireProjectile(
+              this.simState,
+              player,
+              input,
+              actionNowMs,
+              PLANETS,
+              GAME_CONFIG,
+              (event) => this.recordKillEvent(event),
+            )) {
+              this.recordPaintStamp(stamp);
+            }
+            for (const stamp of tryFireHitscan(
+              this.simState,
+              player,
+              input,
+              actionNowMs,
+              PLANETS,
+              GAME_CONFIG,
+              (event) => this.recordKillEvent(event),
+            )) {
+              this.recordPaintStamp(stamp);
+            }
           }
         }
         player.inputSeq = queue[queue.length - 1]!.seq;

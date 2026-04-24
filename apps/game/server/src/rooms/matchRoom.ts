@@ -28,7 +28,6 @@ export class MatchRoom extends Room<{ state: GameState }> {
   private readonly db = new SupabaseService();
   private readonly playerUuids = new Map<string, string>();
   private readonly departedPlayers = new Map<string, DepartedEntry>();
-  private matchStartedAt = new Date();
 
   onCreate() {
     this.setState(createRoomState(this.simulation.matchState));
@@ -127,9 +126,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     const broadcasts = buildTickBroadcasts(result, this.simulation);
     if (broadcasts.matchPhase) {
       this.broadcast(MessageType.MatchPhase, broadcasts.matchPhase);
-      if (broadcasts.matchPhase.phase === MatchPhase.Active) {
-        this.matchStartedAt = new Date();
-      } else if (broadcasts.matchPhase.phase === MatchPhase.Ended) {
+      if (broadcasts.matchPhase.phase === MatchPhase.Ended) {
         void this.persistMatchResults();
         void this.lock();
       }
@@ -174,15 +171,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
         a.name.localeCompare(b.name),
     );
 
-    const endedAt = new Date();
-    const durationSeconds = Math.round((endedAt.getTime() - this.matchStartedAt.getTime()) / 1000);
-
     await this.db.saveMatch({
-      roomId: this.roomId,
-      gameMode: "ffa",
-      playerCount: allEntries.length,
-      durationSeconds,
-      startedAt: this.matchStartedAt,
       entries: allEntries.map((entry, index) => ({
         ...entry,
         placement: index + 1,

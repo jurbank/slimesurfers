@@ -34,12 +34,21 @@ export class CountdownOverlay {
       letterSpacing: "-0.02em",
     });
 
-    this.root.append(label, this.numberEl);
+    const note = document.createElement("p");
+    note.textContent = "Weapons disabled until match begins";
+    Object.assign(note.style, {
+      margin: "12px 0 0",
+      fontSize: "0.75rem",
+      letterSpacing: "0.08em",
+      color: "#9fb3c8",
+    });
+
+    this.root.append(label, this.numberEl, note);
     document.body.appendChild(this.root);
   }
 
   show(seconds: number): void {
-    this.numberEl.textContent = `${Math.ceil(seconds)}`;
+    this.setSeconds(seconds);
     this.root.style.display = "flex";
   }
 
@@ -48,6 +57,8 @@ export class CountdownOverlay {
   }
 
   setSeconds(seconds: number): void {
-    this.numberEl.textContent = `${Math.ceil(seconds)}`;
+    const ceiled = Math.ceil(seconds);
+    this.numberEl.textContent = `${ceiled}`;
+    this.numberEl.style.color = ceiled <= 3 ? "#ef4444" : "#f6f7fb";
   }
 }
