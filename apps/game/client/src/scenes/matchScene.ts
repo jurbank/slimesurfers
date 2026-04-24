@@ -671,8 +671,8 @@ export class MatchScene {
     this.onDisconnectCb = cb;
   }
 
-  async connect(name: string, colorIndex: number): Promise<void> {
-    await this.connection.join(name, colorIndex, {
+  async connect(name: string, colorIndex: number, playerUuid: string | null): Promise<void> {
+    await this.connection.join(name, colorIndex, playerUuid, {
       onPlayerAdded: (
         sessionId: string,
         slimeColor: number,
@@ -737,7 +737,7 @@ export class MatchScene {
         this.syncPickups(snapshot, receivedAtMs);
       },
       onLeaderboard: (message) => {
-        this.leaderboard.update(message, this.connection.sessionId);
+        this.leaderboard.update(message, this.connection.sessionId, this.connection.matchTimer);
       },
       onDisconnect: () => {
         this.clearPlayerEntities();

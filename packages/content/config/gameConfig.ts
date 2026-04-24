@@ -104,7 +104,7 @@ export const GAME_CONFIG = {
 
   // -- Match -----------------------------------------------------------------
   match: {
-    durationSeconds: 180,
+    durationSeconds: 60,
     countdownSeconds: 5,
     teamCount: 2,
     teamColors: [0x00aaff, 0xff6600] as const,

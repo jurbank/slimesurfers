@@ -1,3 +1,9 @@
+try {
+  process.loadEnvFile(".env");
+} catch {
+  // no .env in production — env vars set in environment
+}
+
 import { Server, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Request, Response } from "express";

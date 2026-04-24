@@ -5,6 +5,7 @@ packages:
   - tools/*
 
 catalog:
+  "@supabase/supabase-js": "^2"
   "@colyseus/core": ^0.17.0
   "@colyseus/schema": ^4.0.7
   "@colyseus/sdk": ^0.17.0

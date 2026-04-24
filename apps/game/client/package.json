@@ -10,6 +10,7 @@
     "@splat/content": "workspace:*",
     "@splat/protocol": "workspace:*",
     "@splat/simulation": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
     "@types/three": "catalog:",
     "nipplejs": "catalog:",
     "three": "catalog:"

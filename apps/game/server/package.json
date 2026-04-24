@@ -12,6 +12,7 @@
     "@splat/content": "workspace:*",
     "@splat/protocol": "workspace:*",
     "@splat/simulation": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
     "express": "catalog:"
   },
   "devDependencies": {

@@ -1,9 +1,11 @@
 import { JoinOverlay } from "./ui/JoinOverlay.ts";
 import { MatchScene } from "./scenes/matchScene.ts";
 import { colyseusClient } from "./network/colyseusClient.ts";
+import { getOrCreatePlayerUuid } from "./network/supabaseClient.ts";
 
 const scene = new MatchScene();
 const skipJoinScreen = import.meta.env.DEV && import.meta.env.VITE_SKIP_JOIN_SCREEN === "true";
+const playerUuidPromise = getOrCreatePlayerUuid();
 const devAutoJoinRetryMs = 1000;
 
 scene.start();
@@ -23,7 +25,8 @@ const getDevPlayerName = (): string => {
 
 const connect = async (name: string, colorIndex: number, onError: () => void): Promise<boolean> => {
   try {
-    await scene.connect(name, colorIndex);
+    const playerUuid = await playerUuidPromise;
+    await scene.connect(name, colorIndex, playerUuid);
     return true;
   } catch (err) {
     console.error(err);

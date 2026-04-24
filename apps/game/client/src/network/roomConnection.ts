@@ -44,6 +44,10 @@ export class RoomConnection {
     return this.room?.sessionId ?? null;
   }
 
+  get matchTimer(): number {
+    return this.room?.state.matchTimer ?? 0;
+  }
+
   async fetchTakenColorIndices(): Promise<number[]> {
     try {
       const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
@@ -53,8 +57,17 @@ export class RoomConnection {
     }
   }
 
-  async join(name: string, colorIndex: number, callbacks: RoomCallbacks): Promise<void> {
-    this.room = await colyseusClient.joinOrCreate("match", { name, colorIndex }, GameState);
+  async join(
+    name: string,
+    colorIndex: number,
+    playerUuid: string | null,
+    callbacks: RoomCallbacks,
+  ): Promise<void> {
+    this.room = await colyseusClient.joinOrCreate(
+      "match",
+      { name, colorIndex, playerUuid },
+      GameState,
+    );
 
     this.room.onMessage(MessageType.Snapshot, (snapshot: SnapshotMessage) => {
       callbacks.onSnapshot(snapshot, performance.now());

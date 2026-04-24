@@ -25,6 +25,7 @@ interface ActiveKillFeedItem {
 export class LeaderboardOverlay {
   private readonly root: HTMLDivElement;
   private readonly title: HTMLDivElement;
+  private readonly timerEl: HTMLSpanElement;
   private readonly list: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
   private readonly killFeedSection: HTMLDivElement;
@@ -55,14 +56,21 @@ export class LeaderboardOverlay {
     });
 
     this.title = document.createElement("div");
-    this.title.textContent = "Leaderboard";
     Object.assign(this.title.style, {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
       fontSize: "0.8rem",
       textTransform: "uppercase",
       letterSpacing: "0.12em",
       color: "#9fb3c8",
       marginBottom: "10px",
     });
+    const titleLabel = document.createElement("span");
+    titleLabel.textContent = "Leaderboard";
+    this.timerEl = document.createElement("span");
+    this.timerEl.style.fontVariantNumeric = "tabular-nums";
+    this.title.append(titleLabel, this.timerEl);
 
     this.list = document.createElement("div");
     Object.assign(this.list.style, {
@@ -110,7 +118,8 @@ export class LeaderboardOverlay {
     document.body.appendChild(this.root);
   }
 
-  update(message: LeaderboardMessage, localSessionId: string | null): void {
+  update(message: LeaderboardMessage, localSessionId: string | null, matchTimerSeconds = 0): void {
+    this.timerEl.textContent = LeaderboardOverlay.formatTimer(matchTimerSeconds);
     this.list.replaceChildren();
     this.progressBar.replaceChildren();
 
@@ -415,6 +424,13 @@ export class LeaderboardOverlay {
       return "linear-gradient(135deg, rgba(87, 36, 36, 0.92), rgba(26, 15, 20, 0.92))";
     }
     return "rgba(17, 24, 34, 0.86)";
+  }
+
+  private static formatTimer(seconds: number): string {
+    const s = Math.ceil(Math.max(0, seconds));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem.toString().padStart(2, "0")}`;
   }
 
   private updateVisibility(): void {
