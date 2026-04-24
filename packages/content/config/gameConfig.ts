@@ -244,6 +244,13 @@ export const GAME_CONFIG = {
       hatchStrength: 0.15,
       hatchScale: 5.0,
     },
+    props: {
+      enabled: true,
+      seed: 12345,
+      treeDensity: 400,
+      cactusDensity: 200,
+      rocketEnabled: true,
+    },
   },
 
   // -- Debug -----------------------------------------------------------------

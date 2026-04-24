@@ -24,6 +24,7 @@ import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
 import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
+import { PropSystem } from "../systems/propSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
@@ -95,6 +96,7 @@ export class MatchScene {
   private readonly input: InputSystem;
   private readonly paint: PaintSystem;
   private readonly clouds: CloudSystem;
+  private readonly props: PropSystem;
   private readonly pickups: PickupSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly trickText: TrickTextSystem;
@@ -325,6 +327,7 @@ export class MatchScene {
     this.input = new InputSystem(this.render.renderer.domElement);
     this.paint = new PaintSystem(this.render.renderer);
     this.clouds = new CloudSystem(this.render.scene);
+    this.props = new PropSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.trickText = new TrickTextSystem();
@@ -480,6 +483,10 @@ export class MatchScene {
 
       if (GAME_CONFIG.shaders.clouds.enabled) {
         this.clouds.addPlanetClouds(p);
+      }
+
+      if (GAME_CONFIG.shaders.props.enabled) {
+        this.props.addPlanetProps(p);
       }
     }
   }
@@ -783,6 +790,8 @@ export class MatchScene {
         this.runtime.clear();
         this.paint.clear();
         this.clearPlanetPaint();
+        this.clouds.dispose();
+        this.props.dispose();
         this.pickups.clear();
         this.projectiles.clear();
         this.trickText.clear();
