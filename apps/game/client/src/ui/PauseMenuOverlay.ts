@@ -13,6 +13,15 @@ const CONTROLS = [
   ["Pause", "Esc"],
 ] as const;
 
+const GAMEPLAY_NOTES = [
+  "Recharge slime faster on your own paint.",
+  "Recharge even faster while submerged in your own paint.",
+  "Hide inside your own paint while ski mode is active and you stop moving.",
+  "Enemy paint slows you down and only gives passive recharge.",
+  "Paint more territory than the other team before time runs out.",
+  "Land epic air tricks for big splats!",
+] as const;
+
 const KEY_LABELS = new Map<number, string>([
   [InputKey.Forward, "W"],
   [InputKey.Backward, "S"],
@@ -158,9 +167,48 @@ export class PauseMenuOverlay {
       controls.append(actionEl, bindingEl);
     }
 
-    const audioTitle = document.createElement("div");
-    audioTitle.textContent = "Audio";
-    Object.assign(audioTitle.style, {
+    const audioSection = document.createElement("div");
+    Object.assign(audioSection.style, {
+      marginBottom: "22px",
+    });
+
+    const audioToggle = document.createElement("button");
+    audioToggle.textContent = "Sound Options";
+    Object.assign(audioToggle.style, {
+      border: "1px solid rgba(216, 232, 255, 0.22)",
+      borderRadius: "999px",
+      background: "rgba(216, 232, 255, 0.08)",
+      color: "#d8e8ff",
+      padding: "7px 12px",
+      fontSize: "0.76rem",
+      fontWeight: "bold",
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+      cursor: "pointer",
+    });
+
+    const audioControls = document.createElement("div");
+    Object.assign(audioControls.style, {
+      display: "none",
+      gap: "12px",
+      marginTop: "12px",
+    });
+    audioControls.append(
+      this.createAudioControl(sound, "music", "Music"),
+      this.createAudioControl(sound, "sfx", "Sound"),
+    );
+    audioToggle.setAttribute("aria-expanded", "false");
+    audioToggle.addEventListener("click", () => {
+      const expanded = audioControls.style.display !== "none";
+      audioControls.style.display = expanded ? "none" : "grid";
+      audioToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+      audioToggle.textContent = expanded ? "Sound Options" : "Hide Sound Options";
+    });
+    audioSection.append(audioToggle, audioControls);
+
+    const notesTitle = document.createElement("div");
+    notesTitle.textContent = "How It Works";
+    Object.assign(notesTitle.style, {
       margin: "0 0 10px",
       color: "#97abc0",
       fontSize: "0.76rem",
@@ -169,16 +217,22 @@ export class PauseMenuOverlay {
       textTransform: "uppercase",
     });
 
-    const audioControls = document.createElement("div");
-    Object.assign(audioControls.style, {
+    const notesList = document.createElement("div");
+    Object.assign(notesList.style, {
       display: "grid",
-      gap: "12px",
-      marginBottom: "22px",
+      gap: "8px",
     });
-    audioControls.append(
-      this.createAudioControl(sound, "music", "Music"),
-      this.createAudioControl(sound, "sfx", "Sound"),
-    );
+
+    for (const noteText of GAMEPLAY_NOTES) {
+      const noteRow = document.createElement("div");
+      noteRow.textContent = `- ${noteText}`;
+      Object.assign(noteRow.style, {
+        color: "#b8c6d4",
+        fontSize: "0.88rem",
+        lineHeight: "1.4",
+      });
+      notesList.appendChild(noteRow);
+    }
 
     const movesTitle = document.createElement("div");
     movesTitle.textContent = "Moves";
@@ -197,7 +251,10 @@ export class PauseMenuOverlay {
       gridTemplateColumns: "1fr auto",
       gap: "9px 14px",
       alignItems: "center",
-      paddingBottom: "2px",
+      padding: "14px",
+      borderRadius: "10px",
+      background: "rgba(125, 170, 230, 0.1)",
+      border: "1px solid rgba(160, 205, 255, 0.12)",
     });
 
     for (const trick of AIR_TRICK_DEFS) {
@@ -250,7 +307,7 @@ export class PauseMenuOverlay {
       textAlign: "center",
     });
 
-    leftColumn.append(controlsTitle, controls, audioTitle, audioControls);
+    leftColumn.append(audioSection, controlsTitle, controls, notesTitle, notesList);
     movesColumn.append(movesTitle, movesList);
     content.append(leftColumn, movesColumn);
     syncContentLayout();

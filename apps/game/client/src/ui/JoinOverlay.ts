@@ -40,6 +40,18 @@ export class JoinOverlay {
     title.textContent = "Slime Surfers";
     Object.assign(title.style, { margin: "0 0 8px", fontSize: "2.5rem", letterSpacing: "0.15em" });
 
+    const subtitle = document.createElement("p");
+    subtitle.textContent =
+      "Cover the planet in slime, splat your rivals, and pull off huge tricks.";
+    Object.assign(subtitle.style, {
+      margin: "0 0 12px",
+      maxWidth: "360px",
+      textAlign: "center",
+      fontSize: "0.95rem",
+      lineHeight: "1.4",
+      color: "#9fb3c8",
+    });
+
     this.progressContainer = document.createElement("div");
     Object.assign(this.progressContainer.style, {
       width: "220px",
@@ -150,6 +162,7 @@ export class JoinOverlay {
 
     this.root.append(
       title,
+      subtitle,
       this.progressContainer,
       this.nameInput,
       colorLabel,
