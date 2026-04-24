@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import {
   addSimPlayerToRoomState,
   buildJoinBootstrap,
@@ -12,6 +12,8 @@ import {
 } from "./matchRoomReplication.ts";
 
 describe("matchRoomReplication", () => {
+  const { rows } = getPaintTerritoryDimensions();
+
   it("projects simulation players into room schema state", () => {
     const simulation = new MatchSimulation();
     const alpha = simulation.addPlayer("session-1", "Alpha");
@@ -119,6 +121,6 @@ describe("matchRoomReplication", () => {
     expect(state.scores.get(alpha.paintGroupId.toString())).toBe(1);
     expect(state.players.get(alpha.sessionId)?.paintScore).toBe(1);
     expect(state.planets.get("planet-0")?.cells[0]?.ownerPaintGroupId).toBe(alpha.paintGroupId);
-    expect(state.planets.get("planet-0")?.territoryRows).toBe(GAME_CONFIG.paint.territoryRows);
+    expect(state.planets.get("planet-0")?.territoryRows).toBe(rows);
   });
 });

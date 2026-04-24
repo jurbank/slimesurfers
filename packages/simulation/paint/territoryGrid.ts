@@ -1,4 +1,4 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { getPaintStampAngularRadius, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import type { SimMatchState, SimPlanetPaintState, SimTerritoryCell } from "../match/simState.ts";
 
@@ -82,11 +82,7 @@ export function applyPaintToTerritoryAtPoint(
     paint.pos.y - planetPos.y,
     paint.pos.z - planetPos.z,
   );
-  const angularRadius = clamp(
-    GAME_CONFIG.paint.impactStampRadius * radiusMultiplier * Math.PI,
-    0,
-    Math.PI,
-  );
+  const angularRadius = clamp(getPaintStampAngularRadius() * radiusMultiplier, 0, Math.PI);
   const cosThreshold = Math.cos(angularRadius);
 
   let changedCells = 0;

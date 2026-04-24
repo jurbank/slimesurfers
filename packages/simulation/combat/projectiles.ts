@@ -47,7 +47,7 @@ export interface CombatConfig {
     rechargeDelayMs: number;
   };
   paint: {
-    impactStampRadius: number;
+    impactStampSurfaceRadius: number;
     deathBurstStampCount: number;
     deathBurstSpreadRadius: number;
     deathBurstRadiusMultiplier: number;

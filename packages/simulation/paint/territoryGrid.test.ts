@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  getPaintTerritoryDimensions,
+  PLANET_POSITIONS,
+} from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { createStampBuckets } from "./paintDetection.ts";
 import { createTerritoryCells, applyPaintToTerritoryAtPoint } from "./territoryGrid.ts";
@@ -72,8 +76,7 @@ function createSimState(): SimMatchState {
 }
 
 function surfacePointForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const rows = GAME_CONFIG.paint.territoryRows;
-  const cols = GAME_CONFIG.paint.territoryCols;
+  const { rows, cols } = getPaintTerritoryDimensions();
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -96,16 +99,14 @@ function surfacePointForCell(row: number, col: number): { x: number; y: number; 
 describe("territoryGrid", () => {
   it("claims neutral cells once and does not double-count repainting the same owned area", () => {
     const simState = createSimState();
+    const { rows, cols } = getPaintTerritoryDimensions();
     const planetState = {
       planetId: "planet-0",
-      territoryRows: GAME_CONFIG.paint.territoryRows,
-      territoryCols: GAME_CONFIG.paint.territoryCols,
-      cells: createTerritoryCells(GAME_CONFIG.paint.territoryRows, GAME_CONFIG.paint.territoryCols),
+      territoryRows: rows,
+      territoryCols: cols,
+      cells: createTerritoryCells(rows, cols),
       stamps: [],
-      stampBuckets: createStampBuckets(
-        GAME_CONFIG.paint.territoryRows,
-        GAME_CONFIG.paint.territoryCols,
-      ),
+      stampBuckets: createStampBuckets(rows, cols),
     };
     const impactPoint = surfacePointForCell(5, 7);
 
@@ -138,16 +139,14 @@ describe("territoryGrid", () => {
 
   it("transfers ownership and score when repainting enemy-controlled territory", () => {
     const simState = createSimState();
+    const { rows, cols } = getPaintTerritoryDimensions();
     const planetState = {
       planetId: "planet-0",
-      territoryRows: GAME_CONFIG.paint.territoryRows,
-      territoryCols: GAME_CONFIG.paint.territoryCols,
-      cells: createTerritoryCells(GAME_CONFIG.paint.territoryRows, GAME_CONFIG.paint.territoryCols),
+      territoryRows: rows,
+      territoryCols: cols,
+      cells: createTerritoryCells(rows, cols),
       stamps: [],
-      stampBuckets: createStampBuckets(
-        GAME_CONFIG.paint.territoryRows,
-        GAME_CONFIG.paint.territoryCols,
-      ),
+      stampBuckets: createStampBuckets(rows, cols),
     };
     const impactPoint = surfacePointForCell(5, 7);
 

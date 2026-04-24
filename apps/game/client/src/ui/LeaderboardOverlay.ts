@@ -1,4 +1,4 @@
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import type {
   KillEventMessage,
   LeaderboardEntry,
@@ -12,8 +12,8 @@ const MAX_KILL_FEED_ITEMS = 5;
 const KILL_FEED_LIFETIME_MS = 4000;
 const KILL_FEED_ENTER_MS = 180;
 const KILL_FEED_FADE_MS = 900;
-const TOTAL_CELLS =
-  GAME_CONFIG.paint.territoryRows * GAME_CONFIG.paint.territoryCols * GAME_CONFIG.planet.count;
+const { rows: TOTAL_TERRITORY_ROWS, cols: TOTAL_TERRITORY_COLS } = getPaintTerritoryDimensions();
+const TOTAL_CELLS = TOTAL_TERRITORY_ROWS * TOTAL_TERRITORY_COLS * GAME_CONFIG.planet.count;
 
 interface ActiveKillFeedItem {
   createdAtMs: number;

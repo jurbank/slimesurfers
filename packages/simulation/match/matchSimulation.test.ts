@@ -4,7 +4,12 @@ import { DEV_MODE, FFA_MODE, TEAMS_MODE } from "@splat/content/modes/gameModes.t
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  getPaintStampChordRadius,
+  getPaintTerritoryDimensions,
+  PLANET_POSITIONS,
+} from "@splat/content/config/gameConfig.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
@@ -37,8 +42,7 @@ function distanceBetweenPlayers(
 }
 
 function surfaceNormalForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const rows = GAME_CONFIG.paint.territoryRows;
-  const cols = GAME_CONFIG.paint.territoryCols;
+  const { rows, cols } = getPaintTerritoryDimensions();
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -85,7 +89,7 @@ function paintPlayerSurface(
   simulation: MatchSimulation,
   sessionId: string,
   paintGroupId: number,
-  radius = 0.04,
+  radius = Math.max(getPaintStampChordRadius(), 0.25),
 ): void {
   const player = simulation.players.get(sessionId);
   if (!player) return;
@@ -155,8 +159,8 @@ function trickInput(seq: number, pressedKeys: number): InputMessage {
 }
 
 describe("MatchSimulation", () => {
-  it("seeds large friendly and enemy slime regions for movement testing", () => {
-    const simulation = new MatchSimulation();
+  it("can seed large friendly and enemy slime regions for movement testing when enabled", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: true });
     const planetPaint = simulation.matchState.planets;
 
     expect(getPaintAtPoint({ x: 0, y: 100, z: 0 }, "planet-0", planetPaint)?.paintGroupId).toBe(0);
@@ -651,7 +655,7 @@ describe("MatchSimulation", () => {
 
     const stamps = simulation.drainPaintStampMessages();
     expect(stamps).toHaveLength(1);
-    expect(stamps[0]?.radius).toBe(GAME_CONFIG.paint.impactStampRadius * 4.2);
+    expect(stamps[0]?.radius).toBe(getPaintStampChordRadius() * 4.2);
   });
 
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {

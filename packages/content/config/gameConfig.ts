@@ -1,3 +1,11 @@
+const DEFAULT_PLANET_RADIUS = 50;
+const DEFAULT_TERRITORY_ROWS = 12;
+const DEFAULT_IMPACT_STAMP_RADIUS = 0.03;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
  * GAME_CONFIG — authoritative game-feel constants.
  *
@@ -14,7 +22,7 @@
 export const GAME_CONFIG = {
   // -- Planets ---------------------------------------------------------------
   planet: {
-    radius: 50,
+    radius: 100,
     count: 1,
     interPlanetDistance: 200,
   },
@@ -32,14 +40,14 @@ export const GAME_CONFIG = {
     maxLevel: 100,
     shotCost: 12,
     passiveRechargePerSecond: 8,
-    friendlyPaintRechargePerSecond: 24,
+    friendlyPaintRechargePerSecond: 30,
     submergedRechargePerSecond: 55,
-    rechargeDelayMs: 600,
+    rechargeDelayMs: 200,
   },
 
   // -- Pickups ---------------------------------------------------------------
   pickups: {
-    collectRadius: 1.2,
+    collectRadius: 1.5,
     hoverHeight: 2.6,
   },
 
@@ -51,9 +59,8 @@ export const GAME_CONFIG = {
 
   // -- Paint -----------------------------------------------------------------
   paint: {
-    territoryRows: 12,
-    territoryCols: 24,
-    impactStampRadius: 0.04,
+    territoryCellSurfaceSize: (Math.PI * DEFAULT_PLANET_RADIUS) / DEFAULT_TERRITORY_ROWS,
+    impactStampSurfaceRadius: DEFAULT_PLANET_RADIUS * DEFAULT_IMPACT_STAMP_RADIUS * Math.PI,
     deathBurstStampCount: 9,
     deathBurstSpreadRadius: 1.4,
     deathBurstRadiusMultiplier: 3.4,
@@ -104,8 +111,8 @@ export const GAME_CONFIG = {
 
   // -- Match -----------------------------------------------------------------
   match: {
-    durationSeconds: 60,
-    countdownSeconds: 10,
+    durationSeconds: 960,
+    countdownSeconds: 0,
     teamCount: 2,
     teamColors: [0x00aaff, 0xff6600] as const,
     /** Free-for-all palette — one colour per player slot (index = player.paletteIndex in FFA mode) */
@@ -136,11 +143,11 @@ export const GAME_CONFIG = {
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
     standingHeight: 1.0,
-    friendlyPaintSpeedMultiplier: 2.0,
+    friendlyPaintSpeedMultiplier: 3.0,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 1,
-    surfSpeedMultiplier: 3.2,
-    surfAccelerationMultiplier: 1.0,
+    surfSpeedMultiplier: 2.2,
+    surfAccelerationMultiplier: 2.0,
     surfDisturbanceMinSpeed: 1.5,
     waterSkiSpeedMultiplier: 3.8,
     waterSkiAccelerationMultiplier: 1.5,
@@ -151,7 +158,7 @@ export const GAME_CONFIG = {
   // -- Terrain ---------------------------------------------------------------
   terrain: {
     seed: 42,
-    baseAmplitude: 24.0,
+    baseAmplitude: 54.0,
     frequency: 1.4,
     octaves: 3,
     lacunarity: 2.2,
@@ -245,6 +252,36 @@ export const GAME_CONFIG = {
     showPaintColliders: false,
   },
 } as const;
+
+export function getPaintTerritoryDimensions(planetRadius = GAME_CONFIG.planet.radius): {
+  rows: number;
+  cols: number;
+} {
+  const rows = Math.max(
+    1,
+    Math.round((Math.PI * planetRadius) / GAME_CONFIG.paint.territoryCellSurfaceSize),
+  );
+  const cols = Math.max(
+    1,
+    Math.round((2 * Math.PI * planetRadius) / GAME_CONFIG.paint.territoryCellSurfaceSize),
+  );
+  return { rows, cols };
+}
+
+export function getPaintStampAngularRadius(planetRadius = GAME_CONFIG.planet.radius): number {
+  return clamp(GAME_CONFIG.paint.impactStampSurfaceRadius / planetRadius, 0, Math.PI);
+}
+
+export function getPlanetSurfaceChordRadius(
+  surfaceRadius: number,
+  planetRadius = GAME_CONFIG.planet.radius,
+): number {
+  return 2 * Math.sin(clamp(surfaceRadius / planetRadius, 0, Math.PI) * 0.5);
+}
+
+export function getPaintStampChordRadius(planetRadius = GAME_CONFIG.planet.radius): number {
+  return getPlanetSurfaceChordRadius(GAME_CONFIG.paint.impactStampSurfaceRadius, planetRadius);
+}
 
 export const PLANET_POSITIONS = Array.from({ length: GAME_CONFIG.planet.count }, (_, i) => ({
   id: `planet-${i}`,

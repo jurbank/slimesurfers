@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  getPaintTerritoryDimensions,
+  PLANET_POSITIONS,
+} from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { createStampBuckets } from "./paintDetection.ts";
 import { applyPaintImpact } from "./stampPaint.ts";
@@ -23,16 +27,14 @@ function createSimState(): SimMatchState {
 }
 
 function createPlanetState() {
+  const { rows, cols } = getPaintTerritoryDimensions();
   return {
     planetId: "planet-0",
-    territoryRows: GAME_CONFIG.paint.territoryRows,
-    territoryCols: GAME_CONFIG.paint.territoryCols,
-    cells: createTerritoryCells(GAME_CONFIG.paint.territoryRows, GAME_CONFIG.paint.territoryCols),
+    territoryRows: rows,
+    territoryCols: cols,
+    cells: createTerritoryCells(rows, cols),
     stamps: [],
-    stampBuckets: createStampBuckets(
-      GAME_CONFIG.paint.territoryRows,
-      GAME_CONFIG.paint.territoryCols,
-    ),
+    stampBuckets: createStampBuckets(rows, cols),
   };
 }
 

@@ -21,6 +21,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type DepartedEntry = LeaderboardEntry & { playerUuid?: string };
 
+function isEnvFlagEnabled(value: string | undefined): boolean {
+  return value === "true";
+}
+
 export class MatchRoom extends Room<{ state: GameState }> {
   private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
   private emoteSeq = 0;
@@ -32,6 +36,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
   onCreate() {
     this.simulation = new MatchSimulation(resolveGameMode(process.env.MATCH_MODE), {
       lobbyEnabled: true,
+      seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
     });
     this.setState(createRoomState(this.simulation.matchState));
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;

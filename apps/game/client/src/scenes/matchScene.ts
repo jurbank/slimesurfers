@@ -6,7 +6,11 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  getPaintTerritoryDimensions,
+  PLANET_POSITIONS,
+} from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
   EmoteEventMessage,
@@ -346,17 +350,15 @@ export class MatchScene {
     this.render.renderer.domElement.addEventListener("pointerdown", () => this.sound.resume(), {
       once: true,
     });
+    const { rows, cols } = getPaintTerritoryDimensions();
     for (const p of PLANET_POSITIONS) {
       this.planetPaint.set(p.id, {
         planetId: p.id,
-        territoryRows: GAME_CONFIG.paint.territoryRows,
-        territoryCols: GAME_CONFIG.paint.territoryCols,
+        territoryRows: rows,
+        territoryCols: cols,
         cells: [],
         stamps: [],
-        stampBuckets: createStampBuckets(
-          GAME_CONFIG.paint.territoryRows,
-          GAME_CONFIG.paint.territoryCols,
-        ),
+        stampBuckets: createStampBuckets(rows, cols),
       });
     }
   }

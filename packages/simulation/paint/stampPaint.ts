@@ -1,4 +1,4 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { getPaintStampChordRadius, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
 import type { SimMatchState, SimPaintStamp, SimPlanetPaintState } from "../match/simState.ts";
 import { appendPaintStamp } from "./paintDetection.ts";
@@ -43,7 +43,7 @@ export function applyPaintImpact(
     nx,
     ny,
     nz,
-    radius: GAME_CONFIG.paint.impactStampRadius * impact.radiusMultiplier,
+    radius: getPaintStampChordRadius() * impact.radiusMultiplier,
     seq: ++simState.paintSeq,
   };
 

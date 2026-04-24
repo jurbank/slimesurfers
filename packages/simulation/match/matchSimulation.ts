@@ -1,6 +1,11 @@
 import { FFA_MODE, type GameModeDefinition } from "@splat/content/modes/gameModes.ts";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  getPlanetSurfaceChordRadius,
+  getPaintTerritoryDimensions,
+  PLANET_POSITIONS,
+} from "@splat/content/config/gameConfig.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -153,22 +158,22 @@ function sanitizeInputMessage(value: unknown): InputMessage | null {
 }
 
 function createSimPlanetState(planetId: string): SimPlanetPaintState {
+  const { rows, cols } = getPaintTerritoryDimensions();
   return {
     planetId,
-    territoryRows: GAME_CONFIG.paint.territoryRows,
-    territoryCols: GAME_CONFIG.paint.territoryCols,
-    cells: createTerritoryCells(GAME_CONFIG.paint.territoryRows, GAME_CONFIG.paint.territoryCols),
+    territoryRows: rows,
+    territoryCols: cols,
+    cells: createTerritoryCells(rows, cols),
     stamps: [],
-    stampBuckets: createStampBuckets(
-      GAME_CONFIG.paint.territoryRows,
-      GAME_CONFIG.paint.territoryCols,
-    ),
+    stampBuckets: createStampBuckets(rows, cols),
   };
 }
 
 function seedTestPaint(simState: SimMatchState): void {
   const planet = simState.planets.get("planet-0");
   if (!planet) return;
+  const largeSeedSurfaceRadius = 50 * (2 * Math.asin(1.15 * 0.5));
+  const mediumSeedSurfaceRadius = 50 * (2 * Math.asin(0.55 * 0.5));
 
   const stamps = [
     {
@@ -178,7 +183,7 @@ function seedTestPaint(simState: SimMatchState): void {
       nx: 0,
       ny: 1,
       nz: 0,
-      radius: 1.15,
+      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius),
       seq: ++simState.paintSeq,
     },
     {
@@ -188,7 +193,7 @@ function seedTestPaint(simState: SimMatchState): void {
       nx: 0,
       ny: -1,
       nz: 0,
-      radius: 1.15,
+      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius),
       seq: ++simState.paintSeq,
     },
     {
@@ -198,7 +203,7 @@ function seedTestPaint(simState: SimMatchState): void {
       nx: 0.55,
       ny: 0.55,
       nz: 0.62,
-      radius: 0.55,
+      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius),
       seq: ++simState.paintSeq,
     },
     {
@@ -208,7 +213,7 @@ function seedTestPaint(simState: SimMatchState): void {
       nx: -0.5,
       ny: -0.45,
       nz: -0.74,
-      radius: 0.55,
+      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius),
       seq: ++simState.paintSeq,
     },
   ] as const;
@@ -327,7 +332,7 @@ export class MatchSimulation {
   constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
     this.mode = mode;
     this.simState = createSimMatchState(
-      options.seedTestPaint ?? true,
+      options.seedTestPaint ?? false,
       options.lobbyEnabled ?? false,
     );
   }

@@ -77,18 +77,38 @@ function createRoomHarness() {
 describe("MatchRoom", () => {
   it("uses the configured server match mode", () => {
     const previousMode = process.env.MATCH_MODE;
-    process.env.MATCH_MODE = "dev";
+    try {
+      process.env.MATCH_MODE = "dev";
 
-    const harness = createRoomHarness();
+      const harness = createRoomHarness();
 
-    expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
-      "dev",
-    );
+      expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+        "dev",
+      );
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.MATCH_MODE;
+      } else {
+        process.env.MATCH_MODE = previousMode;
+      }
+    }
+  });
 
-    if (previousMode === undefined) {
-      delete process.env.MATCH_MODE;
-    } else {
-      process.env.MATCH_MODE = previousMode;
+  it("enables seeded paint only when SEED_TEST_PAINT is true", () => {
+    const previousSeedTestPaint = process.env.SEED_TEST_PAINT;
+    try {
+      process.env.SEED_TEST_PAINT = "true";
+
+      const harness = createRoomHarness();
+      const simulation = (harness.room as unknown as { simulation: MatchSimulation }).simulation;
+
+      expect(simulation.getRecentPaintStamps().length).toBeGreaterThan(0);
+    } finally {
+      if (previousSeedTestPaint === undefined) {
+        delete process.env.SEED_TEST_PAINT;
+      } else {
+        process.env.SEED_TEST_PAINT = previousSeedTestPaint;
+      }
     }
   });
 
@@ -100,18 +120,15 @@ describe("MatchRoom", () => {
     expect(harness.scheduledIntervalMs).toBeGreaterThan(0);
   });
 
-  it("adds joined players to authoritative room state and sends paint bootstrap before snapshot", () => {
+  it("adds joined players to authoritative room state and sends snapshot bootstrap", () => {
     const harness = createRoomHarness();
     const alpha = createFakeClient("session-1");
 
     harness.room.onJoin(alpha.client as never, { name: "Alpha" });
 
     expect(harness.room.state.players.get("session-1")?.name).toBe("Alpha");
-    expect(alpha.sent).toHaveLength(2);
-    expect(alpha.sent[0]?.type).toBe(MessageType.PaintStamps);
-    const paintBootstrap = alpha.sent[0]!.payload as { stamps: unknown[] };
-    expect(paintBootstrap.stamps.length).toBeGreaterThan(0);
-    expect(alpha.sent[1]?.type).toBe(MessageType.Snapshot);
+    expect(alpha.sent).toHaveLength(1);
+    expect(alpha.sent[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts).toHaveLength(1);
     expect(harness.broadcasts[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts[0]?.options).toEqual({ except: alpha.client });
