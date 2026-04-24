@@ -76,7 +76,7 @@ export class JoinOverlay {
     });
 
     const colorLabel = document.createElement("p");
-    colorLabel.textContent = "Choose your color";
+    colorLabel.textContent = "Choose your player / slime color";
     Object.assign(colorLabel.style, { margin: "4px 0 0", fontSize: "0.8rem", color: "#888" });
 
     const swatchRow = document.createElement("div");

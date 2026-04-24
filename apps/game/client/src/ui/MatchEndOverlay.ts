@@ -67,7 +67,7 @@ export class MatchEndOverlay {
     playAgain.addEventListener("click", onPlayAgain);
 
     const changeSetup = document.createElement("button");
-    changeSetup.textContent = "Change name / color";
+    changeSetup.textContent = "Exit to change name / color";
     Object.assign(changeSetup.style, {
       background: "none",
       border: "none",
