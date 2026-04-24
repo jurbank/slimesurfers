@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import {
+  CLUSTER_WEAPON_PICKUP_SPAWNS,
+  DEFAULT_WEAPON_ID,
+  getWeaponDefinition,
+  MAP_WEAPON_PICKUP_SPAWNS,
+} from "@splat/content/combat/weaponDefs.ts";
 import { DEV_MODE, FFA_MODE, TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
@@ -295,6 +300,69 @@ describe("MatchSimulation", () => {
     expect(distanceBetweenPlayers(first, second)).toBeLessThan(20);
     expect(distanceBetweenPlayers(first, third)).toBeLessThan(20);
     expect(distanceBetweenPlayers(second, third)).toBeLessThan(20);
+  });
+
+  it("uses map-distributed weapon pickups by default", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const pickups = Array.from(simulation.matchState.pickups.values());
+
+    const highestPairDistance = pickups.reduce((maxDistance, pickup, index) => {
+      for (const other of pickups.slice(index + 1)) {
+        const dx = pickup.pos.x - other.pos.x;
+        const dy = pickup.pos.y - other.pos.y;
+        const dz = pickup.pos.z - other.pos.z;
+        maxDistance = Math.max(maxDistance, Math.hypot(dx, dy, dz));
+      }
+      return maxDistance;
+    }, 0);
+
+    expect(highestPairDistance).toBeGreaterThan(60);
+  });
+
+  it("can cluster weapon pickups for fast server-side dev iteration", () => {
+    const simulation = new MatchSimulation(FFA_MODE, {
+      seedTestPaint: false,
+      weaponPickupLayout: "cluster",
+    });
+    const pickups = Array.from(simulation.matchState.pickups.values());
+
+    const highestPairDistance = pickups.reduce((maxDistance, pickup, index) => {
+      for (const other of pickups.slice(index + 1)) {
+        const dx = pickup.pos.x - other.pos.x;
+        const dy = pickup.pos.y - other.pos.y;
+        const dz = pickup.pos.z - other.pos.z;
+        maxDistance = Math.max(maxDistance, Math.hypot(dx, dy, dz));
+      }
+      return maxDistance;
+    }, 0);
+
+    expect(highestPairDistance).toBeLessThan(50);
+  });
+
+  it("keeps pickup spawn anchors above the waterline", () => {
+    const waterRadius = GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.waterLevel;
+
+    for (const spawn of [...MAP_WEAPON_PICKUP_SPAWNS, ...CLUSTER_WEAPON_PICKUP_SPAWNS]) {
+      const terrainRadius = getTerrainRadius(
+        spawn.normal.x,
+        spawn.normal.y,
+        spawn.normal.z,
+        GAME_CONFIG,
+      );
+      expect(terrainRadius).toBeGreaterThan(waterRadius);
+    }
+  });
+
+  it("keeps the map pickup layout at two spawns per weapon", () => {
+    const counts = new Map<string, number>();
+
+    for (const spawn of MAP_WEAPON_PICKUP_SPAWNS) {
+      counts.set(spawn.weaponId, (counts.get(spawn.weaponId) ?? 0) + 1);
+    }
+
+    expect(counts.get(WeaponId.HeavyMachineGun)).toBe(2);
+    expect(counts.get(WeaponId.Bazooka)).toBe(2);
+    expect(counts.get(WeaponId.Sniper)).toBe(2);
   });
 
   it("advances the authoritative match timer inside simulation", () => {

@@ -1,5 +1,5 @@
 import { FFA_MODE, type GameModeDefinition } from "@splat/content/modes/gameModes.ts";
-import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
+import { DEFAULT_WEAPON_ID, type WeaponPickupLayout } from "@splat/content/combat/weaponDefs.ts";
 import {
   GAME_CONFIG,
   getPlanetSurfaceChordRadius,
@@ -223,14 +223,18 @@ function seedTestPaint(simState: SimMatchState): void {
   }
 }
 
-function createSimMatchState(seedPaint: boolean, lobbyEnabled: boolean): SimMatchState {
+function createSimMatchState(
+  seedPaint: boolean,
+  lobbyEnabled: boolean,
+  weaponPickupLayout: WeaponPickupLayout,
+): SimMatchState {
   const simState: SimMatchState = {
     players: new Map(),
     planets: new Map(
       PLANET_POSITIONS.map((planet) => [planet.id, createSimPlanetState(planet.id)]),
     ),
     projectiles: new Map(),
-    pickups: createWeaponPickups(GAME_CONFIG),
+    pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
     matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
@@ -248,6 +252,7 @@ function createSimMatchState(seedPaint: boolean, lobbyEnabled: boolean): SimMatc
 export interface MatchSimulationOptions {
   seedTestPaint?: boolean;
   lobbyEnabled?: boolean;
+  weaponPickupLayout?: WeaponPickupLayout;
 }
 
 function createSimPlayer(
@@ -334,6 +339,7 @@ export class MatchSimulation {
     this.simState = createSimMatchState(
       options.seedTestPaint ?? false,
       options.lobbyEnabled ?? false,
+      options.weaponPickupLayout ?? "map",
     );
   }
 

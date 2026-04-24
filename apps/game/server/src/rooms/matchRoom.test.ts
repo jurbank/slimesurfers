@@ -112,6 +112,34 @@ describe("MatchRoom", () => {
     }
   });
 
+  it("clusters weapon pickups only when CLUSTER_WEAPON_PICKUPS is true", () => {
+    const previousClusterWeaponPickups = process.env.CLUSTER_WEAPON_PICKUPS;
+    try {
+      process.env.CLUSTER_WEAPON_PICKUPS = "true";
+
+      const harness = createRoomHarness();
+      const simulation = (harness.room as unknown as { simulation: MatchSimulation }).simulation;
+      const pickups = Array.from(simulation.matchState.pickups.values());
+      const highestPairDistance = pickups.reduce((maxDistance, pickup, index) => {
+        for (const other of pickups.slice(index + 1)) {
+          const dx = pickup.pos.x - other.pos.x;
+          const dy = pickup.pos.y - other.pos.y;
+          const dz = pickup.pos.z - other.pos.z;
+          maxDistance = Math.max(maxDistance, Math.hypot(dx, dy, dz));
+        }
+        return maxDistance;
+      }, 0);
+
+      expect(highestPairDistance).toBeLessThan(50);
+    } finally {
+      if (previousClusterWeaponPickups === undefined) {
+        delete process.env.CLUSTER_WEAPON_PICKUPS;
+      } else {
+        process.env.CLUSTER_WEAPON_PICKUPS = previousClusterWeaponPickups;
+      }
+    }
+  });
+
   it("wires room lifecycle setup on create", () => {
     const harness = createRoomHarness();
 

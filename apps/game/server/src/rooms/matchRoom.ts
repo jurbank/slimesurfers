@@ -25,6 +25,10 @@ function isEnvFlagEnabled(value: string | undefined): boolean {
   return value === "true";
 }
 
+function resolveWeaponPickupLayout(): "map" | "cluster" {
+  return isEnvFlagEnabled(process.env.CLUSTER_WEAPON_PICKUPS) ? "cluster" : "map";
+}
+
 export class MatchRoom extends Room<{ state: GameState }> {
   private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
   private emoteSeq = 0;
@@ -37,6 +41,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     this.simulation = new MatchSimulation(resolveGameMode(process.env.MATCH_MODE), {
       lobbyEnabled: true,
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
+      weaponPickupLayout: resolveWeaponPickupLayout(),
     });
     this.setState(createRoomState(this.simulation.matchState));
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;

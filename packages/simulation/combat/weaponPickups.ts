@@ -1,6 +1,7 @@
 import {
-  WEAPON_PICKUP_SPAWNS,
+  getWeaponPickupSpawns,
   getWeaponDefinition,
+  type WeaponPickupLayout,
   type WeaponPickupSpawnDefinition,
 } from "@splat/content/combat/weaponDefs.ts";
 import { PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
@@ -81,9 +82,12 @@ export function createWeaponPickupState(
   };
 }
 
-export function createWeaponPickups(cfg: PickupConfig): Map<string, SimWeaponPickupState> {
+export function createWeaponPickups(
+  cfg: PickupConfig,
+  layout: WeaponPickupLayout = "map",
+): Map<string, SimWeaponPickupState> {
   return new Map(
-    WEAPON_PICKUP_SPAWNS.map((spawn) => [spawn.id, createWeaponPickupState(spawn, cfg)]),
+    getWeaponPickupSpawns(layout).map((spawn) => [spawn.id, createWeaponPickupState(spawn, cfg)]),
   );
 }
 

@@ -52,6 +52,8 @@ export interface WeaponPickupSpawnDefinition {
   respawnSeconds: number;
 }
 
+export type WeaponPickupLayout = "map" | "cluster";
+
 export const WeaponId = WeaponIds;
 
 export const DEFAULT_WEAPON_ID = WeaponId.MachineGun;
@@ -133,36 +135,85 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
   },
 };
 
-export const WEAPON_PICKUP_SPAWNS: WeaponPickupSpawnDefinition[] = [
+export const MAP_WEAPON_PICKUP_SPAWNS: WeaponPickupSpawnDefinition[] = [
   {
     id: "heavy-machinegun-ridge",
     weaponId: WeaponId.HeavyMachineGun,
     planetId: "planet-0",
-    normal: { x: -0.18, y: 0.97, z: 0.16 },
+    normal: { x: -0.31, y: -0.93, z: 0.21 },
+    respawnSeconds: 14,
+  },
+  {
+    id: "heavy-machinegun-grove",
+    weaponId: WeaponId.HeavyMachineGun,
+    planetId: "planet-0",
+    normal: { x: -0.57, y: -0.77, z: -0.29 },
     respawnSeconds: 14,
   },
   {
     id: "bazooka-east",
     weaponId: WeaponId.Bazooka,
     planetId: "planet-0",
-    normal: { x: 0.09, y: 0.996, z: 0.01 },
+    normal: { x: -0.71, y: 0.34, z: 0.62 },
     respawnSeconds: 10,
   },
   {
     id: "bazooka-west",
     weaponId: WeaponId.Bazooka,
     planetId: "planet-0",
-    normal: { x: -0.84, y: 0.5, z: -0.2 },
+    normal: { x: -0.18, y: 0.64, z: -0.75 },
     respawnSeconds: 10,
   },
   {
     id: "sniper-north",
     weaponId: WeaponId.Sniper,
     planetId: "planet-0",
-    normal: { x: 0.15, y: 0.98, z: 0.12 },
+    normal: { x: 0.22, y: 0.97, z: 0.08 },
+    respawnSeconds: 15,
+  },
+  {
+    id: "sniper-south",
+    weaponId: WeaponId.Sniper,
+    planetId: "planet-0",
+    normal: { x: 0.49, y: 0.39, z: 0.78 },
     respawnSeconds: 15,
   },
 ];
+
+export const CLUSTER_WEAPON_PICKUP_SPAWNS: WeaponPickupSpawnDefinition[] = [
+  {
+    id: "heavy-machinegun-ridge",
+    weaponId: WeaponId.HeavyMachineGun,
+    planetId: "planet-0",
+    normal: { x: 0.12, y: 0.98, z: 0.15 },
+    respawnSeconds: 14,
+  },
+  {
+    id: "bazooka-east",
+    weaponId: WeaponId.Bazooka,
+    planetId: "planet-0",
+    normal: { x: 0.22, y: 0.97, z: 0.08 },
+    respawnSeconds: 10,
+  },
+  {
+    id: "bazooka-west",
+    weaponId: WeaponId.Bazooka,
+    planetId: "planet-0",
+    normal: { x: 0.06, y: 0.99, z: 0.12 },
+    respawnSeconds: 10,
+  },
+  {
+    id: "sniper-north",
+    weaponId: WeaponId.Sniper,
+    planetId: "planet-0",
+    normal: { x: 0.28, y: 0.93, z: 0.24 },
+    respawnSeconds: 15,
+  },
+];
+
+export function getWeaponPickupSpawns(layout: WeaponPickupLayout): WeaponPickupSpawnDefinition[] {
+  return layout === "cluster" ? CLUSTER_WEAPON_PICKUP_SPAWNS : MAP_WEAPON_PICKUP_SPAWNS;
+}
 
 export function getWeaponDefinition(weaponId: WeaponId): WeaponDefinition {
   return WEAPON_DEFS[weaponId] ?? WEAPON_DEFS[DEFAULT_WEAPON_ID];
