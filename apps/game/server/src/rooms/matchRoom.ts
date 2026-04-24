@@ -1,10 +1,10 @@
 import { Room, type Client } from "@colyseus/core";
 import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
+import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
-import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import {
@@ -30,6 +30,9 @@ export class MatchRoom extends Room<{ state: GameState }> {
   private readonly departedPlayers = new Map<string, DepartedEntry>();
 
   onCreate() {
+    this.simulation = new MatchSimulation(resolveGameMode(process.env.MATCH_MODE), {
+      lobbyEnabled: true,
+    });
     this.setState(createRoomState(this.simulation.matchState));
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;
 

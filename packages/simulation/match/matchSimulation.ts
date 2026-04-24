@@ -24,7 +24,6 @@ import {
   tickWeaponPickups,
 } from "../combat/weaponPickups.ts";
 import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
-import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
 import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
@@ -38,6 +37,7 @@ import {
   type SimPlanetPaintState,
   type SimPlayerState,
 } from "./simState.ts";
+import { selectSpawnSurface } from "./spawnSelection.ts";
 
 const TICK_MS = 1000 / NETWORK_CONFIG.simulation.tickRateHz;
 const SNAPSHOT_EVERY =
@@ -250,26 +250,18 @@ function createSimPlayer(
   playerIndex: number,
   name: unknown,
   paletteIndex: number,
-  maxPlayers: number,
   mode: GameModeDefinition,
+  existingPlayers: Iterable<SimPlayerState>,
 ): SimPlayerState {
   const slot = { ...mode.assignPlayerSlot(playerIndex), paletteIndex };
-  const spawnPlanetId = mode.selectSpawnPlanet(playerIndex);
+  const spawn = selectSpawnSurface(
+    mode,
+    existingPlayers,
+    { playerIndex, teamId: slot.teamId },
+    sessionId,
+  );
   const planetPos =
-    PLANET_POSITIONS.find((planet) => planet.id === spawnPlanetId) ?? PLANET_POSITIONS[0]!;
-  const angle = (playerIndex / Math.max(1, maxPlayers)) * Math.PI * 2;
-  const spread = GAME_CONFIG.planet.radius * 0.15;
-  const spawnOffsetX = Math.cos(angle) * spread;
-  const spawnOffsetZ = Math.sin(angle) * spread;
-  const spawnDirLen = Math.hypot(spawnOffsetX, GAME_CONFIG.planet.radius, spawnOffsetZ);
-  const spawnNormal = {
-    x: spawnOffsetX / spawnDirLen,
-    y: GAME_CONFIG.planet.radius / spawnDirLen,
-    z: spawnOffsetZ / spawnDirLen,
-  };
-  const spawnRadius =
-    getTerrainRadius(spawnNormal.x, spawnNormal.y, spawnNormal.z, GAME_CONFIG) +
-    GAME_CONFIG.movement.standingHeight;
+    PLANET_POSITIONS.find((planet) => planet.id === spawn.planetId) ?? PLANET_POSITIONS[0]!;
 
   return {
     sessionId,
@@ -280,14 +272,15 @@ function createSimPlayer(
     patternId: mode.slots[slot.paletteIndex]?.patternId ?? 0,
     slimeColor: mode.slots[slot.paletteIndex]?.color ?? 0xffffff,
     pos: {
-      x: planetPos.x + spawnNormal.x * spawnRadius,
-      y: planetPos.y + spawnNormal.y * spawnRadius,
-      z: planetPos.z + spawnNormal.z * spawnRadius,
+      x: spawn.surfacePos.x,
+      y: spawn.surfacePos.y,
+      z: spawn.surfacePos.z,
     },
     vel: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: planetPos.id,
     spawnPlanetId: planetPos.id,
+    spawnNormal: { ...spawn.normal },
     movementState: PlayerMovementState.Idle,
     surfState: PlayerSurfState.None,
     isCarving: false,
@@ -359,38 +352,58 @@ export class MatchSimulation {
     return Array.from(this.simState.players.values()).map((p) => p.paletteIndex);
   }
 
-  addPlayer(sessionId: string, name?: unknown, requestedColorIndex?: unknown): SimPlayerState {
-    const playerIndex = this.playerCount++;
+  private resolvePaletteIndex(
+    playerIndex: number,
+    requestedColorIndex: unknown,
+    assignedTeamId: number,
+  ): number {
     const taken = new Set(this.takenColorIndices());
     const paletteLen = this.mode.slots.length;
-    let paletteIndex = playerIndex % paletteLen;
     const requestedPaletteIndex =
       typeof requestedColorIndex === "number" && Number.isSafeInteger(requestedColorIndex)
         ? requestedColorIndex
         : null;
+    const matchesTeam = (paletteIndex: number): boolean =>
+      !this.mode.isTeamBased || this.mode.slots[paletteIndex]?.teamId === assignedTeamId;
+
     if (
       requestedPaletteIndex !== null &&
       requestedPaletteIndex >= 0 &&
       requestedPaletteIndex < paletteLen &&
-      !taken.has(requestedPaletteIndex)
+      !taken.has(requestedPaletteIndex) &&
+      matchesTeam(requestedPaletteIndex)
     ) {
-      paletteIndex = requestedPaletteIndex;
-    } else {
-      for (let i = 0; i < paletteLen; i++) {
-        const idx = (playerIndex + i) % paletteLen;
-        if (!taken.has(idx)) {
-          paletteIndex = idx;
-          break;
-        }
-      }
+      return requestedPaletteIndex;
     }
+
+    for (let i = 0; i < paletteLen; i++) {
+      const idx = (playerIndex + i) % paletteLen;
+      if (!taken.has(idx) && matchesTeam(idx)) return idx;
+    }
+
+    for (let i = 0; i < paletteLen; i++) {
+      const idx = (playerIndex + i) % paletteLen;
+      if (!taken.has(idx)) return idx;
+    }
+
+    return playerIndex % paletteLen;
+  }
+
+  addPlayer(sessionId: string, name?: unknown, requestedColorIndex?: unknown): SimPlayerState {
+    const playerIndex = this.playerCount++;
+    const assignedSlot = this.mode.assignPlayerSlot(playerIndex);
+    const paletteIndex = this.resolvePaletteIndex(
+      playerIndex,
+      requestedColorIndex,
+      assignedSlot.teamId,
+    );
     const player = createSimPlayer(
       sessionId,
       playerIndex,
       name,
       paletteIndex,
-      this.maxPlayers,
       this.mode,
+      this.simState.players.values(),
     );
     this.simState.players.set(sessionId, player);
     this.inputQueues.set(sessionId, []);
@@ -573,8 +586,22 @@ export class MatchSimulation {
       }
     });
 
-    const paintStamps = tickProjectiles(this.simState, dtMs, PLANETS, GAME_CONFIG, (event) =>
-      this.recordKillEvent(event),
+    const paintStamps = tickProjectiles(
+      this.simState,
+      dtMs,
+      PLANETS,
+      GAME_CONFIG,
+      (player) =>
+        selectSpawnSurface(
+          this.mode,
+          this.simState.players.values(),
+          {
+            playerIndex: player.paintGroupId + player.deathCount,
+            teamId: player.teamId,
+          },
+          player.sessionId,
+        ),
+      (event) => this.recordKillEvent(event),
     );
     for (const stamp of paintStamps) {
       this.recordPaintStamp(stamp);

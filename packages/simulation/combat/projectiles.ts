@@ -28,6 +28,7 @@ import {
   type SimProjectileState,
   type SimVec3,
 } from "../match/simState.ts";
+import type { SpawnSelection } from "../match/spawnSelection.ts";
 
 export interface CombatConfig {
   player: {
@@ -36,6 +37,7 @@ export interface CombatConfig {
   };
   movement: {
     collisionRadius: number;
+    standingHeight: number;
   };
   slime: {
     maxLevel: number;
@@ -73,6 +75,7 @@ export interface CombatConfig {
 
 type PendingKillEvent = Omit<KillEventMessage, "seq">;
 type RecordKillEvent = (event: PendingKillEvent) => void;
+type SelectRespawnPoint = (player: SimPlayerState) => SpawnSelection;
 
 function add(a: Vec3Data, b: Vec3Data): SimVec3 {
   return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
@@ -590,20 +593,33 @@ function applyBlastImpulse(
   });
 }
 
-function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: CombatConfig): void {
-  const planet = planets.find((candidate) => candidate.id === player.spawnPlanetId) ?? planets[0];
+function respawnPlayer(
+  player: SimPlayerState,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+  selectRespawnPoint?: SelectRespawnPoint,
+): void {
+  const selectedSpawn = selectRespawnPoint?.(player);
+  const planetId = selectedSpawn?.planetId ?? player.spawnPlanetId;
+  const planet = planets.find((candidate) => candidate.id === planetId) ?? planets[0];
   if (!planet) return;
 
-  // Spawn above the terrain at the top of the planet (+Y direction)
-  const spawnRadius = getTerrainRadius(0, 1, 0, cfg);
+  const spawnNormal = selectedSpawn?.normal ?? player.spawnNormal ?? { x: 0, y: 1, z: 0 };
+  const surfaceRadius = selectedSpawn
+    ? distance(selectedSpawn.surfacePos, planet.center)
+    : getTerrainRadius(spawnNormal.x, spawnNormal.y, spawnNormal.z, cfg) +
+      cfg.movement.standingHeight;
+  const dropInRadius = surfaceRadius + cfg.respawn.dropInHeight + cfg.movement.collisionRadius;
   player.pos = {
-    x: planet.center.x,
-    y: planet.center.y + spawnRadius + cfg.respawn.dropInHeight + cfg.movement.collisionRadius,
-    z: planet.center.z,
+    x: planet.center.x + spawnNormal.x * dropInRadius,
+    y: planet.center.y + spawnNormal.y * dropInRadius,
+    z: planet.center.z + spawnNormal.z * dropInRadius,
   };
   player.vel = { x: 0, y: 0, z: 0 };
   player.rot = { x: 0, y: 0, z: 0, w: 1 };
   player.planetId = planet.id;
+  player.spawnPlanetId = planet.id;
+  player.spawnNormal = { ...spawnNormal };
   player.health = cfg.player.maxHealth;
   player.slimeLevel = cfg.slime.maxLevel;
   player.respawnTimer = 0;
@@ -798,6 +814,7 @@ export function tickProjectiles(
   dtMs: number,
   planets: PlanetData[],
   cfg: CombatConfig,
+  selectRespawnPoint?: SelectRespawnPoint,
   recordKillEvent?: RecordKillEvent,
 ): PaintStampMessage[] {
   const paintStamps: PaintStampMessage[] = [];
@@ -805,7 +822,7 @@ export function tickProjectiles(
     if (player.movementState !== PlayerMovementState.Dead) return;
     player.respawnTimer = Math.max(0, player.respawnTimer - dtMs / 1000);
     if (player.respawnTimer === 0) {
-      respawnPlayer(player, planets, cfg);
+      respawnPlayer(player, planets, cfg, selectRespawnPoint);
     }
   });
 

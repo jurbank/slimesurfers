@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
-import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
+import { DEV_MODE, FFA_MODE, TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
@@ -23,6 +23,17 @@ function createForwardInput(seq: number): InputMessage {
 function snapshotX(simulation: MatchSimulation, sessionId: string): number {
   return simulation.buildSnapshotMessage().players.find((player) => player.sessionId === sessionId)!
     .pos.x;
+}
+
+function distanceBetweenPlayers(
+  first: ReturnType<MatchSimulation["addPlayer"]>,
+  second: ReturnType<MatchSimulation["addPlayer"]>,
+): number {
+  return Math.hypot(
+    first.pos.x - second.pos.x,
+    first.pos.y - second.pos.y,
+    first.pos.z - second.pos.z,
+  );
 }
 
 function surfaceNormalForCell(row: number, col: number): { x: number; y: number; z: number } {
@@ -231,6 +242,55 @@ describe("MatchSimulation", () => {
     expect(first.slimeColor).toBe(FFA_MODE.palette[0]);
     expect(second.slimeColor).toBe(FFA_MODE.palette[1]);
     expect(simulation.buildLeaderboardMessage().teamScores).toHaveLength(0);
+  });
+
+  it("spreads new ffa spawns away from existing alive players", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+
+    const first = simulation.addPlayer("session-1", "Alpha");
+    const second = simulation.addPlayer("session-2", "Bravo");
+    const third = simulation.addPlayer("session-3", "Charlie");
+
+    expect(distanceBetweenPlayers(first, second)).toBeGreaterThan(55);
+    expect(distanceBetweenPlayers(first, third)).toBeGreaterThan(40);
+    expect(distanceBetweenPlayers(second, third)).toBeGreaterThan(40);
+  });
+
+  it("keeps team players on team colors and team-local spawn zones", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", 1);
+    const bravo = simulation.addPlayer("session-2", "Bravo", 0);
+    const charlie = simulation.addPlayer("session-3", "Charlie");
+    const delta = simulation.addPlayer("session-4", "Delta");
+
+    expect(alpha.teamId).toBe(0);
+    expect(charlie.teamId).toBe(0);
+    expect(bravo.teamId).toBe(1);
+    expect(delta.teamId).toBe(1);
+    expect(alpha.paintGroupId).toBe(0);
+    expect(bravo.paintGroupId).toBe(1);
+    expect(alpha.slimeColor).toBe(TEAMS_MODE.teamColors[0]);
+    expect(bravo.slimeColor).toBe(TEAMS_MODE.teamColors[1]);
+    expect(TEAMS_MODE.slots[alpha.paletteIndex]?.teamId).toBe(alpha.teamId);
+    expect(TEAMS_MODE.slots[bravo.paletteIndex]?.teamId).toBe(bravo.teamId);
+    expect(distanceBetweenPlayers(alpha, charlie)).toBeLessThan(25);
+    expect(distanceBetweenPlayers(bravo, delta)).toBeLessThan(25);
+    expect(distanceBetweenPlayers(alpha, bravo)).toBeGreaterThan(80);
+  });
+
+  it("clusters dev spawns for faster combat testing without stacking players", () => {
+    const simulation = new MatchSimulation(DEV_MODE, { seedTestPaint: false });
+
+    const first = simulation.addPlayer("session-1", "Alpha");
+    const second = simulation.addPlayer("session-2", "Bravo");
+    const third = simulation.addPlayer("session-3", "Charlie");
+
+    expect(distanceBetweenPlayers(first, second)).toBeGreaterThan(2);
+    expect(distanceBetweenPlayers(second, third)).toBeGreaterThan(2);
+    expect(distanceBetweenPlayers(first, second)).toBeLessThan(20);
+    expect(distanceBetweenPlayers(first, third)).toBeLessThan(20);
+    expect(distanceBetweenPlayers(second, third)).toBeLessThan(20);
   });
 
   it("advances the authoritative match timer inside simulation", () => {
@@ -918,7 +978,7 @@ describe("MatchSimulation", () => {
         dt: simulation.tickIntervalMs / 1000,
       });
       simulation.tick(simulation.tickIntervalMs);
-      if (shooter.equippedWeaponId === DEFAULT_WEAPON_ID) break;
+      if (shooter.disposableShotsRemaining === 0) break;
     }
 
     expect(shooter.equippedWeaponId).toBe(DEFAULT_WEAPON_ID);
@@ -1175,6 +1235,7 @@ describe("MatchSimulation", () => {
     expect(target.health).toBe(GAME_CONFIG.player.maxHealth);
     expect(target.movementState).toBe(PlayerMovementState.Idle);
     expect(target.respawnTimer).toBe(0);
+    expect(distanceBetweenPlayers(shooter, target)).toBeGreaterThan(40);
   });
 
   it("counts one kill and one death for an elimination in the leaderboard payload", () => {

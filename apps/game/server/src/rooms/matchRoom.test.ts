@@ -75,6 +75,23 @@ function createRoomHarness() {
 }
 
 describe("MatchRoom", () => {
+  it("uses the configured server match mode", () => {
+    const previousMode = process.env.MATCH_MODE;
+    process.env.MATCH_MODE = "dev";
+
+    const harness = createRoomHarness();
+
+    expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+      "dev",
+    );
+
+    if (previousMode === undefined) {
+      delete process.env.MATCH_MODE;
+    } else {
+      process.env.MATCH_MODE = previousMode;
+    }
+  });
+
   it("wires room lifecycle setup on create", () => {
     const harness = createRoomHarness();
 

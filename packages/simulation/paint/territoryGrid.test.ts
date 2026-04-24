@@ -20,6 +20,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: "planet-0",
     spawnPlanetId: "planet-0",
+    spawnNormal: { x: 0, y: 1, z: 0 },
     movementState: 0,
     surfState: 0,
     isCarving: false,

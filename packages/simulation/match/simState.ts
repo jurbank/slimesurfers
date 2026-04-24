@@ -106,6 +106,7 @@ export interface SimPlayerState {
   rot: SimQuat;
   planetId: string;
   spawnPlanetId: string;
+  spawnNormal: SimVec3;
   /** Use PlayerMovementState values. Named movementState to avoid the confusing playerState.state pattern. */
   movementState: number;
   surfState: number;
