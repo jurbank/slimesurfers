@@ -78,14 +78,14 @@ export const PlayerMovementState = {
 } as const;
 export type PlayerMovementState = (typeof PlayerMovementState)[keyof typeof PlayerMovementState];
 
-export const PlayerSwimState = {
+export const PlayerSurfState = {
   None: 0,
-  SwimmingMoving: 1,
-  SwimmingHidden: 2,
+  SurfmingMoving: 1,
+  SurfmingHidden: 2,
   SkiVisible: 3,
   SkiWater: 4,
 } as const;
-export type PlayerSwimState = (typeof PlayerSwimState)[keyof typeof PlayerSwimState];
+export type PlayerSurfState = (typeof PlayerSurfState)[keyof typeof PlayerSurfState];
 
 export const NO_TEAM_ID = 255;
 
@@ -108,7 +108,7 @@ export interface SimPlayerState {
   spawnPlanetId: string;
   /** Use PlayerMovementState values. Named movementState to avoid the confusing playerState.state pattern. */
   movementState: number;
-  swimState: number;
+  surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
   inputSeq: number;

@@ -4,7 +4,7 @@ import { stepPlayer, type PlanetData, type PlayerPhysics } from "./simulatedMove
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import {
   PlayerMovementState,
-  PlayerSwimState,
+  PlayerSurfState,
   type SimPlanetPaintState,
 } from "@splat/simulation/match/simState.ts";
 import { createStampBuckets } from "@splat/simulation/paint/paintDetection.ts";
@@ -38,9 +38,9 @@ const TEST_CONFIG = {
     friendlyPaintSpeedMultiplier: 1.5,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 6,
-    swimSpeedMultiplier: 2.4,
-    swimAccelerationMultiplier: 3.0,
-    swimDisturbanceMinSpeed: 1.5,
+    surfSpeedMultiplier: 2.4,
+    surfAccelerationMultiplier: 3.0,
+    surfDisturbanceMinSpeed: 1.5,
     waterSkiSpeedMultiplier: 2.8,
     waterSkiAccelerationMultiplier: 2.5,
     waterSkiFriction: 0.6,
@@ -82,7 +82,7 @@ function createPlayer(): PlayerPhysics {
     planetId: "planet-0",
     paintGroupId: 1,
     movementState: PlayerMovementState.Idle,
-    swimState: PlayerSwimState.None,
+    surfState: PlayerSurfState.None,
     isCarving: false,
     skiJumpCharge: 0,
   };
@@ -161,7 +161,7 @@ describe("stepPlayer", () => {
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
     expect(player.vel.y).toBeGreaterThan(TEST_CONFIG.movement.jumpImpulse * 0.8);
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
   it("carries normal movement input into a jump", () => {
@@ -209,7 +209,7 @@ describe("stepPlayer", () => {
     }
 
     expect(boostedPlayer.planetId).toBe("planet-0");
-    expect(boostedPlayer.swimState).toBe(PlayerSwimState.SwimmingMoving);
+    expect(boostedPlayer.surfState).toBe(PlayerSurfState.SurfmingMoving);
     expect(
       Math.hypot(boostedPlayer.vel.x, boostedPlayer.vel.y, boostedPlayer.vel.z),
     ).toBeGreaterThan(Math.hypot(normalPlayer.vel.x, normalPlayer.vel.y, normalPlayer.vel.z));
@@ -240,7 +240,7 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("planet-0");
     expect(player.movementState).toBe(PlayerMovementState.Idle);
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
   it("lets ski traversal leave the surface when the free path rises beyond snap distance", () => {
@@ -253,7 +253,7 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
   });
 
   it("keeps ski mode when landing back on slime after becoming airborne", () => {
@@ -261,7 +261,7 @@ describe("stepPlayer", () => {
     const paint = createPaintMap(player.paintGroupId);
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.swimState = PlayerSwimState.SwimmingMoving;
+    player.surfState = PlayerSurfState.SurfmingMoving;
     player.pos.y += 1;
     player.vel.y = -20;
 
@@ -269,14 +269,14 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.swimState).not.toBe(PlayerSwimState.None);
+    expect(player.surfState).not.toBe(PlayerSurfState.None);
   });
 
   it("keeps ski mode after landing on neutral ground", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.swimState = PlayerSwimState.SwimmingMoving;
+    player.surfState = PlayerSurfState.SurfmingMoving;
     player.pos.y += 1;
     player.vel.y = -20;
 
@@ -284,7 +284,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.swimState).not.toBe(PlayerSwimState.None);
+    expect(player.surfState).not.toBe(PlayerSurfState.None);
   });
 
   it("keeps upward stored velocity grounded in normal mode without jump input", () => {
@@ -295,7 +295,7 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("planet-0");
     expect(player.movementState).not.toBe(PlayerMovementState.Airborne);
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
   it("stops tangent velocity in normal mode without movement input", () => {
@@ -410,7 +410,7 @@ describe("stepPlayer", () => {
     const speed = Math.hypot(player.vel.x, player.vel.y, player.vel.z);
     expect(speed).toBeGreaterThan(0);
     expect(speed).toBeLessThanOrEqual(
-      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.swimSpeedMultiplier * 1.05,
+      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.surfSpeedMultiplier * 1.05,
     );
   });
 
@@ -427,7 +427,7 @@ describe("stepPlayer", () => {
       paint,
     );
 
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingMoving);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeGreaterThan(0);
   });
 
@@ -437,7 +437,7 @@ describe("stepPlayer", () => {
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
     expect(player.movementState).toBe(PlayerMovementState.Idle);
   });
 
@@ -448,7 +448,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
   });
 
   it("exits ski mode when toggled again", () => {
@@ -458,7 +458,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
   it("keeps ski mode while firing", () => {
@@ -468,7 +468,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Fire), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
   });
 
   it("allows visible ski mode on enemy paint", () => {
@@ -484,7 +484,7 @@ describe("stepPlayer", () => {
       paint,
     );
 
-    expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
+    expect(player.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeGreaterThan(0);
   });
 
@@ -504,7 +504,7 @@ describe("stepPlayer", () => {
     player.vel.z = 18;
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemyPaint);
 
-    expect(player.swimState).toBe(PlayerSwimState.SkiVisible);
+    expect(player.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.moveSpeed);
   });
 
@@ -530,7 +530,7 @@ describe("stepPlayer", () => {
     );
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.swimState).toBe(PlayerSwimState.SwimmingMoving);
+    expect(player.surfState).toBe(PlayerSurfState.SurfmingMoving);
     expect(player.isCarving).toBe(true);
     expect(player.movementState).toBe(PlayerMovementState.Moving);
     expect(player.vel.z).toBeGreaterThan(0);
@@ -550,7 +550,7 @@ describe("stepPlayer", () => {
     );
     stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.swimState).not.toBe(PlayerSwimState.None);
+    expect(player.surfState).not.toBe(PlayerSurfState.None);
     expect(player.isCarving).toBe(false);
   });
 
@@ -558,7 +558,7 @@ describe("stepPlayer", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.swimState = PlayerSwimState.SwimmingMoving;
+    player.surfState = PlayerSurfState.SurfmingMoving;
 
     stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
 
@@ -574,7 +574,7 @@ describe("stepPlayer", () => {
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.swimState).toBe(PlayerSwimState.None);
+    expect(player.surfState).toBe(PlayerSurfState.None);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
   });
 });

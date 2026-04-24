@@ -5,7 +5,7 @@ import {
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
+import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
@@ -14,7 +14,7 @@ interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
-  swimState: number;
+  surfState: number;
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
@@ -70,7 +70,7 @@ export class RemotePlayer {
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
     this.jsrOutline.visible = true;
-    this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
+    this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
     this.trickChargeEffect.update(state, dt);
@@ -81,13 +81,13 @@ export class RemotePlayer {
 
     const airborne = state.movementState === PlayerMovementState.Airborne;
     const submerged =
-      state.swimState === PlayerSwimState.SwimmingMoving ||
-      state.swimState === PlayerSwimState.SwimmingHidden;
+      state.surfState === PlayerSurfState.SurfmingMoving ||
+      state.surfState === PlayerSurfState.SurfmingHidden;
     const effectivelySubmerged = submerged && !airborne && !state.isShooting;
 
     this.mesh.visible = !effectivelySubmerged;
 
-    if (effectivelySubmerged && state.swimState === PlayerSwimState.SwimmingMoving) {
+    if (effectivelySubmerged && state.surfState === PlayerSurfState.SurfmingMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
       const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;

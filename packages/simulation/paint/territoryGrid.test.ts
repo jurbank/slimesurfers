@@ -21,7 +21,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     planetId: "planet-0",
     spawnPlanetId: "planet-0",
     movementState: 0,
-    swimState: 0,
+    surfState: 0,
     isCarving: false,
     skiJumpCharge: 0,
     inputSeq: 0,

@@ -11,7 +11,7 @@ import type {
 } from "@splat/protocol/network/serverMessages.ts";
 import {
   PlayerMovementState,
-  PlayerSwimState,
+  PlayerSurfState,
   type SimMatchState,
   type SimPlayerState,
 } from "../match/simState.ts";
@@ -93,7 +93,7 @@ function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): Pain
     GAME_CONFIG.tricks.maxRadiusMultiplier,
     (GAME_CONFIG.tricks.radiusMultiplier +
       Math.max(0, player.airTrickCombo - 1) * GAME_CONFIG.tricks.comboRadiusBonus) *
-      player.airTrickPaintMultiplier,
+    player.airTrickPaintMultiplier,
   );
   const stamps: PaintStampMessage[] = [];
 
@@ -220,7 +220,7 @@ export function processAirTricks(
   player.airTrickAirTimeMs += dtMs;
   player.airTrickInputAgeMs += dtMs;
 
-  if (player.swimState === PlayerSwimState.None) return empty;
+  if (player.surfState === PlayerSurfState.None) return empty;
   if (player.airTrickAirTimeMs < GAME_CONFIG.tricks.minAirTimeMs) return empty;
 
   if (player.airTrickInputAgeMs > GAME_CONFIG.tricks.inputWindowMs) {

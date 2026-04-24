@@ -22,7 +22,7 @@ export interface PlayerSnapshot {
   planetId: string;
   paintGroupId: number;
   movementState: number;
-  swimState: number;
+  surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
   isShooting: boolean;

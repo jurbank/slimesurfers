@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PlayerSwimState } from "@splat/simulation/match/simState.ts";
+import { PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import type { RuntimePlayerState } from "../network/runtimeState.ts";
 
 const TRAIL_MAX_POINTS = 20;
@@ -88,12 +88,12 @@ export class SkiTrailSystem {
   }
 
   update(state: RuntimePlayerState | null, planetCenter: THREE.Vector3, slimeColor: number): void {
-    const swimState = state?.swimState ?? PlayerSwimState.None;
+    const surfState = state?.surfState ?? PlayerSurfState.None;
     const isSkiing =
-      swimState === PlayerSwimState.SkiVisible ||
-      swimState === PlayerSwimState.SkiWater ||
-      swimState === PlayerSwimState.SwimmingMoving ||
-      swimState === PlayerSwimState.SwimmingHidden;
+      surfState === PlayerSurfState.SkiVisible ||
+      surfState === PlayerSurfState.SkiWater ||
+      surfState === PlayerSurfState.SurfmingMoving ||
+      surfState === PlayerSurfState.SurfmingHidden;
 
     if (!isSkiing || !state) {
       this.clear();
@@ -126,11 +126,11 @@ export class SkiTrailSystem {
     }
 
     // Set trail color: light blue-white for water, slime color for paint.
-    const trailHex = swimState === PlayerSwimState.SkiWater ? WATER_TRAIL_COLOR : slimeColor;
+    const trailHex = surfState === PlayerSurfState.SkiWater ? WATER_TRAIL_COLOR : slimeColor;
     this.material.uniforms.trailColor.value.setHex(trailHex);
 
     const halfWidth =
-      swimState === PlayerSwimState.SkiWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
+      surfState === PlayerSurfState.SkiWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
 
     // Surface up direction at current position (radial out from planet).
     this._up.set(x, y, z).sub(planetCenter).normalize();
@@ -190,7 +190,7 @@ export class SkiTrailSystem {
         posArr[(i * 2 + 1) * 3] =
         posArr[(i * 2 + 1) * 3 + 1] =
         posArr[(i * 2 + 1) * 3 + 2] =
-          0;
+        0;
       alphaArr[i * 2] = alphaArr[i * 2 + 1] = 0;
     }
 

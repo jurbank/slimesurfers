@@ -8,7 +8,7 @@ import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
-import { PlayerMovementState, PlayerSwimState } from "./simState.ts";
+import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
 
 function createForwardInput(seq: number): InputMessage {
@@ -111,7 +111,7 @@ function makeAirborneSkier(player: ReturnType<MatchSimulation["addPlayer"]>): vo
   player.vel = { x: 0, y: 6, z: 0 };
   player.planetId = "";
   player.movementState = PlayerMovementState.Airborne;
-  player.swimState = PlayerSwimState.SkiVisible;
+  player.surfState = PlayerSurfState.SkiVisible;
   player.airTrickAirTimeMs = GAME_CONFIG.tricks.minAirTimeMs;
 }
 
@@ -192,7 +192,7 @@ describe("MatchSimulation", () => {
 
     expect(snapshot.players).toHaveLength(1);
     expect(snapshot.players[0]?.paintGroupId).toBe(player.paintGroupId);
-    expect(snapshot.players[0]?.swimState).toBe(PlayerSwimState.None);
+    expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.None);
     expect(snapshot.players[0]?.equippedWeaponId).toBe(player.equippedWeaponId);
     expect(snapshot.players[0]?.slimeLevel).toBe(player.slimeLevel);
     expect(snapshot.pickups.length).toBeGreaterThan(0);
@@ -483,8 +483,8 @@ describe("MatchSimulation", () => {
 
   it("keeps ski mode active and fires on the same tick", () => {
     const simulation = new MatchSimulation();
-    const swimmer = simulation.addPlayer("session-1", "Alpha");
-    paintPlayerSurface(simulation, swimmer.sessionId, swimmer.paintGroupId);
+    const surfmer = simulation.addPlayer("session-1", "Alpha");
+    paintPlayerSurface(simulation, surfmer.sessionId, surfmer.paintGroupId);
 
     simulation.recordInput("session-1", {
       seq: 1,
@@ -494,7 +494,7 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(swimmer.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(surfmer.surfState).toBe(PlayerSurfState.SurfmingHidden);
 
     simulation.recordInput("session-1", {
       seq: 2,
@@ -504,7 +504,7 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(swimmer.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(surfmer.surfState).toBe(PlayerSurfState.SurfmingHidden);
     expect(simulation.matchState.projectiles.size).toBe(1);
     expect(simulation.buildSnapshotMessage().players[0]?.isShooting).toBe(true);
   });
@@ -583,7 +583,7 @@ describe("MatchSimulation", () => {
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
 
-    player.swimState = PlayerSwimState.None;
+    player.surfState = PlayerSurfState.None;
     simulation.recordInput("session-1", trickInput(1, InputKey.Left));
     simulation.tick(simulation.tickIntervalMs);
     simulation.recordInput("session-1", trickInput(2, InputKey.Right));
@@ -591,7 +591,7 @@ describe("MatchSimulation", () => {
     expect(player.airTrickCombo).toBe(0);
     expect(simulation.drainPaintStampMessages()).toHaveLength(0);
 
-    player.swimState = PlayerSwimState.SkiVisible;
+    player.surfState = PlayerSurfState.SkiVisible;
     player.airTrickAirTimeMs = 0;
     simulation.recordInput("session-1", trickInput(3, InputKey.Left));
     simulation.tick(simulation.tickIntervalMs);
@@ -698,7 +698,7 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(target.swimState).toBe(PlayerSwimState.SwimmingHidden);
+    expect(target.surfState).toBe(PlayerSurfState.SurfmingHidden);
 
     simulation.matchState.projectiles.set("hit-submerged", {
       id: "hit-submerged",
@@ -714,7 +714,7 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(target.swimState).toBe(PlayerSwimState.None);
+    expect(target.surfState).toBe(PlayerSurfState.None);
     expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
   });
 
@@ -733,7 +733,7 @@ describe("MatchSimulation", () => {
 
     paintPlayerSurface(paintedSimulation, painted.sessionId, painted.paintGroupId, 0.25);
     paintPlayerSurface(submergedSimulation, submerged.sessionId, submerged.paintGroupId, 0.25);
-    submerged.swimState = PlayerSwimState.SwimmingHidden;
+    submerged.surfState = PlayerSurfState.SurfmingHidden;
 
     neutralSimulation.tick(1000);
     paintedSimulation.tick(1000);

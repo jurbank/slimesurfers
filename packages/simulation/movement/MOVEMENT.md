@@ -49,8 +49,8 @@ This state is **not** part of the prediction/reconciliation loop. It is never re
 - Surface movement is tangent to the current planet surface.
 - `aimDir` is projected onto the tangent plane to establish forward.
 - Normal grounded movement is direct combat control: movement input sets tangent velocity, and no input zeros tangent velocity.
-- Ski mode is toggled with `E` while on painted slime and is represented by `swimState !== None`.
-- Friendly ski mode uses `SwimmingMoving` while movement keys are held so remote players see only a subtle disturbance indicator, and `SwimmingHidden` when no movement keys are held so remote players see nothing.
+- Ski mode is toggled with `E` while on painted slime and is represented by `surfState !== None`.
+- Friendly ski mode uses `SurfmingMoving` while movement keys are held so remote players see only a subtle disturbance indicator, and `SurfmingHidden` when no movement keys are held so remote players see nothing.
 - Enemy ski mode uses `SkiVisible` so remote players see the skier and board.
 - In ski mode, movement input accelerates tangent velocity without discarding traversal momentum.
 - In ski mode, anchor input (space) is the Carve action: it crouches the player, keeps them held to terrain, and applies extra downward gravity.

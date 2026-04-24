@@ -54,7 +54,7 @@ import {
 } from "@splat/simulation/paint/paintDetection.ts";
 import {
   PlayerMovementState,
-  PlayerSwimState,
+  PlayerSurfState,
   type SimPlanetPaintState,
 } from "@splat/simulation/match/simState.ts";
 
@@ -1000,7 +1000,7 @@ export class MatchScene {
       const predictedLocalState = this.runtime.getLocalPlayerState();
       if (predictedLocalState) {
         const isNowAirborne = predictedLocalState.movementState === PlayerMovementState.Airborne;
-        const isNowSki = predictedLocalState.swimState !== PlayerSwimState.None;
+        const isNowSki = predictedLocalState.surfState !== PlayerSurfState.None;
         const { vel } = predictedLocalState;
         const velMag = Math.hypot(vel.x, vel.y, vel.z);
         const justLaunched =
@@ -1069,7 +1069,7 @@ export class MatchScene {
 
       if (predictedLocalState) {
         const { vel, pos } = predictedLocalState;
-        const isSki = predictedLocalState.swimState !== PlayerSwimState.None;
+        const isSki = predictedLocalState.surfState !== PlayerSurfState.None;
         const speed = Math.hypot(vel.x, vel.y, vel.z);
         const pLen = Math.hypot(pos.x, pos.y, pos.z);
         const gravDirX = pLen > 1e-6 ? pos.x / pLen : 0;

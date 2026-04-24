@@ -4,7 +4,7 @@ import {
   getWeaponDefinition,
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
-import { PlayerMovementState, PlayerSwimState } from "@splat/simulation/match/simState.ts";
+import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import { createPlayerMesh } from "./playerMesh.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
@@ -18,7 +18,7 @@ interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
-  swimState: number;
+  surfState: number;
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
@@ -83,7 +83,7 @@ export class LocalPlayer {
     if (visualRotation) {
       this.skiVisualRotation.copy(visualRotation);
       this.mesh.quaternion.copy(visualRotation);
-    } else if (state.swimState !== PlayerSwimState.None) {
+    } else if (state.surfState !== PlayerSurfState.None) {
       this.skiTargetRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
       this.skiVisualRotation.slerp(
         this.skiTargetRotation,
@@ -113,7 +113,7 @@ export class LocalPlayer {
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
     this.jsrOutline.visible = true;
-    this.snowboardMesh.visible = state.swimState !== PlayerSwimState.None;
+    this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
     this.trickChargeEffect.update(state, dt);
@@ -130,8 +130,8 @@ export class LocalPlayer {
     }
 
     const isSubmerged =
-      state.swimState === PlayerSwimState.SwimmingMoving ||
-      state.swimState === PlayerSwimState.SwimmingHidden;
+      state.surfState === PlayerSurfState.SurfmingMoving ||
+      state.surfState === PlayerSurfState.SurfmingHidden;
     const airborne = state.movementState === PlayerMovementState.Airborne;
     const effectivelySubmerged = isSubmerged && !airborne && !state.isShooting;
 
@@ -151,7 +151,7 @@ export class LocalPlayer {
     this.outlineMesh.visible = effectivelySubmerged;
     this.mesh.scale.set(1, 1, 1);
 
-    if (effectivelySubmerged && state.swimState === PlayerSwimState.SwimmingMoving) {
+    if (effectivelySubmerged && state.surfState === PlayerSurfState.SurfmingMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
       const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;

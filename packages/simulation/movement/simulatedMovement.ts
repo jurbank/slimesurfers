@@ -6,7 +6,7 @@ import {
 } from "@splat/protocol/network/clientMessages.ts";
 import {
   PlayerMovementState,
-  PlayerSwimState,
+  PlayerSurfState,
   type SimPlanetPaintState,
 } from "../match/simState.ts";
 import { getPaintAtPoint } from "../paint/paintDetection.ts";
@@ -28,7 +28,7 @@ export interface PlayerPhysics {
   planetId: string;
   paintGroupId: number;
   movementState: number;
-  swimState: number;
+  surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
 }
@@ -56,9 +56,9 @@ export interface StepConfig {
     friendlyPaintSpeedMultiplier: number;
     enemySpeedMultiplier: number;
     groundedDeceleration: number;
-    swimSpeedMultiplier: number;
-    swimAccelerationMultiplier: number;
-    swimDisturbanceMinSpeed: number;
+    surfSpeedMultiplier: number;
+    surfAccelerationMultiplier: number;
+    surfDisturbanceMinSpeed: number;
     waterSkiSpeedMultiplier: number;
     waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
@@ -309,18 +309,18 @@ function stepOnSurface(
   // Terrain below water triggers water skiing when the player is still at the surface,
   // or when they're already water skiing (to prevent submerged paint pulling them down).
   const onWater =
-    terrainBelowWater && (playerAboveWater || state.swimState === PlayerSwimState.SkiWater);
+    terrainBelowWater && (playerAboveWater || state.surfState === PlayerSurfState.SkiWater);
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
-  const wasSkiActive = state.swimState !== PlayerSwimState.None;
+  const wasSkiActive = state.surfState !== PlayerSurfState.None;
   let skiActive = wasSkiActive;
 
   if (onWater) {
     // Don't water ski if the player is already submerged and on paint — they intentionally went under.
     const wasSubmerged =
       !playerAboveWater &&
-      (state.swimState === PlayerSwimState.SwimmingMoving ||
-        state.swimState === PlayerSwimState.SwimmingHidden);
+      (state.surfState === PlayerSurfState.SurfmingMoving ||
+        state.surfState === PlayerSurfState.SurfmingHidden);
     skiActive = wasSkiActive && !wasSubmerged && !toggleSubmerge;
   } else if (toggleSubmerge) {
     skiActive = !skiActive;
@@ -348,7 +348,7 @@ function stepOnSurface(
   if (onWater && skiActive) {
     speedMultiplier = cfg.movement.waterSkiSpeedMultiplier;
   } else if (skiActive) {
-    speedMultiplier = cfg.movement.swimSpeedMultiplier;
+    speedMultiplier = cfg.movement.surfSpeedMultiplier;
   } else if (onEnemyPaint) {
     speedMultiplier = cfg.movement.enemySpeedMultiplier;
   } else if (onFriendlyPaint) {
@@ -366,7 +366,7 @@ function stepOnSurface(
       add(jumpTangentVel, scale(oldContact.radialNormal, cfg.movement.jumpImpulse)),
     );
     state.planetId = "";
-    state.swimState = PlayerSwimState.None;
+    state.surfState = PlayerSurfState.None;
     state.isCarving = false;
     state.movementState = PlayerMovementState.Airborne;
     assign(
@@ -473,7 +473,7 @@ function stepOnSurface(
       baseSpeed * 0.5,
       baseSpeed * carvingBoost + Math.max(0, slopeAccel) * 0.6,
     );
-    const baseAcceleration = baseSpeed * cfg.movement.swimAccelerationMultiplier;
+    const baseAcceleration = baseSpeed * cfg.movement.surfAccelerationMultiplier;
     const currentSpeed = Math.max(0, dot(state.vel, moveDir));
     const desiredTangentVel = hasMoveInput ? scale(moveDir, dynamicMaxSpeed) : tangentVel;
     const accelerationStep = clampLength(sub(desiredTangentVel, tangentVel), baseAcceleration * dt);
@@ -507,17 +507,17 @@ function stepOnSurface(
       state.isCarving = false;
     }
     if (onWater) {
-      state.swimState = PlayerSwimState.SkiWater;
+      state.surfState = PlayerSurfState.SkiWater;
     } else if (onFriendlyPaint) {
-      state.swimState = hasMoveInput
-        ? PlayerSwimState.SwimmingMoving
-        : PlayerSwimState.SwimmingHidden;
+      state.surfState = hasMoveInput
+        ? PlayerSurfState.SurfmingMoving
+        : PlayerSurfState.SurfmingHidden;
     } else {
-      state.swimState = PlayerSwimState.SkiVisible;
+      state.surfState = PlayerSurfState.SkiVisible;
     }
   } else {
     state.isCarving = false;
-    state.swimState = PlayerSwimState.None;
+    state.surfState = PlayerSurfState.None;
   }
 
   const gravityDir = normalize(sub(planet.center, state.pos));
@@ -592,12 +592,12 @@ function stepAirborne(
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   state.skiJumpCharge = 0;
-  if (toggleSubmerge && state.swimState === PlayerSwimState.None) {
-    state.swimState = PlayerSwimState.SkiVisible;
-  } else if (toggleSubmerge && state.swimState !== PlayerSwimState.None) {
-    state.swimState = PlayerSwimState.None;
+  if (toggleSubmerge && state.surfState === PlayerSurfState.None) {
+    state.surfState = PlayerSurfState.SkiVisible;
+  } else if (toggleSubmerge && state.surfState !== PlayerSurfState.None) {
+    state.surfState = PlayerSurfState.None;
   }
-  state.isCarving = state.swimState !== PlayerSwimState.None && anchorPressed;
+  state.isCarving = state.surfState !== PlayerSurfState.None && anchorPressed;
   const nearest = getNearestPlanet(state.pos, planets);
 
   if (nearest !== null) {
@@ -646,7 +646,7 @@ function stepAirborne(
     const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
     // Skiers land at the water surface, not the ocean floor — preserves ski state through the arc.
     const landingRadius =
-      state.swimState !== PlayerSwimState.None && rawLandingRadius < waterRadius
+      state.surfState !== PlayerSurfState.None && rawLandingRadius < waterRadius
         ? waterRadius
         : rawLandingRadius;
     if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
@@ -681,7 +681,7 @@ export function stepPlayer(
   planetPaint: Map<string, SimPlanetPaintState>,
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
-    state.swimState = PlayerSwimState.None;
+    state.surfState = PlayerSurfState.None;
     state.isCarving = false;
     return;
   }

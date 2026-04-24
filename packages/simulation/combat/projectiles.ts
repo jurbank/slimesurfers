@@ -22,7 +22,7 @@ import { applyPaintImpact } from "../paint/stampPaint.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import {
   PlayerMovementState,
-  PlayerSwimState,
+  PlayerSurfState,
   type SimMatchState,
   type SimPlayerState,
   type SimProjectileState,
@@ -390,7 +390,7 @@ function getSlimeRechargeRate(
     return cfg.slime.passiveRechargePerSecond;
   }
 
-  return player.swimState !== PlayerSwimState.None
+  return player.surfState !== PlayerSurfState.None
     ? cfg.slime.submergedRechargePerSecond
     : cfg.slime.friendlyPaintRechargePerSecond;
 }
@@ -481,7 +481,7 @@ function applyDamage(
 ): boolean {
   if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return false;
 
-  player.swimState = PlayerSwimState.None;
+  player.surfState = PlayerSurfState.None;
   player.isCarving = false;
   player.health = Math.max(0, player.health - damage);
   if (player.health > 0) return false;
@@ -585,7 +585,7 @@ function applyBlastImpulse(
     assign(player.vel, add(player.vel, scale(blastDir, blastImpulse * falloff)));
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.swimState = PlayerSwimState.None;
+    player.surfState = PlayerSurfState.None;
     player.isCarving = false;
   });
 }
@@ -608,7 +608,7 @@ function respawnPlayer(player: SimPlayerState, planets: PlanetData[], cfg: Comba
   player.slimeLevel = cfg.slime.maxLevel;
   player.respawnTimer = 0;
   player.movementState = PlayerMovementState.Idle;
-  player.swimState = PlayerSwimState.None;
+  player.surfState = PlayerSurfState.None;
   player.isCarving = false;
   player.equippedWeaponId = DEFAULT_WEAPON_ID;
   player.disposableShotsRemaining = 0;

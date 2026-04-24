@@ -87,7 +87,7 @@ class MobileControls {
       this.anchorDown = down;
     });
 
-    const submergeButton = this.createButton("SWIM");
+    const submergeButton = this.createButton("SURF");
     this.bindPressButton(submergeButton, () => {
       this.submergePressed = true;
     });
