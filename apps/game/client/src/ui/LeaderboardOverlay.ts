@@ -119,7 +119,8 @@ export class LeaderboardOverlay {
   }
 
   update(message: LeaderboardMessage, localSessionId: string | null, matchTimerSeconds = 0): void {
-    this.timerEl.textContent = LeaderboardOverlay.formatTimer(matchTimerSeconds);
+    this.timerEl.textContent =
+      matchTimerSeconds > 0 ? LeaderboardOverlay.formatTimer(matchTimerSeconds) : "";
     this.list.replaceChildren();
     this.progressBar.replaceChildren();
 

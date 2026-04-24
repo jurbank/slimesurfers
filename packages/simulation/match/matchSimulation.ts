@@ -218,7 +218,7 @@ function seedTestPaint(simState: SimMatchState): void {
   }
 }
 
-function createSimMatchState(seedPaint: boolean): SimMatchState {
+function createSimMatchState(seedPaint: boolean, lobbyEnabled: boolean): SimMatchState {
   const simState: SimMatchState = {
     players: new Map(),
     planets: new Map(
@@ -226,8 +226,8 @@ function createSimMatchState(seedPaint: boolean): SimMatchState {
     ),
     projectiles: new Map(),
     pickups: createWeaponPickups(GAME_CONFIG),
-    matchPhase: MatchPhase.Active,
-    matchTimer: GAME_CONFIG.match.durationSeconds,
+    matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
+    matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
     trickSeq: 0,
     scores: new Map(),
@@ -242,6 +242,7 @@ function createSimMatchState(seedPaint: boolean): SimMatchState {
 
 export interface MatchSimulationOptions {
   seedTestPaint?: boolean;
+  lobbyEnabled?: boolean;
 }
 
 function createSimPlayer(
@@ -322,7 +323,10 @@ export class MatchSimulation {
 
   constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
     this.mode = mode;
-    this.simState = createSimMatchState(options.seedTestPaint ?? true);
+    this.simState = createSimMatchState(
+      options.seedTestPaint ?? true,
+      options.lobbyEnabled ?? false,
+    );
   }
 
   get players(): ReadonlyMap<string, SimPlayerState> {
@@ -453,7 +457,22 @@ export class MatchSimulation {
     const serverDtSec = dtMs / 1000;
     let shouldBroadcastMatchPhase = false;
 
-    if (this.simState.matchPhase === MatchPhase.Active) {
+    if (this.simState.matchPhase === MatchPhase.Lobby) {
+      if (this.simState.players.size > 0) {
+        this.simState.matchPhase = MatchPhase.Countdown;
+        this.simState.matchTimer = GAME_CONFIG.match.countdownSeconds;
+        shouldBroadcastMatchPhase = true;
+      }
+    } else if (this.simState.matchPhase === MatchPhase.Countdown) {
+      const nextTimer = Math.max(0, this.simState.matchTimer - serverDtSec);
+      if (nextTimer === 0) {
+        this.simState.matchPhase = MatchPhase.Active;
+        this.simState.matchTimer = GAME_CONFIG.match.durationSeconds;
+        shouldBroadcastMatchPhase = true;
+      } else {
+        this.simState.matchTimer = nextTimer;
+      }
+    } else if (this.simState.matchPhase === MatchPhase.Active) {
       const nextTimer = Math.max(0, this.simState.matchTimer - serverDtSec);
       shouldBroadcastMatchPhase = nextTimer !== this.simState.matchTimer && nextTimer === 0;
       this.simState.matchTimer = nextTimer;

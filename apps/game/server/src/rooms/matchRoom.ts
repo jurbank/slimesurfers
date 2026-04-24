@@ -4,6 +4,7 @@ import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/cli
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
+import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import {
@@ -21,7 +22,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type DepartedEntry = LeaderboardEntry & { playerUuid?: string };
 
 export class MatchRoom extends Room<{ state: GameState }> {
-  private simulation = new MatchSimulation();
+  private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
   private emoteSeq = 0;
   private readonly lastEmotePostMs = new Map<string, number>();
   private readonly db = new SupabaseService();
@@ -130,6 +131,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
         this.matchStartedAt = new Date();
       } else if (broadcasts.matchPhase.phase === MatchPhase.Ended) {
         void this.persistMatchResults();
+        void this.lock();
       }
     }
     if (broadcasts.snapshot) {

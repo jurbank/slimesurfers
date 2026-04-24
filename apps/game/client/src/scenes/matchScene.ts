@@ -7,9 +7,11 @@ import {
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
   EmoteEventMessage,
   KillEventMessage,
+  LeaderboardMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
@@ -31,7 +33,9 @@ import { RemotePlayer } from "../entities/player/remotePlayer.ts";
 import { ClientRuntimeState } from "../network/runtimeState.ts";
 import { CombatHud } from "../ui/CombatHud.ts";
 import { SkiDebugHud } from "../ui/SkiDebugHud.ts";
+import { CountdownOverlay } from "../ui/CountdownOverlay.ts";
 import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
+import { MatchEndOverlay } from "../ui/MatchEndOverlay.ts";
 import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { EmoteMenuOverlay } from "../ui/EmoteMenuOverlay.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
@@ -97,8 +101,15 @@ export class MatchScene {
   private readonly combatHud: CombatHud;
   private readonly skiDebugHud: SkiDebugHud;
   private readonly leaderboard: LeaderboardOverlay;
+  private readonly countdown: CountdownOverlay;
+  private readonly matchEnd: MatchEndOverlay;
   private readonly pauseMenu: PauseMenuOverlay;
   private readonly emoteMenu: EmoteMenuOverlay;
+  private lastLeaderboard: LeaderboardMessage | null = null;
+  private currentPhase: MatchPhase = MatchPhase.Lobby;
+  private connectParams: { name: string; colorIndex: number; playerUuid: string | null } | null =
+    null;
+  private reconnecting = false;
 
   private localPlayer: LocalPlayer | null = null;
   private localPlayerColor = -1;
@@ -321,6 +332,11 @@ export class MatchScene {
     this.skiDebugHud = new SkiDebugHud();
     this.skiDebugHud.setVisible(import.meta.env.VITE_DEV_MODE === "true");
     this.leaderboard = new LeaderboardOverlay();
+    this.countdown = new CountdownOverlay();
+    this.matchEnd = new MatchEndOverlay(
+      () => this.reconnect(),
+      () => window.location.reload(),
+    );
     this.pauseMenu = new PauseMenuOverlay(this.sound);
     this.emoteMenu = new EmoteMenuOverlay();
     this.pauseMenu.onResume(() => this.setPaused(false));
@@ -671,7 +687,15 @@ export class MatchScene {
     this.onDisconnectCb = cb;
   }
 
+  private reconnect(): void {
+    if (!this.connectParams) return;
+    this.reconnecting = true;
+    this.matchEnd.hide();
+    this.connection.leave();
+  }
+
   async connect(name: string, colorIndex: number, playerUuid: string | null): Promise<void> {
+    this.connectParams = { name, colorIndex, playerUuid };
     await this.connection.join(name, colorIndex, playerUuid, {
       onPlayerAdded: (
         sessionId: string,
@@ -737,7 +761,20 @@ export class MatchScene {
         this.syncPickups(snapshot, receivedAtMs);
       },
       onLeaderboard: (message) => {
-        this.leaderboard.update(message, this.connection.sessionId, this.connection.matchTimer);
+        this.lastLeaderboard = message;
+        const timer = this.currentPhase === MatchPhase.Active ? this.connection.matchTimer : 0;
+        this.leaderboard.update(message, this.connection.sessionId, timer);
+      },
+      onMatchPhase: (phase) => {
+        this.currentPhase = phase;
+        if (phase === MatchPhase.Countdown) {
+          this.countdown.show(this.connection.matchTimer);
+        } else if (phase === MatchPhase.Active) {
+          this.countdown.hide();
+        } else if (phase === MatchPhase.Ended) {
+          this.countdown.hide();
+          this.matchEnd.show(this.lastLeaderboard, this.connection.sessionId);
+        }
       },
       onDisconnect: () => {
         this.clearPlayerEntities();
@@ -749,11 +786,21 @@ export class MatchScene {
         this.trickText.clear();
         this.emoteBubbles.clear();
         this.leaderboard.clear();
+        this.countdown.hide();
+        this.matchEnd.hide();
+        this.lastLeaderboard = null;
+        this.currentPhase = MatchPhase.Lobby;
         this.emoteMenu.close(false);
         this.lastLocalHealth = null;
         this.combatHud.clear();
         this.setPaused(false);
-        this.onDisconnectCb?.();
+        if (this.reconnecting) {
+          this.reconnecting = false;
+          const { name, colorIndex, playerUuid } = this.connectParams!;
+          void this.connect(name, colorIndex, playerUuid);
+        } else {
+          this.onDisconnectCb?.();
+        }
       },
     });
   }
@@ -1058,6 +1105,9 @@ export class MatchScene {
 
       this.pickups.update(now);
       this.projectiles.update(now);
+      if (this.currentPhase === MatchPhase.Countdown) {
+        this.countdown.setSeconds(this.connection.matchTimer);
+      }
       this.leaderboard.tick(now);
       this.trickText.update(dt * 1000, this.camera.camera, (sessionId) =>
         this.getPlayerMesh(sessionId),

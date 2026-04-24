@@ -2,6 +2,7 @@ import { getStateCallbacks, type Room } from "@colyseus/sdk";
 import { colyseusClient } from "./colyseusClient.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
+import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import type {
   EmoteEventBatchMessage,
@@ -34,6 +35,7 @@ export interface RoomCallbacks {
   onKillEvents(events: KillEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
+  onMatchPhase(phase: MatchPhase, timer: number): void;
   onDisconnect(): void;
 }
 
@@ -46,6 +48,10 @@ export class RoomConnection {
 
   get matchTimer(): number {
     return this.room?.state.matchTimer ?? 0;
+  }
+
+  get matchPhase(): MatchPhase {
+    return this.room?.state.matchPhase ?? MatchPhase.Lobby;
   }
 
   async fetchTakenColorIndices(): Promise<number[]> {
@@ -93,6 +99,14 @@ export class RoomConnection {
       callbacks.onKillEvents(message.events);
     });
 
+    let lastPhase: MatchPhase | null = null;
+    this.room.onStateChange((state: GameState) => {
+      if (state.matchPhase !== lastPhase) {
+        lastPhase = state.matchPhase;
+        callbacks.onMatchPhase(state.matchPhase, state.matchTimer);
+      }
+    });
+
     const $ = getStateCallbacks(this.room);
 
     $(this.room.state.players).onAdd((player: PlayerState, sessionId: string) => {
@@ -122,6 +136,10 @@ export class RoomConnection {
       this.room = null;
       callbacks.onDisconnect();
     });
+  }
+
+  leave(): void {
+    void this.room?.leave();
   }
 
   sendInput(msg: InputMessage): void {

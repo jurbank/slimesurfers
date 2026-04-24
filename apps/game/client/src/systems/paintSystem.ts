@@ -97,10 +97,15 @@ export class PaintSystem {
     this.seenStamps.clear();
     this.stampHistory.clear();
     const currentRenderTarget = this.renderer.getRenderTarget();
+    const savedColor = new THREE.Color();
+    this.renderer.getClearColor(savedColor);
+    const savedAlpha = this.renderer.getClearAlpha();
+    this.renderer.setClearColor(0x000000, 0);
     for (const rt of this.renderTargets.values()) {
       this.renderer.setRenderTarget(rt);
       this.renderer.clear();
     }
+    this.renderer.setClearColor(savedColor, savedAlpha);
     this.renderer.setRenderTarget(currentRenderTarget);
   }
 }
