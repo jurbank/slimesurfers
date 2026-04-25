@@ -109,7 +109,7 @@ export class EmoteMenuOverlay {
     Object.assign(this.toggleButton.style, {
       position: "fixed",
       right: "18px",
-      bottom: "calc(112px + min(42vw, 184px))",
+      bottom: "18px",
       zIndex: "33",
       width: "70px",
       height: "70px",

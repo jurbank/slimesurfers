@@ -6,8 +6,6 @@ const MOVEMENT_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyE"])
 const PITCH_MIN = -1.55; // ~-89° — limit how far down the player can aim
 const PITCH_MAX = 1.55; //  ~+89° — limit how far up
 const MOBILE_DEAD_ZONE = 0.35;
-const MOBILE_FIRE_DEAD_ZONE = 0.22;
-const MOBILE_LOOK_SPEED = 0.045;
 const TOUCH_LOOK_SENSITIVITY = 0.003;
 
 type NippleManager = ReturnType<typeof nipplejs.create>;
@@ -15,14 +13,10 @@ type NippleManager = ReturnType<typeof nipplejs.create>;
 class MobileControls {
   private readonly root = document.createElement("div");
   private readonly moveStickZone = document.createElement("div");
-  private readonly aimStickZone = document.createElement("div");
   private readonly moveManager: NippleManager;
-  private readonly aimManager: NippleManager;
   private moveX = 0;
   private moveY = 0;
-  private aimX = 0;
-  private aimY = 0;
-  private aimForce = 0;
+  private fireDown = false;
   private anchorDown = false;
   private submergePressed = false;
 
@@ -58,16 +52,6 @@ class MobileControls {
       touchAction: "none",
     });
 
-    Object.assign(this.aimStickZone.style, {
-      position: "absolute",
-      right: "16px",
-      bottom: "18px",
-      width: stickSize,
-      height: stickSize,
-      pointerEvents: "auto",
-      touchAction: "none",
-    });
-
     const leftButtons = document.createElement("div");
     Object.assign(leftButtons.style, {
       position: "absolute",
@@ -81,7 +65,11 @@ class MobileControls {
     Object.assign(rightButtons.style, {
       position: "absolute",
       right: "18px",
-      bottom: "calc(30px + min(42vw, 184px))",
+      bottom: "96px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+      alignItems: "flex-end",
       pointerEvents: "auto",
       touchAction: "none",
     });
@@ -91,14 +79,19 @@ class MobileControls {
       this.anchorDown = down;
     });
 
+    const fireButton = this.createButton("FIRE");
+    this.bindHoldButton(fireButton, (down) => {
+      this.fireDown = down;
+    });
+
     const submergeButton = this.createButton("SURF");
     this.bindPressButton(submergeButton, () => {
       this.submergePressed = true;
     });
 
     leftButtons.append(submergeButton);
-    rightButtons.append(anchorButton);
-    this.root.append(this.moveStickZone, this.aimStickZone, leftButtons, rightButtons);
+    rightButtons.append(anchorButton, fireButton);
+    this.root.append(this.moveStickZone, leftButtons, rightButtons);
     document.body.append(this.root);
 
     this.moveManager = nipplejs.create({
@@ -114,19 +107,6 @@ class MobileControls {
       },
     });
 
-    this.aimManager = nipplejs.create({
-      zone: this.aimStickZone,
-      mode: "static",
-      position: { left: "50%", top: "50%" },
-      size: 118,
-      threshold: 0.1,
-      restOpacity: 0.55,
-      color: {
-        back: "rgba(255, 255, 255, 0.24)",
-        front: "rgba(255, 238, 112, 0.9)",
-      },
-    });
-
     this.moveManager.on("move", (evt) => {
       this.moveX = evt.data.vector.x;
       this.moveY = evt.data.vector.y;
@@ -134,16 +114,6 @@ class MobileControls {
     this.moveManager.on("end", () => {
       this.moveX = 0;
       this.moveY = 0;
-    });
-    this.aimManager.on("move", (evt) => {
-      this.aimX = evt.data.vector.x;
-      this.aimY = evt.data.vector.y;
-      this.aimForce = evt.data.force;
-    });
-    this.aimManager.on("end", () => {
-      this.aimX = 0;
-      this.aimY = 0;
-      this.aimForce = 0;
     });
   }
 
@@ -154,12 +124,8 @@ class MobileControls {
       (this.moveX < -MOBILE_DEAD_ZONE ? InputKey.Left : 0) |
       (this.moveX > MOBILE_DEAD_ZONE ? InputKey.Right : 0) |
       (this.anchorDown ? InputKey.Anchor : 0) |
-      (this.aimForce > MOBILE_FIRE_DEAD_ZONE ? InputKey.Fire : 0)
+      (this.fireDown ? InputKey.Fire : 0)
     );
-  }
-
-  getLookInput(): { x: number; y: number; force: number } {
-    return { x: this.aimX, y: this.aimY, force: this.aimForce };
   }
 
   consumeSubmergePress(): boolean {
@@ -173,9 +139,7 @@ class MobileControls {
     if (enabled) return;
     this.moveX = 0;
     this.moveY = 0;
-    this.aimX = 0;
-    this.aimY = 0;
-    this.aimForce = 0;
+    this.fireDown = false;
     this.anchorDown = false;
     this.submergePressed = false;
   }
@@ -398,13 +362,7 @@ export class InputSystem {
     this._tempQuat.setFromUnitVectors(this._up, newUp);
     this._localRotation.premultiply(this._tempQuat).normalize();
 
-    const mobileLook = this.mobileControls?.getLookInput();
-    if (mobileLook && mobileLook.force > MOBILE_DEAD_ZONE) {
-      this.mouseX -= mobileLook.x * MOBILE_LOOK_SPEED;
-      this.mouseY += mobileLook.y * MOBILE_LOOK_SPEED;
-    }
-
-    // 2. Apply mouse yaw (rotation around the local surface UP).
+    // 2. Apply mouse/touch yaw (rotation around the local surface UP).
     if (this.mouseX !== 0) {
       this._up.set(0, 1, 0).applyQuaternion(this._localRotation).normalize();
       this._tempQuat.setFromAxisAngle(this._up, this.mouseX);
