@@ -89,8 +89,8 @@ export class CameraSystem {
     const forwardSpeed = Math.max(
       0,
       playerVel.x * this._camForward.x +
-        playerVel.y * this._camForward.y +
-        playerVel.z * this._camForward.z,
+      playerVel.y * this._camForward.y +
+      playerVel.z * this._camForward.z,
     );
 
     // Speed smoothing: accelerate fast, decelerate slowly for a trailing-off feel.

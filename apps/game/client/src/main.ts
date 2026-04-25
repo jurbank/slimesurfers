@@ -115,6 +115,7 @@ if (!skipJoinScreen && overlay) {
     });
     if (connected) {
       overlay.hide();
+      scene.requestPointerCapture();
       scene.setEmoteToggleVisible(true);
       scene.showHint("Press E to surf");
       setTimeout(() => scene.showHint("Surf on your slime to go faster"), 7000);

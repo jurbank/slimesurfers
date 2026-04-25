@@ -710,6 +710,10 @@ export class MatchScene {
     this.emoteMenu.setToggleVisible(visible);
   }
 
+  requestPointerCapture(): void {
+    void this.render.renderer.domElement.requestPointerLock().catch(() => {});
+  }
+
   private reconnect(): void {
     if (!this.connectParams) return;
     this.reconnecting = true;
