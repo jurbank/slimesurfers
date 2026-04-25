@@ -26,6 +26,7 @@ import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
+import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
@@ -43,6 +44,7 @@ import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
 import { MatchEndOverlay } from "../ui/MatchEndOverlay.ts";
 import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { EmoteMenuOverlay } from "../ui/EmoteMenuOverlay.ts";
+import { HintToast } from "../ui/HintToast.ts";
 import { createPlanetMaterial } from "../materials/planetMaterial.ts";
 import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
 import { createWaterMaterial } from "../materials/waterMaterial.ts";
@@ -111,6 +113,7 @@ export class MatchScene {
   private readonly matchEnd: MatchEndOverlay;
   private readonly pauseMenu: PauseMenuOverlay;
   private readonly emoteMenu: EmoteMenuOverlay;
+  private readonly hintToast: HintToast;
   private lastLeaderboard: LeaderboardMessage | null = null;
   private currentPhase: MatchPhase = MatchPhase.Lobby;
   private connectParams: { name: string; colorIndex: number; playerUuid: string | null } | null =
@@ -128,6 +131,7 @@ export class MatchScene {
   private lastLocalHealth: number | null = null;
   private lastWasCarving = false;
   private lastWasAirborne = false;
+  private portal: PortalSystem | null = null;
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];
   private readonly planetOutlines: THREE.Mesh[] = [];
   private readonly atmosphereMaterials: THREE.ShaderMaterial[] = [];
@@ -346,6 +350,7 @@ export class MatchScene {
     );
     this.pauseMenu = new PauseMenuOverlay(this.sound);
     this.emoteMenu = new EmoteMenuOverlay();
+    this.hintToast = new HintToast();
     this.pauseMenu.onResume(() => this.setPaused(false));
     this.pauseMenu.onToggle(() => this.setPaused(!this.pauseMenu.isVisible()));
     this.emoteMenu.onPost((emoteIds) => this.connection.sendEmotePost(emoteIds));
@@ -390,6 +395,7 @@ export class MatchScene {
 
     // 3. Planets (heavy geometry)
     this.buildPlanets();
+    if (PORTAL_ENABLED) this.portal = new PortalSystem(this.render.scene, performance.now());
     increment();
   }
 
@@ -694,6 +700,10 @@ export class MatchScene {
 
   onDisconnect(cb: () => void): void {
     this.onDisconnectCb = cb;
+  }
+
+  showHint(message: string): void {
+    this.hintToast.show(message);
   }
 
   setEmoteToggleVisible(visible: boolean): void {
@@ -1121,6 +1131,7 @@ export class MatchScene {
       }
 
       this.pickups.update(now);
+      this.portal?.update(now, playerPos);
       this.projectiles.update(now);
       if (this.currentPhase === MatchPhase.Countdown) {
         this.countdown.setSeconds(this.connection.matchTimer);

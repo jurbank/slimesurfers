@@ -6,11 +6,10 @@ type PauseMenuCallback = () => void;
 
 const CONTROLS = [
   ["Move", "W A S D"],
-  ["Aim", "Mouse"],
+  ["Surf", "E"],
   ["Fire", "Left Mouse"],
-  ["Carve / Air Boost", "Space"],
-  ["Ski Mode", "E on friendly slime"],
-  ["😊 Emotes", "E"],
+  ["Jump / Crouch", "Space"],
+  ["😊 Emotes", "Q"],
   ["Pause", "Esc"],
 ] as const;
 

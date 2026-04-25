@@ -4,6 +4,81 @@ import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
 import { createOutlineMaterial } from "../../materials/outlineMaterial.ts";
 
+function buildSnowboardGeom(
+  halfW: number,
+  halfLen: number,
+  halfT: number,
+  upturnPeak: number,
+  tipTaper: number,
+  N: number,
+): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const idx: number[] = [];
+
+  const hwAt = (z: number) => Math.max(halfW * 0.33, halfW - tipTaper * (z / halfLen) ** 2);
+  const yAt = (z: number) => upturnPeak * Math.abs(z / halfLen) ** 2.6;
+
+  for (let i = 0; i <= N; i++) {
+    const z = -halfLen + (2 * halfLen * i) / N;
+    const hw = hwAt(z);
+    const yo = yAt(z);
+    pos.push(-hw, yo + halfT, z); // 4i   TL
+    pos.push(+hw, yo + halfT, z); // 4i+1 TR
+    pos.push(+hw, yo - halfT, z); // 4i+2 BR
+    pos.push(-hw, yo - halfT, z); // 4i+3 BL
+  }
+
+  for (let i = 0; i < N; i++) {
+    const a = 4 * i;
+    const b = 4 * (i + 1);
+    idx.push(a, a + 1, b + 1, a, b + 1, b); // top
+    idx.push(a + 3, b + 3, b + 2, a + 3, b + 2, a + 2); // bottom
+    idx.push(a, a + 3, b + 3, a, b + 3, b); // left
+    idx.push(a + 1, b + 1, b + 2, a + 1, b + 2, a + 2); // right
+  }
+
+  const f = 4 * N;
+  idx.push(f, f + 1, f + 2, f, f + 2, f + 3); // front cap
+  idx.push(0, 3, 2, 0, 2, 1); // back cap
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildStripeGeom(
+  halfW: number,
+  halfLen: number,
+  boardHalfT: number,
+  upturnPeak: number,
+  N: number,
+): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const idx: number[] = [];
+
+  for (let i = 0; i <= N; i++) {
+    const z = -halfLen + (2 * halfLen * i) / N;
+    const t = Math.abs(z / halfLen);
+    const yo = upturnPeak * t ** 2.6 + boardHalfT + 0.004;
+    pos.push(-halfW, yo, z);
+    pos.push(+halfW, yo, z);
+  }
+
+  for (let i = 0; i < N; i++) {
+    const a = 2 * i;
+    const b = 2 * (i + 1);
+    idx.push(a, a + 1, b + 1, a, b + 1, b);
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 export interface PlayerMeshRig {
   group: THREE.Group;
   liveMesh: THREE.Group;
@@ -73,7 +148,21 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   liveMesh.add(mouth);
 
   const snowboardMesh = new THREE.Group();
-  const boardGeom = new THREE.BoxGeometry(0.78, 0.08, 1.35);
+
+  const BOARD_HALF_W = 0.39;
+  const BOARD_HALF_LEN = 0.675;
+  const BOARD_HALF_T = 0.04;
+  const BOARD_UPTURN = 0.14;
+  const BOARD_SEGS = 20;
+
+  const boardGeom = buildSnowboardGeom(
+    BOARD_HALF_W,
+    BOARD_HALF_LEN,
+    BOARD_HALF_T,
+    BOARD_UPTURN,
+    0.13,
+    BOARD_SEGS,
+  );
   const boardMat = new THREE.MeshLambertMaterial({
     color: 0x1f2430,
     emissive: 0x080a10,
@@ -82,11 +171,26 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const board = new THREE.Mesh(boardGeom, boardMat);
   snowboardMesh.add(board);
 
-  const stripeGeom = new THREE.BoxGeometry(0.08, 0.012, 1.18);
+  const stripeGeom = buildStripeGeom(0.04, BOARD_HALF_LEN, BOARD_HALF_T, BOARD_UPTURN, BOARD_SEGS);
   const stripeMat = new THREE.MeshBasicMaterial({ color: slimeColor });
   const stripe = new THREE.Mesh(stripeGeom, stripeMat);
-  stripe.position.y = 0.048;
   snowboardMesh.add(stripe);
+
+  // Bindings
+  const boardTopAt = (z: number) =>
+    BOARD_UPTURN * Math.abs(z / BOARD_HALF_LEN) ** 2.6 + BOARD_HALF_T;
+  const bindingMat = new THREE.MeshLambertMaterial({
+    color: 0x3a3a44,
+    emissive: 0x0a0a10,
+    emissiveIntensity: 0.2,
+  });
+  const bindingGeom = new THREE.BoxGeometry(0.3, 0.026, 0.21);
+  const frontBinding = new THREE.Mesh(bindingGeom, bindingMat);
+  frontBinding.position.set(0, boardTopAt(0.27) + 0.013, 0.27);
+  snowboardMesh.add(frontBinding);
+  const rearBinding = new THREE.Mesh(bindingGeom, bindingMat);
+  rearBinding.position.set(0, boardTopAt(-0.23) + 0.013, -0.23);
+  snowboardMesh.add(rearBinding);
 
   snowboardMesh.position.set(0, -0.58, 0);
   snowboardMesh.visible = false;
