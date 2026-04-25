@@ -31,12 +31,18 @@ export class LeaderboardOverlay {
   private readonly killFeedSection: HTMLDivElement;
   private readonly killFeedHeader: HTMLDivElement;
   private readonly killFeedList: HTMLDivElement;
+  private readonly expandBtn: HTMLButtonElement;
 
   private readonly activeKillFeed: ActiveKillFeedItem[] = [];
   private isLeaderboardVisible = false;
   private lastKillTemplateId: string | null = null;
+  private readonly isMobile: boolean;
+  private mobileCollapsed: boolean;
 
   constructor() {
+    this.isMobile = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+    this.mobileCollapsed = this.isMobile;
+
     this.root = document.createElement("div");
     Object.assign(this.root.style, {
       position: "fixed",
@@ -70,7 +76,61 @@ export class LeaderboardOverlay {
     titleLabel.textContent = "Leaderboard";
     this.timerEl = document.createElement("span");
     this.timerEl.style.fontVariantNumeric = "tabular-nums";
-    this.title.append(titleLabel, this.timerEl);
+
+    const collapseBtn = document.createElement("button");
+    collapseBtn.textContent = "✕";
+    collapseBtn.setAttribute("aria-label", "Hide leaderboard");
+    Object.assign(collapseBtn.style, {
+      display: this.isMobile ? "" : "none",
+      marginLeft: "auto",
+      paddingLeft: "10px",
+      background: "none",
+      border: "none",
+      color: "#9fb3c8",
+      fontSize: "0.9rem",
+      lineHeight: "1",
+      cursor: "pointer",
+      pointerEvents: "auto",
+      touchAction: "none",
+    });
+    collapseBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.mobileCollapsed = true;
+      this.updateVisibility();
+    });
+
+    this.title.append(titleLabel, this.timerEl, collapseBtn);
+
+    this.expandBtn = document.createElement("button");
+    this.expandBtn.textContent = "≡";
+    this.expandBtn.setAttribute("aria-label", "Show leaderboard");
+    Object.assign(this.expandBtn.style, {
+      position: "fixed",
+      top: "16px",
+      right: "16px",
+      zIndex: "16",
+      width: "36px",
+      height: "36px",
+      border: "1px solid rgba(255, 255, 255, 0.22)",
+      borderRadius: "8px",
+      background: "rgba(8, 10, 20, 0.82)",
+      color: "#9fb3c8",
+      font: "18px system-ui, sans-serif",
+      lineHeight: "1",
+      cursor: "pointer",
+      backdropFilter: "blur(10px)",
+      pointerEvents: "auto",
+      touchAction: "none",
+      display: "none",
+    });
+    this.expandBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.mobileCollapsed = false;
+      this.updateVisibility();
+    });
+    document.body.appendChild(this.expandBtn);
 
     this.list = document.createElement("div");
     Object.assign(this.list.style, {
@@ -436,7 +496,10 @@ export class LeaderboardOverlay {
 
   private updateVisibility(): void {
     this.killFeedSection.style.display = this.activeKillFeed.length > 0 ? "block" : "none";
-    this.root.style.display =
-      this.isLeaderboardVisible || this.activeKillFeed.length > 0 ? "block" : "none";
+    const hasContent = this.isLeaderboardVisible || this.activeKillFeed.length > 0;
+    const showPanel = hasContent && (!this.isMobile || !this.mobileCollapsed);
+    this.root.style.display = showPanel ? "block" : "none";
+    this.expandBtn.style.display =
+      this.isMobile && this.mobileCollapsed && hasContent ? "" : "none";
   }
 }

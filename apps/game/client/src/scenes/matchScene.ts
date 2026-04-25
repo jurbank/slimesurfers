@@ -696,6 +696,10 @@ export class MatchScene {
     this.onDisconnectCb = cb;
   }
 
+  setEmoteToggleVisible(visible: boolean): void {
+    this.emoteMenu.setToggleVisible(visible);
+  }
+
   private reconnect(): void {
     if (!this.connectParams) return;
     this.reconnecting = true;

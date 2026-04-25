@@ -38,8 +38,6 @@ export class CombatHud {
       display: "none",
     });
 
-
-
     this.weaponLabel = document.createElement("div");
     Object.assign(this.weaponLabel.style, {
       fontSize: "0.9rem",
@@ -287,7 +285,6 @@ export class CombatHud {
     } else {
       this.disposablePips.style.display = "none";
     }
-
   }
 
   showAcquisitionOverlay(holdProgress: number, isLocked: boolean, isGuaranteed: boolean): void {

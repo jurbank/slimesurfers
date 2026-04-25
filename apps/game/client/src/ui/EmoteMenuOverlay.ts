@@ -122,10 +122,7 @@ export class EmoteMenuOverlay {
       boxShadow: "0 8px 28px rgba(0, 0, 0, 0.25)",
       touchAction: "none",
       userSelect: "none",
-      display:
-        window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0
-          ? ""
-          : "none",
+      display: "none",
     });
     this.toggleButton.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -141,6 +138,11 @@ export class EmoteMenuOverlay {
 
   onPost(handler: EmotePostHandler): void {
     this.postHandler = handler;
+  }
+
+  setToggleVisible(visible: boolean): void {
+    const isMobile = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+    this.toggleButton.style.display = visible && isMobile ? "" : "none";
   }
 
   isVisible(): boolean {

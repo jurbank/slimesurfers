@@ -101,6 +101,7 @@ if (!skipJoinScreen && overlay) {
   startPolling();
 
   scene.onDisconnect(() => {
+    scene.setEmoteToggleVisible(false);
     overlay.show("Disconnected. Try rejoining.");
     startPolling();
   });
@@ -112,6 +113,9 @@ if (!skipJoinScreen && overlay) {
       overlay.show("Could not connect. Is the server running?");
       startPolling();
     });
-    if (connected) overlay.hide();
+    if (connected) {
+      overlay.hide();
+      scene.setEmoteToggleVisible(true);
+    }
   });
 }

@@ -10,6 +10,7 @@ const CONTROLS = [
   ["Fire", "Left Mouse"],
   ["Carve / Air Boost", "Space"],
   ["Ski Mode", "E on friendly slime"],
+  ["😊 Emotes", "E"],
   ["Pause", "Esc"],
 ] as const;
 

@@ -42,7 +42,8 @@ class MobileControls {
       touchAction: "none",
       userSelect: "none",
     });
-    (this.root.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] = "transparent";
+    (this.root.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] =
+      "transparent";
     (this.root.style as unknown as Record<string, string>)["-webkit-user-select"] = "none";
 
     const stickSize = "min(42vw, 184px)";
@@ -85,7 +86,7 @@ class MobileControls {
       touchAction: "none",
     });
 
-    const anchorButton = this.createButton("CARVE/DIVE");
+    const anchorButton = this.createButton("JUMP");
     this.bindHoldButton(anchorButton, (down) => {
       this.anchorDown = down;
     });
@@ -198,7 +199,8 @@ class MobileControls {
       userSelect: "none",
       outline: "none",
     });
-    (button.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] = "transparent";
+    (button.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] =
+      "transparent";
     (button.style as unknown as Record<string, string>)["-webkit-user-select"] = "none";
     return button;
   }
