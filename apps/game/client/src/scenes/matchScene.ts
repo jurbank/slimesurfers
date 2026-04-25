@@ -700,6 +700,7 @@ export class MatchScene {
     if (!this.connectParams) return;
     this.reconnecting = true;
     this.matchEnd.hide();
+    this.input.setEnabled(true);
     this.connection.leave();
   }
 
@@ -783,6 +784,7 @@ export class MatchScene {
         } else if (phase === MatchPhase.Ended) {
           this.countdown.hide();
           this.matchEnd.show(this.lastLeaderboard, this.connection.sessionId);
+          this.input.setEnabled(false);
         }
       },
       onDisconnect: () => {

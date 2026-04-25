@@ -10,7 +10,6 @@ export class CombatHud {
   private readonly healthLabel: HTMLDivElement;
   private readonly slimeLabel: HTMLDivElement;
   private readonly disposablePips: HTMLDivElement;
-  private readonly statusLabel: HTMLDivElement;
   private readonly flash: HTMLDivElement;
   private readonly crosshair: HTMLDivElement;
   private readonly acquisitionRoot: HTMLDivElement;
@@ -39,15 +38,7 @@ export class CombatHud {
       display: "none",
     });
 
-    const title = document.createElement("div");
-    title.textContent = "Status";
-    Object.assign(title.style, {
-      fontSize: "0.75rem",
-      textTransform: "uppercase",
-      letterSpacing: "0.12em",
-      color: "#97abc0",
-      marginBottom: "10px",
-    });
+
 
     this.weaponLabel = document.createElement("div");
     Object.assign(this.weaponLabel.style, {
@@ -117,22 +108,13 @@ export class CombatHud {
       marginBottom: "6px",
     });
 
-    this.statusLabel = document.createElement("div");
-    Object.assign(this.statusLabel.style, {
-      fontSize: "0.85rem",
-      color: "#b8c6d4",
-      minHeight: "1.2em",
-    });
-
     this.root.append(
-      title,
       this.weaponLabel,
       track,
       this.healthLabel,
       slimeTrack,
       this.slimeLabel,
       this.disposablePips,
-      this.statusLabel,
     );
     document.body.appendChild(this.root);
 
@@ -306,12 +288,6 @@ export class CombatHud {
       this.disposablePips.style.display = "none";
     }
 
-    this.statusLabel.textContent =
-      respawnTimer > 0
-        ? `Respawning in ${respawnTimer.toFixed(1)}s`
-        : slimeLevel < maxSlimeLevel * 0.2
-          ? "Low slime"
-          : "Combat ready";
   }
 
   showAcquisitionOverlay(holdProgress: number, isLocked: boolean, isGuaranteed: boolean): void {

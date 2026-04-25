@@ -40,7 +40,10 @@ class MobileControls {
       zIndex: "20",
       pointerEvents: "none",
       touchAction: "none",
+      userSelect: "none",
     });
+    (this.root.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] = "transparent";
+    (this.root.style as unknown as Record<string, string>)["-webkit-user-select"] = "none";
 
     const stickSize = "min(42vw, 184px)";
 
@@ -193,7 +196,10 @@ class MobileControls {
       boxShadow: "0 8px 28px rgba(0, 0, 0, 0.25)",
       touchAction: "none",
       userSelect: "none",
+      outline: "none",
     });
+    (button.style as unknown as Record<string, string>)["-webkit-tap-highlight-color"] = "transparent";
+    (button.style as unknown as Record<string, string>)["-webkit-user-select"] = "none";
     return button;
   }
 
