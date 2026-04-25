@@ -12,6 +12,7 @@ const MAX_KILL_FEED_ITEMS = 5;
 const KILL_FEED_LIFETIME_MS = 4000;
 const KILL_FEED_ENTER_MS = 180;
 const KILL_FEED_FADE_MS = 900;
+const JOIN_PILL_LIFETIME_MS = 5000;
 const { rows: TOTAL_TERRITORY_ROWS, cols: TOTAL_TERRITORY_COLS } = getPaintTerritoryDimensions();
 const TOTAL_CELLS = TOTAL_TERRITORY_ROWS * TOTAL_TERRITORY_COLS * GAME_CONFIG.planet.count;
 
@@ -38,6 +39,10 @@ export class LeaderboardOverlay {
   private lastKillTemplateId: string | null = null;
   private readonly isMobile: boolean;
   private mobileCollapsed: boolean;
+
+  private readonly knownSessionIds = new Set<string>();
+  private readonly recentJoins = new Map<string, number>(); // sessionId → first seen in leaderboard
+  private seenFirstLeaderboard = false;
 
   constructor() {
     this.isMobile = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
@@ -181,8 +186,19 @@ export class LeaderboardOverlay {
   update(message: LeaderboardMessage, localSessionId: string | null, matchTimerSeconds = 0): void {
     this.timerEl.textContent =
       matchTimerSeconds > 0 ? LeaderboardOverlay.formatTimer(matchTimerSeconds) : "";
+    const nowMs = performance.now();
     this.list.replaceChildren();
     this.progressBar.replaceChildren();
+
+    for (const entry of message.entries) {
+      if (!this.knownSessionIds.has(entry.sessionId)) {
+        this.knownSessionIds.add(entry.sessionId);
+        if (this.seenFirstLeaderboard) {
+          this.recentJoins.set(entry.sessionId, nowMs);
+        }
+      }
+    }
+    this.seenFirstLeaderboard = true;
 
     if (message.entries.length === 0) {
       this.isLeaderboardVisible = false;
@@ -277,6 +293,9 @@ export class LeaderboardOverlay {
     this.killFeedList.replaceChildren();
     this.activeKillFeed.length = 0;
     this.lastKillTemplateId = null;
+    this.knownSessionIds.clear();
+    this.recentJoins.clear();
+    this.seenFirstLeaderboard = false;
     this.isLeaderboardVisible = false;
     this.updateVisibility();
   }
@@ -342,12 +361,39 @@ export class LeaderboardOverlay {
       flexShrink: "0",
     });
 
+    const nameCell = document.createElement("span");
+    nameCell.style.overflow = "hidden";
+    nameCell.style.display = "flex";
+    nameCell.style.alignItems = "center";
+    nameCell.style.gap = "4px";
+
     const name = document.createElement("span");
     name.textContent = entry.sessionId === localSessionId ? `${entry.name}*` : entry.name;
     name.style.color = `#${entry.slimeColor.toString(16).padStart(6, "0")}`;
     name.style.whiteSpace = "nowrap";
     name.style.overflow = "hidden";
     name.style.textOverflow = "ellipsis";
+    nameCell.appendChild(name);
+
+    const joinedAtMs = this.recentJoins.get(entry.sessionId);
+    if (joinedAtMs !== undefined) {
+      const elapsed = performance.now() - joinedAtMs;
+      if (elapsed < JOIN_PILL_LIFETIME_MS) {
+        const pill = document.createElement("span");
+        pill.textContent = "joined";
+        Object.assign(pill.style, {
+          fontSize: "0.65rem",
+          padding: "1px 5px",
+          borderRadius: "999px",
+          background: "rgba(43, 211, 255, 0.15)",
+          color: "#7dd8ee",
+          border: "1px solid rgba(43, 211, 255, 0.25)",
+          whiteSpace: "nowrap",
+          flexShrink: "0",
+        });
+        nameCell.appendChild(pill);
+      }
+    }
 
     const k = document.createElement("span");
     k.textContent = `${entry.killCount}`;
@@ -367,7 +413,7 @@ export class LeaderboardOverlay {
     score.style.fontVariantNumeric = "tabular-nums";
     score.style.fontWeight = "bold";
 
-    row.append(swatch, name, k, d, score);
+    row.append(swatch, nameCell, k, d, score);
     this.list.appendChild(row);
   }
 

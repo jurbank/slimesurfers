@@ -725,8 +725,24 @@ export class MatchScene {
   async connect(name: string, colorIndex: number, playerUuid: string | null): Promise<void> {
     this.connectParams = { name, colorIndex, playerUuid };
     await this.connection.join(name, colorIndex, playerUuid, {
+      onPlayerInit: (
+        sessionId: string,
+        slimeColor: number,
+        patternId: number,
+        paintGroupId: number,
+      ) => {
+        this.playerColors.set(sessionId, slimeColor);
+        this.playerPatterns.set(sessionId, patternId);
+        if (sessionId === this.connection.sessionId) {
+          this.ensureLocalPlayer(slimeColor, patternId);
+          this.runtime.setLocalPaintGroupId(paintGroupId);
+        } else {
+          this.ensureRemotePlayer(sessionId, slimeColor, patternId);
+        }
+      },
       onPlayerAdded: (
         sessionId: string,
+        name: string,
         slimeColor: number,
         patternId: number,
         paintGroupId: number,

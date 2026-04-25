@@ -19,8 +19,15 @@ import type {
 import type { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 
 export interface RoomCallbacks {
+  onPlayerInit(
+    sessionId: string,
+    slimeColor: number,
+    patternId: number,
+    paintGroupId: number,
+  ): void;
   onPlayerAdded(
     sessionId: string,
+    name: string,
     slimeColor: number,
     patternId: number,
     paintGroupId: number,
@@ -109,7 +116,13 @@ export class RoomConnection {
     const $ = getStateCallbacks(this.room);
 
     $(this.room.state.players).onAdd((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerAdded(sessionId, player.slimeColor, player.patternId, player.paintGroupId);
+      callbacks.onPlayerAdded(
+        sessionId,
+        player.name,
+        player.slimeColor,
+        player.patternId,
+        player.paintGroupId,
+      );
     });
 
     $(this.room.state.players).onRemove((_player: PlayerState, sessionId: string) => {
@@ -118,7 +131,7 @@ export class RoomConnection {
 
     const players = this.room.state.players;
     players?.forEach((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerAdded(sessionId, player.slimeColor, player.patternId, player.paintGroupId);
+      callbacks.onPlayerInit(sessionId, player.slimeColor, player.patternId, player.paintGroupId);
     });
 
     this.room.onLeave(() => {
