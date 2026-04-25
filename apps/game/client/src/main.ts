@@ -117,8 +117,10 @@ if (!skipJoinScreen && overlay) {
       overlay.hide();
       scene.requestPointerCapture();
       scene.setEmoteToggleVisible(true);
-      scene.showHint("Press E to surf");
-      setTimeout(() => scene.showHint("Surf on your slime to go faster"), 7000);
+      if (window.innerWidth > 768) {
+        scene.showHint("Press E to surf");
+        setTimeout(() => scene.showHint("Surf on your slime to go faster"), 7000);
+      }
     }
   });
 }

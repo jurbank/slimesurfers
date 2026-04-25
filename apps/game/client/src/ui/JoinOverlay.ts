@@ -6,6 +6,7 @@ import { swatchBackground } from "./uiUtils.ts";
 const SLOTS = FFA_MODE.slots;
 const GUEST_PLAYER_NAME_STORAGE_KEY = "splat.guestPlayerName";
 const MOBILE_VIEWPORT_MAX_WIDTH_PX = 768;
+const DESKTOP_HINT_SHOWN_KEY = "splat.desktopHintShown";
 
 export class JoinOverlay {
   private readonly root: HTMLDivElement;
@@ -175,6 +176,7 @@ export class JoinOverlay {
 
     this.selectSwatch(0);
     this.focusNameInput();
+    JoinOverlay.maybeShowDesktopHint();
   }
 
   setProgress(percent: number): void {
@@ -285,5 +287,34 @@ export class JoinOverlay {
   private focusNameInput(): void {
     if (window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH_PX) return;
     requestAnimationFrame(() => this.nameInput.focus());
+  }
+
+  private static maybeShowDesktopHint(): void {
+    if (window.innerWidth > MOBILE_VIEWPORT_MAX_WIDTH_PX) return;
+    if (localStorage.getItem(DESKTOP_HINT_SHOWN_KEY)) return;
+    localStorage.setItem(DESKTOP_HINT_SHOWN_KEY, "1");
+
+    const toast = document.createElement("div");
+    toast.textContent = "Play on desktop for the best experience";
+    Object.assign(toast.style, {
+      position: "fixed",
+      top: "16px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(0,0,0,0.75)",
+      color: "#fff",
+      fontSize: "0.85rem",
+      padding: "8px 16px",
+      borderRadius: "6px",
+      pointerEvents: "none",
+      zIndex: "100",
+      whiteSpace: "nowrap",
+      transition: "opacity 0.6s",
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 600);
+    }, 6000);
   }
 }
