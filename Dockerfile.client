@@ -1,0 +1,33 @@
+FROM node:22-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+WORKDIR /app
+
+# Copy manifests for dependency install
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/game/client/package.json ./apps/game/client/
+COPY packages/content/package.json ./packages/content/
+COPY packages/protocol/package.json ./packages/protocol/
+COPY packages/simulation/package.json ./packages/simulation/
+
+RUN pnpm install --frozen-lockfile --filter @splat/game-client...
+
+# Copy source
+COPY apps/game/client ./apps/game/client
+COPY packages ./packages
+
+# Build-time env vars (set these as build args in Coolify)
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_DEV_MODE=false
+ARG VITE_SKIP_JOIN_SCREEN=false
+
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_DEV_MODE=$VITE_DEV_MODE
+ENV VITE_SKIP_JOIN_SCREEN=$VITE_SKIP_JOIN_SCREEN
+
+RUN pnpm --filter @splat/game-client exec vp build
+
+FROM nginx:alpine
+COPY --from=builder /app/apps/game/client/dist /usr/share/nginx/html
+EXPOSE 80
