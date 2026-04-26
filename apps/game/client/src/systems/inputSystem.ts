@@ -14,6 +14,7 @@ class MobileControls {
   private readonly root = document.createElement("div");
   private readonly moveStickZone = document.createElement("div");
   private readonly moveManager: NippleManager;
+  private readonly submergeButton: HTMLButtonElement;
   private moveX = 0;
   private moveY = 0;
   private fireDown = false;
@@ -89,12 +90,12 @@ class MobileControls {
       this.fireDown = down;
     });
 
-    const submergeButton = this.createButton("SURF");
-    this.bindPressButton(submergeButton, () => {
+    this.submergeButton = this.createButton("SURF");
+    this.bindPressButton(this.submergeButton, () => {
       this.submergePressed = true;
     });
 
-    leftButtons.append(submergeButton);
+    leftButtons.append(this.submergeButton);
     rightButtons.append(anchorButton, fireButton);
     this.root.append(this.moveStickZone, leftButtons, rightButtons);
     document.body.append(this.root);
@@ -138,6 +139,18 @@ class MobileControls {
     const pressed = this.submergePressed;
     this.submergePressed = false;
     return pressed;
+  }
+
+  setSubmergeActive(active: boolean): void {
+    if (active) {
+      this.submergeButton.style.border = "2px solid #66ffb8";
+      this.submergeButton.style.background = "rgba(102, 255, 184, 0.3)";
+      this.submergeButton.style.boxShadow = "0 0 12px rgba(102, 255, 184, 0.5)";
+    } else {
+      this.submergeButton.style.border = "1px solid rgba(255, 255, 255, 0.55)";
+      this.submergeButton.style.background = "rgba(16, 24, 28, 0.66)";
+      this.submergeButton.style.boxShadow = "0 8px 28px rgba(0, 0, 0, 0.25)";
+    }
   }
 
   setEnabled(enabled: boolean): void {
@@ -361,6 +374,10 @@ export class InputSystem {
   isFireDown(): boolean {
     if (!this.enabled) return false;
     return this.firePressed || ((this.mobileControls?.buildKeyBits() ?? 0) & InputKey.Fire) !== 0;
+  }
+
+  setSubmergeActive(active: boolean): void {
+    this.mobileControls?.setSubmergeActive(active);
   }
 
   /**

@@ -1077,6 +1077,8 @@ export class MatchScene {
       if (predictedLocalState) {
         const isNowAirborne = predictedLocalState.movementState === PlayerMovementState.Airborne;
         const isNowSki = predictedLocalState.surfState !== PlayerSurfState.None;
+        this.input.setSubmergeActive(isNowSki);
+
         const { vel } = predictedLocalState;
         const velMag = Math.hypot(vel.x, vel.y, vel.z);
         const justLaunched =
