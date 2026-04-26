@@ -28,6 +28,7 @@ export class LeaderboardOverlay {
   private readonly title: HTMLDivElement;
   private readonly timerEl: HTMLSpanElement;
   private readonly list: HTMLDivElement;
+  private readonly progressLabel: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
   private readonly killFeedSection: HTMLDivElement;
   private readonly killFeedHeader: HTMLDivElement;
@@ -110,20 +111,22 @@ export class LeaderboardOverlay {
     this.title.append(titleLabel, this.timerEl, collapseBtn);
 
     this.expandBtn = document.createElement("button");
-    this.expandBtn.textContent = "≡";
+    this.expandBtn.textContent = "Leaderboard";
     this.expandBtn.setAttribute("aria-label", "Show leaderboard");
     Object.assign(this.expandBtn.style, {
       position: "fixed",
       top: "16px",
       right: "16px",
       zIndex: "16",
-      width: "36px",
-      height: "36px",
+      minHeight: "36px",
+      padding: "0 12px",
       border: "1px solid rgba(255, 255, 255, 0.22)",
       borderRadius: "8px",
       background: "rgba(8, 10, 20, 0.82)",
       color: "#9fb3c8",
-      font: "18px system-ui, sans-serif",
+      font: "600 0.72rem sans-serif",
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
       lineHeight: "1",
       cursor: "pointer",
       backdropFilter: "blur(10px)",
@@ -144,6 +147,16 @@ export class LeaderboardOverlay {
       display: "grid",
       gap: "6px",
       marginBottom: "12px",
+    });
+
+    this.progressLabel = document.createElement("div");
+    this.progressLabel.textContent = "Planet surface covered in slime";
+    Object.assign(this.progressLabel.style, {
+      fontSize: "0.7rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+      color: "#6b7d8f",
+      marginBottom: "6px",
     });
 
     this.progressBar = document.createElement("div");
@@ -181,7 +194,7 @@ export class LeaderboardOverlay {
     });
 
     this.killFeedSection.append(this.killFeedHeader, this.killFeedList);
-    this.root.append(this.title, this.list, this.progressBar, this.killFeedSection);
+    this.root.append(this.title, this.list, this.progressLabel, this.progressBar, this.killFeedSection);
     document.body.appendChild(this.root);
   }
 
