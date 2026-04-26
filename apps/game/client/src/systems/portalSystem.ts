@@ -4,7 +4,7 @@ import { getTerrainHeight, getTerrainRadius } from "@splat/simulation/terrain/pl
 
 export const PORTAL_ENABLED = false; // temp, will enable when ready
 
-// const PORTAL_URL = "https://vibejam.cc/portal/2026";
+const PORTAL_URL = "https://vibejam.cc/portal/2026";
 const COLLECT_RADIUS_SQ = 4.5 * 4.5;
 const HOVER_HEIGHT = 1.2;
 
