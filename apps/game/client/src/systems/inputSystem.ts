@@ -28,6 +28,11 @@ class MobileControls {
   }
 
   private constructor() {
+    const existingRoot = document.getElementById("mobile-controls-root");
+    if (existingRoot) {
+      existingRoot.remove();
+    }
+    this.root.id = "mobile-controls-root";
     Object.assign(this.root.style, {
       position: "fixed",
       inset: "0",
@@ -101,6 +106,7 @@ class MobileControls {
       size: 118,
       threshold: 0.1,
       restOpacity: 0.55,
+      fadeTime: 0,
       color: {
         back: "rgba(255, 255, 255, 0.28)",
         front: "rgba(102, 255, 184, 0.86)",
@@ -226,6 +232,12 @@ export class InputSystem {
     canvas.style.touchAction = "none";
     this.mobileControls = MobileControls.create();
 
+    // Safari-specific: prevent pinch-zoom and double-tap zoom at the gesture API level.
+    // iOS 10+ ignores user-scalable=no in the viewport meta, so this is the only reliable guard.
+    for (const name of ["gesturestart", "gesturechange", "gestureend"]) {
+      document.addEventListener(name, (e) => e.preventDefault(), { passive: false });
+    }
+
     const requestPointerCapture = (e: PointerEvent): void => {
       if (!this.enabled) return;
       if (this.pointerLocked) return;
@@ -277,7 +289,11 @@ export class InputSystem {
         this.touchLookPointerId = e.pointerId;
         this.touchLookX = e.clientX;
         this.touchLookY = e.clientY;
-        canvas.setPointerCapture(e.pointerId);
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {
+          // Pointer already released (fast tap race condition)
+        }
         e.preventDefault();
         return;
       }
