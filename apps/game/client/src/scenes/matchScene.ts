@@ -127,6 +127,7 @@ export class MatchScene {
   private readonly remotePlayers = new Map<string, RemotePlayer>();
   private readonly playerColors = new Map<string, number>();
   private readonly playerPatterns = new Map<string, number>();
+  private readonly removedSessions = new Set<string>();
   private readonly planetPaint = new Map<string, SimPlanetPaintState>();
   private lastLocalHealth: number | null = null;
   private lastWasCarving = false;
@@ -608,6 +609,7 @@ export class MatchScene {
     this.remotePlayers.clear();
     this.playerColors.clear();
     this.playerPatterns.clear();
+    this.removedSessions.clear();
   }
 
   private ensureLocalPlayer(slimeColor: number, patternId: number): void {
@@ -633,10 +635,27 @@ export class MatchScene {
       this.playerColors.get(sessionId) === slimeColor
     )
       return;
+    // Don't recreate a mesh for a session that was explicitly removed.
+    if (!existing && this.removedSessions.has(sessionId)) return;
     existing?.dispose(this.render.scene);
     this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor, patternId));
     this.playerColors.set(sessionId, slimeColor);
     this.playerPatterns.set(sessionId, patternId);
+  }
+
+  private removeRemotePlayers(liveIds: Set<string>): void {
+    const stale: string[] = [];
+    for (const sid of this.remotePlayers.keys()) {
+      if (!liveIds.has(sid)) stale.push(sid);
+    }
+    for (const sid of stale) {
+      this.remotePlayers.get(sid)!.dispose(this.render.scene);
+      this.remotePlayers.delete(sid);
+      this.playerColors.delete(sid);
+      this.playerPatterns.delete(sid);
+      this.runtime.removePlayer(sid);
+      this.emoteBubbles.clearPlayer(sid);
+    }
   }
 
   private syncProjectiles(snapshot: SnapshotMessage, receivedAtMs: number): void {
@@ -747,6 +766,7 @@ export class MatchScene {
         patternId: number,
         paintGroupId: number,
       ) => {
+        this.removedSessions.delete(sessionId);
         this.playerColors.set(sessionId, slimeColor);
         this.playerPatterns.set(sessionId, patternId);
         if (sessionId === this.connection.sessionId) {
@@ -757,6 +777,7 @@ export class MatchScene {
         }
       },
       onPlayerRemoved: (sessionId: string) => {
+        this.removedSessions.add(sessionId);
         this.playerColors.delete(sessionId);
         this.playerPatterns.delete(sessionId);
         this.runtime.removePlayer(sessionId);
@@ -793,14 +814,19 @@ export class MatchScene {
       },
       onSnapshot: (snapshot, receivedAtMs) => {
         const localSessionId = this.connection.sessionId;
+        const liveRemoteIds = new Set<string>();
         for (const player of snapshot.players) {
           const isLocal = player.sessionId === localSessionId;
           const slimeColor = player.slimeColor;
           const patternId = player.patternId;
           if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
-          else this.ensureRemotePlayer(player.sessionId, slimeColor, patternId);
+          else {
+            liveRemoteIds.add(player.sessionId);
+            this.ensureRemotePlayer(player.sessionId, slimeColor, patternId);
+          }
           this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetPaint);
         }
+        this.removeRemotePlayers(liveRemoteIds);
         this.syncProjectiles(snapshot, receivedAtMs);
         this.syncPickups(snapshot, receivedAtMs);
       },

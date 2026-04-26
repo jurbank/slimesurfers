@@ -41,7 +41,9 @@ export class LeaderboardOverlay {
   private mobileCollapsed: boolean;
 
   private readonly knownSessionIds = new Set<string>();
-  private readonly recentJoins = new Map<string, number>(); // sessionId → first seen in leaderboard
+  private readonly recentJoins = new Map<string, number>(); // sessionId → joinedAtMs
+  private readonly recentLeaves = new Map<string, number>(); // sessionId → leftAtMs
+  private readonly lastKnownEntries = new Map<string, LeaderboardEntry>();
   private seenFirstLeaderboard = false;
 
   constructor() {
@@ -190,7 +192,11 @@ export class LeaderboardOverlay {
     this.list.replaceChildren();
     this.progressBar.replaceChildren();
 
+    const currentIds = new Set(message.entries.map((e) => e.sessionId));
+
     for (const entry of message.entries) {
+      this.lastKnownEntries.set(entry.sessionId, entry);
+      this.recentLeaves.delete(entry.sessionId);
       if (!this.knownSessionIds.has(entry.sessionId)) {
         this.knownSessionIds.add(entry.sessionId);
         if (this.seenFirstLeaderboard) {
@@ -198,6 +204,18 @@ export class LeaderboardOverlay {
         }
       }
     }
+
+    if (this.seenFirstLeaderboard) {
+      const departed: string[] = [];
+      for (const sid of this.knownSessionIds) {
+        if (!currentIds.has(sid)) departed.push(sid);
+      }
+      for (const sid of departed) {
+        this.recentLeaves.set(sid, nowMs);
+        this.knownSessionIds.delete(sid);
+      }
+    }
+
     this.seenFirstLeaderboard = true;
 
     if (message.entries.length === 0) {
@@ -242,6 +260,7 @@ export class LeaderboardOverlay {
       this.renderFFAProgressBar(message);
     }
 
+    this.renderRecentLeaves(nowMs);
     this.updateVisibility();
   }
 
@@ -295,6 +314,8 @@ export class LeaderboardOverlay {
     this.lastKillTemplateId = null;
     this.knownSessionIds.clear();
     this.recentJoins.clear();
+    this.recentLeaves.clear();
+    this.lastKnownEntries.clear();
     this.seenFirstLeaderboard = false;
     this.isLeaderboardVisible = false;
     this.updateVisibility();
@@ -335,6 +356,92 @@ export class LeaderboardOverlay {
   private renderFFAEntries(message: LeaderboardMessage, localSessionId: string | null): void {
     const topEntries = message.entries.slice(0, MAX_DISPLAY_ENTRIES);
     topEntries.forEach((entry) => this.renderEntry(entry, localSessionId));
+  }
+
+  private renderRecentLeaves(nowMs: number): void {
+    for (const [sid, leftAtMs] of this.recentLeaves) {
+      const elapsed = nowMs - leftAtMs;
+      if (elapsed >= JOIN_PILL_LIFETIME_MS) {
+        this.recentLeaves.delete(sid);
+        continue;
+      }
+      const entry = this.lastKnownEntries.get(sid);
+      if (entry) this.renderLeftEntry(entry);
+    }
+  }
+
+  private renderLeftEntry(entry: LeaderboardEntry): void {
+    const row = document.createElement("div");
+    Object.assign(row.style, {
+      display: "grid",
+      gridTemplateColumns: "20px 1fr 30px 30px 45px",
+      gap: "4px",
+      alignItems: "center",
+      padding: "4px 8px",
+      borderRadius: "6px",
+      fontSize: "0.85rem",
+      opacity: "0.45",
+    });
+
+    const swatch = document.createElement("div");
+    const bg = swatchBackground({ color: entry.slimeColor, patternId: entry.patternId });
+    Object.assign(swatch.style, {
+      width: "14px",
+      height: "14px",
+      borderRadius: "50%",
+      backgroundImage: bg.backgroundImage,
+      backgroundSize: bg.backgroundSize,
+      flexShrink: "0",
+    });
+
+    const nameCell = document.createElement("span");
+    nameCell.style.overflow = "hidden";
+    nameCell.style.display = "flex";
+    nameCell.style.alignItems = "center";
+    nameCell.style.gap = "4px";
+
+    const name = document.createElement("span");
+    name.textContent = entry.name;
+    name.style.color = `#${entry.slimeColor.toString(16).padStart(6, "0")}`;
+    name.style.whiteSpace = "nowrap";
+    name.style.overflow = "hidden";
+    name.style.textOverflow = "ellipsis";
+    nameCell.appendChild(name);
+
+    const pill = document.createElement("span");
+    pill.textContent = "left";
+    Object.assign(pill.style, {
+      fontSize: "0.65rem",
+      padding: "1px 5px",
+      borderRadius: "999px",
+      background: "rgba(255, 120, 80, 0.15)",
+      color: "#f0a090",
+      border: "1px solid rgba(255, 120, 80, 0.25)",
+      whiteSpace: "nowrap",
+      flexShrink: "0",
+    });
+    nameCell.appendChild(pill);
+
+    const k = document.createElement("span");
+    k.textContent = `${entry.killCount}`;
+    k.style.textAlign = "center";
+    k.style.fontSize = "0.75rem";
+    k.style.color = "#9fb3c8";
+
+    const d = document.createElement("span");
+    d.textContent = `${entry.deathCount}`;
+    d.style.textAlign = "center";
+    d.style.fontSize = "0.75rem";
+    d.style.color = "#9fb3c8";
+
+    const score = document.createElement("span");
+    score.textContent = `${Math.round(entry.paintScore)}`;
+    score.style.textAlign = "right";
+    score.style.fontVariantNumeric = "tabular-nums";
+    score.style.fontWeight = "bold";
+
+    row.append(swatch, nameCell, k, d, score);
+    this.list.appendChild(row);
   }
 
   private renderEntry(entry: LeaderboardEntry, localSessionId: string | null): void {

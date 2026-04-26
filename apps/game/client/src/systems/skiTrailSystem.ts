@@ -2,12 +2,11 @@ import * as THREE from "three";
 import { PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import type { RuntimePlayerState } from "../network/runtimeState.ts";
 
-const TRAIL_MAX_POINTS = 20;
-const TRAIL_EMIT_DISTANCE = 0.15;
-const TRAIL_HALF_WIDTH = 0.28;
-const TRAIL_HALF_WIDTH_WATER = 0.42;
-const WATER_TRAIL_COLOR = 0xc0e8ff;
-// Trail fades to 0 below this speed (wu/s). Ramp is linear from 0 → full at 2× this value.
+const TRAIL_MAX_POINTS = 40;
+const TRAIL_EMIT_DISTANCE = 0.12;
+const TRAIL_HALF_WIDTH = 0.3;
+const TRAIL_HALF_WIDTH_WATER = 0.44;
+const WATER_TRAIL_COLOR = 0xc8ecff;
 const TRAIL_FADE_SPEED = 3.0;
 
 export class SkiTrailSystem {
@@ -40,12 +39,21 @@ export class SkiTrailSystem {
     const vertexCount = TRAIL_MAX_POINTS * 2;
     const positions = new Float32Array(vertexCount * 3);
     const alphas = new Float32Array(vertexCount);
+    const uCoords = new Float32Array(vertexCount);
+
+    // uCoord is static: 0 = left vertex, 1 = right vertex across the ribbon.
+    for (let i = 0; i < TRAIL_MAX_POINTS; i++) {
+      uCoords[i * 2] = 0.0;
+      uCoords[i * 2 + 1] = 1.0;
+    }
 
     this.geometry = new THREE.BufferGeometry();
     this.posAttr = new THREE.BufferAttribute(positions, 3);
     this.alphaAttr = new THREE.BufferAttribute(alphas, 1);
+    const uAttr = new THREE.BufferAttribute(uCoords, 1);
     this.geometry.setAttribute("position", this.posAttr);
     this.geometry.setAttribute("alpha", this.alphaAttr);
+    this.geometry.setAttribute("uCoord", uAttr);
 
     const indices: number[] = [];
     for (let i = 0; i < TRAIL_MAX_POINTS - 1; i++) {
@@ -60,20 +68,28 @@ export class SkiTrailSystem {
     this.material = new THREE.ShaderMaterial({
       vertexShader: `
         attribute float alpha;
+        attribute float uCoord;
         varying float vAlpha;
+        varying float vU;
         void main() {
           vAlpha = alpha;
+          vU = uCoord;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
         uniform vec3 trailColor;
         varying float vAlpha;
+        varying float vU;
         void main() {
-          gl_FragColor = vec4(trailColor, vAlpha * vAlpha);
+          float centerDist = abs(vU - 0.5) * 2.0;
+          float mask = 0.5 + 0.5 * smoothstep(0.4, 0.9, centerDist);
+          gl_FragColor = vec4(trailColor, vAlpha * vAlpha * mask);
         }
       `,
-      uniforms: { trailColor: { value: new THREE.Color(slimeColor) } },
+      uniforms: {
+        trailColor: { value: new THREE.Color(slimeColor) },
+      },
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
@@ -125,22 +141,21 @@ export class SkiTrailSystem {
       return;
     }
 
-    // Set trail color: light blue-white for water, slime color for paint.
     const trailHex = surfState === PlayerSurfState.SkiWater ? WATER_TRAIL_COLOR : slimeColor;
     this.material.uniforms.trailColor.value.setHex(trailHex);
-
-    const halfWidth =
-      surfState === PlayerSurfState.SkiWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
 
     // Surface up direction at current position (radial out from planet).
     this._up.set(x, y, z).sub(planetCenter).normalize();
 
-    // Scale the whole trail down when the player is barely moving so the head fades to 0 at rest.
     const speed = Math.sqrt(
       state.vel.x * state.vel.x + state.vel.y * state.vel.y + state.vel.z * state.vel.z,
     );
+    // Quadratic ramp so the trail only becomes visible once moving meaningfully.
     const speedScale =
       Math.min(1, speed / (TRAIL_FADE_SPEED * 2)) * Math.min(1, speed / TRAIL_FADE_SPEED);
+
+    const halfWidth =
+      surfState === PlayerSurfState.SkiWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
 
     const N = this.trailCount;
     const posArr = this.posAttr.array as Float32Array;
@@ -167,7 +182,7 @@ export class SkiTrailSystem {
 
       this._side.crossVectors(this._dir, this._up).normalize();
 
-      // Alpha: 1 at head, 0 at tail — scaled down when the player is barely moving.
+      // Alpha: 1 at head, 0 at tail — scaled down when barely moving.
       const alpha = ((N - 1 - i) / (N - 1)) * speedScale;
 
       const vi = i * 2;
