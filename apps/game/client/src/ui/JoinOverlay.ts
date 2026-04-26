@@ -17,6 +17,7 @@ export class JoinOverlay {
   private readonly progressBar: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
   private readonly guestPlayerName: string;
+  private readonly video: HTMLVideoElement;
   private selectedIndex = 0;
   private isLoading = true;
 
@@ -34,8 +35,44 @@ export class JoinOverlay {
       fontFamily: "sans-serif",
       color: "#fff",
       flexDirection: "column",
+    });
+
+    this.video = document.createElement("video");
+    this.video.src = "/video/slime-surfers-gameplay-loop.mp4";
+    this.video.autoplay = true;
+    this.video.muted = true;
+    this.video.loop = true;
+    this.video.setAttribute("playsinline", "");
+    Object.assign(this.video.style, {
+      position: "absolute",
+      inset: "0",
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      opacity: "0",
+      transition: "opacity 0.8s ease",
+      pointerEvents: "none",
+    });
+    this.video.addEventListener("canplay", () => { this.video.style.opacity = "1"; }, { once: true });
+
+    const videoScrim = document.createElement("div");
+    Object.assign(videoScrim.style, {
+      position: "absolute",
+      inset: "0",
+      background: "rgba(8, 8, 24, 0.62)",
+      pointerEvents: "none",
+    });
+
+    const contentWrapper = document.createElement("div");
+    Object.assign(contentWrapper.style, {
+      position: "relative",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
       gap: "12px",
     });
+
+    this.root.append(this.video, videoScrim, contentWrapper);
 
     const title = document.createElement("h1");
     title.textContent = "Slime Surfers";
@@ -161,7 +198,7 @@ export class JoinOverlay {
     twitterLink.addEventListener("mouseenter", () => (twitterLink.style.color = "#00e5ff"));
     twitterLink.addEventListener("mouseleave", () => (twitterLink.style.color = "#666"));
 
-    this.root.append(
+    contentWrapper.append(
       title,
       subtitle,
       this.progressContainer,
@@ -170,8 +207,8 @@ export class JoinOverlay {
       swatchRow,
       this.joinBtn,
       this.statusText,
-      twitterLink,
     );
+    this.root.appendChild(twitterLink);
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
@@ -242,10 +279,12 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
+    void this.video.play().catch(() => {});
   }
 
   hide(): void {
     this.root.style.display = "none";
+    this.video.pause();
     this.showClickHint();
   }
 
