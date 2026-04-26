@@ -841,6 +841,9 @@ export class MatchScene {
           this.countdown.show(this.connection.matchTimer);
         } else if (phase === MatchPhase.Active) {
           this.countdown.hide();
+          this.paint.clear();
+          this.clearPlanetPaint();
+          this.projectiles.clear();
         } else if (phase === MatchPhase.Ended) {
           this.countdown.hide();
           this.matchEnd.show(this.lastLeaderboard, this.connection.sessionId);

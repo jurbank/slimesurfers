@@ -449,6 +449,26 @@ export class MatchSimulation {
     return this.pendingKillEvents.splice(0, this.pendingKillEvents.length);
   }
 
+  private resetMatchState(): void {
+    for (const [id, planet] of this.simState.planets) {
+      const { territoryRows: rows, territoryCols: cols } = planet;
+      this.simState.planets.set(id, {
+        ...planet,
+        cells: createTerritoryCells(rows, cols),
+        stamps: [],
+        stampBuckets: createStampBuckets(rows, cols),
+      });
+    }
+    this.simState.scores.clear();
+    this.recentPaintStamps.clear();
+    this.simState.projectiles.clear();
+    this.simState.players.forEach((player) => {
+      player.paintScore = 0;
+      player.killCount = 0;
+      player.deathCount = 0;
+    });
+  }
+
   private recordPaintStamp(message: PaintStampMessage): void {
     this.pendingPaintStamps.push(message);
 
@@ -503,6 +523,7 @@ export class MatchSimulation {
         this.simState.matchPhase = MatchPhase.Active;
         this.simState.matchTimer = GAME_CONFIG.match.durationSeconds;
         shouldBroadcastMatchPhase = true;
+        this.resetMatchState();
       } else {
         this.simState.matchTimer = nextTimer;
       }
@@ -541,7 +562,10 @@ export class MatchSimulation {
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, GAME_CONFIG);
-          if (this.simState.matchPhase === MatchPhase.Active) {
+          if (
+            this.simState.matchPhase === MatchPhase.Active ||
+            this.simState.matchPhase === MatchPhase.Countdown
+          ) {
             for (const stamp of tryFireProjectile(
               this.simState,
               player,
