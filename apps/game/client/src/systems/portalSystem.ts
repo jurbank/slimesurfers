@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { getTerrainHeight, getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
 
-export const PORTAL_ENABLED = false; // temp, will enable when ready
+export const PORTAL_ENABLED = true; // temp, will enable when ready
 
 const PORTAL_URL = "https://vibejam.cc/portal/2026";
 const COLLECT_RADIUS_SQ = 4.5 * 4.5;
