@@ -1,21 +1,33 @@
 import * as THREE from "three";
 
+// Distance behind the player the camera floats along the yaw-forward axis.
 const CAMERA_BACK = 15;
-const CAMERA_UP = 8;
-const CAMERA_SIDE = 3; // right-shoulder offset; negate for left-shoulder
-const AIM_DISTANCE = 500; // parallax raycast distance
+// Height above the player's surface position. Lower = more ground-hugging feel.
+const CAMERA_UP = 5;
+// Lateral offset — positive pushes to the right shoulder, negative to left.
+const CAMERA_SIDE = 3;
+// How far ahead the aim ray is cast for parallax correction.
+const AIM_DISTANCE = 500;
 // Approximate player collision radius — keeps the camera this far above the surface.
 const COLLISION_RADIUS = 1;
 const SURFACE_GAP = 0.3;
 
+// Field of view at zero speed. Widens dynamically as the player accelerates.
 const BASE_FOV = 75;
-const MAX_FOV_GAIN = 14; // degrees added at max speed (~38 wu/s ski speed)
-const SPEED_FOV_RATE = 0.37; // fov per wu/s
-const PULL_BACK_RATE = 0.12; // extra arm units per wu/s
-const MAX_BANK_ANGLE = 0.05; // radians (~7°) at full lateral speed
-const BANK_SPEED_NORM = 18; // lateral wu/s that gives full bank
-const LANDING_DIP_MAX = 2.0; // max CAMERA_UP reduction on landing
-const LANDING_DIP_SPEED_SCALE = 0.07; // dip = min(speed * scale, max)
+// Maximum extra degrees added to FOV at peak speed. Higher = more dramatic warp effect.
+const MAX_FOV_GAIN = 25;
+// How many degrees of FOV are gained per wu/s. Higher = FOV ramps up faster.
+const SPEED_FOV_RATE = 0.55;
+// Extra camera arm length (pull-back) added per wu/s. Higher = more dramatic zoom-out.
+const PULL_BACK_RATE = 0.22;
+// Maximum camera roll in radians at full lateral speed. Higher = more tilt on sharp turns.
+const MAX_BANK_ANGLE = 0.09;
+// Lateral speed (wu/s) at which the camera reaches MAX_BANK_ANGLE.
+const BANK_SPEED_NORM = 18;
+// Maximum reduction in CAMERA_UP applied as a dip impulse on landing.
+const LANDING_DIP_MAX = 2.0;
+// Scales landing speed into dip magnitude: dip = min(speed * scale, max).
+const LANDING_DIP_SPEED_SCALE = 0.07;
 
 export class CameraSystem {
   readonly camera: THREE.PerspectiveCamera;
@@ -89,8 +101,8 @@ export class CameraSystem {
     const forwardSpeed = Math.max(
       0,
       playerVel.x * this._camForward.x +
-        playerVel.y * this._camForward.y +
-        playerVel.z * this._camForward.z,
+      playerVel.y * this._camForward.y +
+      playerVel.z * this._camForward.z,
     );
 
     // Speed smoothing: accelerate fast, decelerate slowly for a trailing-off feel.
@@ -193,7 +205,10 @@ export class CameraSystem {
       this.camera.up.applyAxisAngle(this._camForward, bankAngle);
     }
 
-    this._lookAt.copy(this._playerPos).addScaledVector(this._playerUp, 1.5);
+    this._lookAt
+      .copy(this._playerPos)
+      .addScaledVector(this._playerUp, 3)
+      .addScaledVector(this._camForward, 0);
     this.camera.lookAt(this._lookAt);
 
     // Parallax-corrected aimDir: cast a ray from the camera through the screen

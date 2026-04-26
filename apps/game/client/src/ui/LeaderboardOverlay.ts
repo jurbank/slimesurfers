@@ -194,7 +194,13 @@ export class LeaderboardOverlay {
     });
 
     this.killFeedSection.append(this.killFeedHeader, this.killFeedList);
-    this.root.append(this.title, this.list, this.progressLabel, this.progressBar, this.killFeedSection);
+    this.root.append(
+      this.title,
+      this.list,
+      this.progressLabel,
+      this.progressBar,
+      this.killFeedSection,
+    );
     document.body.appendChild(this.root);
   }
 

@@ -53,7 +53,13 @@ export class JoinOverlay {
       transition: "opacity 0.8s ease",
       pointerEvents: "none",
     });
-    this.video.addEventListener("canplay", () => { this.video.style.opacity = "1"; }, { once: true });
+    this.video.addEventListener(
+      "canplay",
+      () => {
+        this.video.style.opacity = "1";
+      },
+      { once: true },
+    );
 
     const videoScrim = document.createElement("div");
     Object.assign(videoScrim.style, {
