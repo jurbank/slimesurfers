@@ -76,7 +76,10 @@ export class RailSystem {
         const ny = fromCenter.y / dist;
         const nz = fromCenter.z / dist;
         const terrainR = getTerrainRadius(nx, ny, nz, GAME_CONFIG);
-        const surfacePt = pc.clone().addScaledVector(fromCenter, terrainR / dist);
+        const waterR = GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.waterLevel;
+        // Base of column is either terrain or water surface, whichever is higher
+        const baseR = Math.max(terrainR, waterR);
+        const surfacePt = pc.clone().addScaledVector(fromCenter, baseR / dist);
 
         const columnHeight = railPt.distanceTo(surfacePt) - GAME_CONFIG.rail.visualRadius;
         if (columnHeight < 0.5) continue;

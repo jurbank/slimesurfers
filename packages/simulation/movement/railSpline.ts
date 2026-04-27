@@ -133,8 +133,11 @@ export function buildComputedRail(
   // Convert control points to world positions.
   const worldPts: Vec3Data[] = def.controlPoints.map((cp) => {
     const n = normalize({ x: cp.nx, y: cp.ny, z: cp.nz });
-    const r = getTerrainRadius(n.x, n.y, n.z, cfg) + cp.heightOffset;
-    return add(planetCenter, scale(n, r));
+    const terrainR = getTerrainRadius(n.x, n.y, n.z, cfg);
+    const waterR = cfg.planet.radius + cfg.terrain.waterLevel;
+    // Ensure the base point for the height offset is at least at water level
+    const baseR = Math.max(terrainR, waterR);
+    return add(planetCenter, scale(n, baseR + cp.heightOffset));
   });
 
   const n = worldPts.length;

@@ -7,6 +7,6 @@ interface AudioAsset {
 
 export const AUDIO: Record<string, AudioAsset> = {
   // SFX
-  pow: { url: "/audio/pow.mp3", category: "sfx" },
+  pow: { url: "/audio/pew_pow.mp3", category: "sfx" },
   skiLaunch: { url: "/audio/ski_launch.mp3", category: "sfx" },
 };
