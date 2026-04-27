@@ -316,7 +316,7 @@ function createSimPlayer(
     skiJumpCharge: 0,
     grindRailId: -1,
     grindT: 0,
-    grindBalance: 0,
+    lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
     inputSeq: 0,

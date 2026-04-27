@@ -38,14 +38,9 @@ const TEST_CONFIG = {
   rail: {
     snapDistance: 3.0,
     minEntrySpeed: 12.0,
-    balanceDriftRate: 0.35,
-    balanceInputScale: 1.2,
-    balanceRestoreRate: 0.4,
-    bailThreshold: 0.95,
     paintCorridorRadius: 3.5,
     paintStampSpacing: 4.0,
     maxGrindSpeed: 35.0,
-    centerBoostPerSecond: 2.0,
     visualRadius: 0.4,
   },
   terrain: {
@@ -108,7 +103,7 @@ function createPlayer(): PlayerPhysics {
     skiJumpCharge: 0,
     grindRailId: -1,
     grindT: 0,
-    grindBalance: 0,
+    lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
   };
@@ -143,6 +138,7 @@ describe("Rail Grinding", () => {
     player.movementState = PlayerMovementState.Grinding;
     player.grindRailId = 0;
     player.grindT = TEST_RAIL.samples[5]!.arcLength;
+    player.lastGrindT = player.grindT;
     player.grindSpeed = 20;
 
     // Hold Anchor to charge, then release to launch.
@@ -163,6 +159,7 @@ describe("Rail Grinding", () => {
     player.movementState = PlayerMovementState.Grinding;
     player.grindRailId = 0;
     player.grindT = TEST_RAIL.totalLength - 0.1;
+    player.lastGrindT = player.grindT;
     player.grindSpeed = 20;
 
     // Move past the end

@@ -121,7 +121,6 @@ export interface SimPlayerState {
   grindRailId: number; // -1 = not grinding
   grindT: number; // arc-length parameter along rail (wu from start)
   lastGrindT: number; // arc-length parameter from the previous tick
-  grindBalance: number; // -1.0 to 1.0, 0 = centered
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
   inputSeq: number;

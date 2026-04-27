@@ -36,7 +36,6 @@ export interface PlayerPhysics {
   grindRailId: number;
   grindT: number;
   lastGrindT: number;
-  grindBalance: number;
   grindSpeed: number;
   grindCooldownMs: number;
 }

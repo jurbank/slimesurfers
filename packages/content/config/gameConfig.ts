@@ -255,16 +255,11 @@ export const GAME_CONFIG = {
 
   // -- Rails -----------------------------------------------------------------
   rail: {
-    snapDistance: 4.5,
+    snapDistance: 5.0,
     minEntrySpeed: 12.0,
-    balanceDriftRate: 0.35,
-    balanceInputScale: 1.2,
-    balanceRestoreRate: 0.4,
-    bailThreshold: 0.95,
-    paintCorridorRadius: 6.0,
+    paintCorridorRadius: 8.0,
     paintStampSpacing: 4.0,
     maxGrindSpeed: 35.0,
-    centerBoostPerSecond: 2.0,
     visualRadius: 0.4,
   },
 

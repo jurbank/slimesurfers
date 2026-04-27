@@ -100,7 +100,6 @@ function applyGrindSnap(
   state.grindRailId = snap.railIndex;
   state.grindT = snap.arcLength;
   state.lastGrindT = snap.arcLength;
-  state.grindBalance = 0;
   state.grindSpeed = snap.speed;
   state.movementState = PlayerMovementState.Grinding;
   state.planetId = "";
@@ -114,7 +113,6 @@ function exitGrind(
 ): void {
   state.grindRailId = -1;
   state.grindT = 0;
-  state.grindBalance = 0;
   state.grindSpeed = 0;
   state.grindCooldownMs = cooldownMs;
   state.skiJumpCharge = 0;
@@ -184,20 +182,6 @@ export function stepGrinding(
 
   state.lastGrindT = state.grindT;
 
-  // Balance: lean input fights the natural drift; drifting off-center too far causes a bail.
-  // Natural drift is a slow sinusoid of arc-length — the player must actively track it.
-  const leanInput = (input.keys & InputKey.Right ? 1 : 0) + (input.keys & InputKey.Left ? -1 : 0);
-  const naturalDrift = Math.sin(state.grindT * 0.1) * cfg.rail.balanceDriftRate;
-  state.grindBalance = clamp(
-    state.grindBalance +
-      (leanInput * cfg.rail.balanceInputScale +
-        naturalDrift -
-        state.grindBalance * cfg.rail.balanceRestoreRate) *
-        dt,
-    -1,
-    1,
-  );
-
   const { pos, tangent } = sampleRailAt(rail, state.grindT);
 
   // Carve-charge: hold Anchor to build jump charge, release to launch.
@@ -214,32 +198,6 @@ export function stepGrinding(
     return;
   } else {
     state.isCarving = false;
-  }
-
-  if (Math.abs(state.grindBalance) >= cfg.rail.bailThreshold) {
-    // Bail: throw the player sideways off the rail.
-    const up = normalize(sub(pos, rail.planetCenter));
-    const sideDir = normalize(cross(tangent, up));
-    const bailVel = add(
-      scale(tangent, state.grindSpeed * 0.6),
-      add(
-        scale(sideDir, Math.sign(state.grindBalance) * Math.abs(state.grindSpeed) * 0.7),
-        scale(up, cfg.movement.jumpImpulse * 0.4),
-      ),
-    );
-    exitGrind(state, bailVel, 400);
-    return;
-  }
-
-  // Small speed boost when centered — reward for good balance.
-  if (Math.abs(state.grindBalance) < 0.2) {
-    const dir = state.grindSpeed >= 0 ? 1 : -1;
-    state.grindSpeed =
-      dir *
-      Math.min(
-        Math.abs(state.grindSpeed) + cfg.rail.centerBoostPerSecond * dt,
-        cfg.rail.maxGrindSpeed,
-      );
   }
 
   // Advance along rail. No uphill deceleration — rail is frictionless.
