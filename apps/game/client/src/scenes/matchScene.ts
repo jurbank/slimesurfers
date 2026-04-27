@@ -329,6 +329,28 @@ export class MatchScene {
     );
   }
 
+  private syncCenterCountdown(respawnTimer: number): void {
+    if (this.currentPhase === MatchPhase.Countdown) {
+      this.countdown.show(this.connection.matchTimer, {
+        label: "MATCH STARTING IN",
+        note: "Weapons disabled until match begins",
+        dangerThreshold: 3,
+      });
+      return;
+    }
+
+    if (this.currentPhase === MatchPhase.Active && respawnTimer > 0) {
+      this.countdown.show(respawnTimer, {
+        label: "RESPAWNING IN",
+        note: "You will drop back into the match automatically",
+        dangerThreshold: 1,
+      });
+      return;
+    }
+
+    this.countdown.hide();
+  }
+
   constructor() {
     this.render = new RenderSystem();
     this.camera = new CameraSystem();
@@ -852,12 +874,12 @@ export class MatchScene {
       onMatchPhase: (phase) => {
         this.currentPhase = phase;
         if (phase === MatchPhase.Countdown) {
-          this.countdown.show(this.connection.matchTimer);
+          this.syncCenterCountdown(0);
         } else if (phase === MatchPhase.Active) {
-          this.countdown.hide();
           this.paint.clear();
           this.clearPlanetPaint();
           this.projectiles.clear();
+          this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
         } else if (phase === MatchPhase.Ended) {
           this.countdown.hide();
           this.matchEnd.show(this.lastLeaderboard, this.connection.sessionId);
@@ -1212,9 +1234,7 @@ export class MatchScene {
       this.portal?.update(now, playerPos);
       this.projectiles.update(now);
       this.rails.update(this.connection.roomState);
-      if (this.currentPhase === MatchPhase.Countdown) {
-        this.countdown.setSeconds(this.connection.matchTimer);
-      }
+      this.syncCenterCountdown(predictedLocalState?.respawnTimer ?? 0);
       this.leaderboard.tick(now);
       this.trickText.update(dt * 1000, this.camera.camera, (sessionId) =>
         this.getPlayerMesh(sessionId),
