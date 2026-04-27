@@ -913,32 +913,32 @@ describe("MatchSimulation", () => {
     }
   });
 
-  it("recharges slime slowly by default, faster on friendly paint, and fastest while submerged", () => {
+  it("recharges slime slowly by default, faster on friendly paint, and fastest while skiing", () => {
     const neutralSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const paintedSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
-    const submergedSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const skiingSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
     const painted = paintedSimulation.addPlayer("session-1", "Painted");
-    const submerged = submergedSimulation.addPlayer("session-1", "Submerged");
+    const skier = skiingSimulation.addPlayer("session-1", "Skier");
 
     neutral.slimeLevel = 0;
     painted.slimeLevel = 0;
-    submerged.slimeLevel = 0;
+    skier.slimeLevel = 0;
 
     paintPlayerSurface(paintedSimulation, painted.sessionId, painted.paintGroupId, 0.25);
-    paintPlayerSurface(submergedSimulation, submerged.sessionId, submerged.paintGroupId, 0.25);
-    submerged.surfState = PlayerSurfState.SurfmingHidden;
+    paintPlayerSurface(skiingSimulation, skier.sessionId, skier.paintGroupId, 0.25);
+    skier.surfState = PlayerSurfState.SkiVisible;
 
     neutralSimulation.tick(1000);
     paintedSimulation.tick(1000);
-    submergedSimulation.tick(1000);
+    skiingSimulation.tick(1000);
 
     expect(neutral.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.passiveRechargePerSecond, 5);
     expect(painted.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.friendlyPaintRechargePerSecond, 5);
-    expect(submerged.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.submergedRechargePerSecond, 5);
+    expect(skier.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.submergedRechargePerSecond, 5);
     expect(neutral.slimeLevel).toBeLessThan(painted.slimeLevel);
-    expect(painted.slimeLevel).toBeLessThan(submerged.slimeLevel);
+    expect(painted.slimeLevel).toBeLessThan(skier.slimeLevel);
   });
 
   it("equips a bazooka when the player touches an active pickup", () => {

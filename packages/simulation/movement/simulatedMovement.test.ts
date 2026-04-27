@@ -8,7 +8,7 @@ import {
   type SimPlanetPaintState,
 } from "@splat/simulation/match/simState.ts";
 import { createStampBuckets } from "@splat/simulation/paint/paintDetection.ts";
-import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
 
 const TEST_PLANETS: PlanetData[] = [
   {
@@ -146,6 +146,28 @@ function forwardFromRot(rot: PlayerPhysics["rot"]): { x: number; y: number; z: n
     y: iy * qw + iw * -qy + iz * -qx - ix * -qz,
     z: iz * qw + iw * -qz + ix * -qy - iy * -qx,
   };
+}
+
+function findUnderwaterNormal(): { x: number; y: number; z: number } {
+  const candidates = [
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: -1, z: 0 },
+    { x: 1, y: 0, z: 0 },
+    { x: -1, y: 0, z: 0 },
+    { x: 0, y: 0, z: 1 },
+    { x: 0, y: 0, z: -1 },
+    { x: 0.55, y: 0.55, z: 0.62 },
+    { x: -0.5, y: -0.45, z: -0.74 },
+  ];
+  for (const candidate of candidates) {
+    if (
+      getTerrainHeight(candidate.x, candidate.y, candidate.z, TEST_CONFIG) <
+      TEST_CONFIG.terrain.waterLevel
+    ) {
+      return candidate;
+    }
+  }
+  throw new Error("expected at least one underwater terrain sample in test config");
 }
 
 describe("stepPlayer", () => {
@@ -590,5 +612,35 @@ describe("stepPlayer", () => {
     expect(player.planetId).toBe("planet-0");
     expect(player.surfState).toBe(PlayerSurfState.None);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
+  });
+
+  it("lands on the water surface instead of below it over underwater terrain", () => {
+    const player = createPlayer();
+    const underwaterNormal = findUnderwaterNormal();
+    const waterRadius = TEST_CONFIG.planet.radius + TEST_CONFIG.terrain.waterLevel;
+
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.surfState = PlayerSurfState.None;
+    player.pos = {
+      x: TEST_PLANETS[0]!.center.x + underwaterNormal.x * (waterRadius + 1.2),
+      y: TEST_PLANETS[0]!.center.y + underwaterNormal.y * (waterRadius + 1.2),
+      z: TEST_PLANETS[0]!.center.z + underwaterNormal.z * (waterRadius + 1.2),
+    };
+    player.vel = {
+      x: -underwaterNormal.x * 8,
+      y: -underwaterNormal.y * 8,
+      z: -underwaterNormal.z * 8,
+    };
+
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+
+    const distFromCenter = Math.hypot(
+      player.pos.x - TEST_PLANETS[0]!.center.x,
+      player.pos.y - TEST_PLANETS[0]!.center.y,
+      player.pos.z - TEST_PLANETS[0]!.center.z,
+    );
+    expect(player.planetId).toBe("planet-0");
+    expect(distFromCenter).toBeCloseTo(waterRadius + TEST_CONFIG.movement.standingHeight, 3);
   });
 });

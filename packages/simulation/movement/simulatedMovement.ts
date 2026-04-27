@@ -317,28 +317,16 @@ function stepOnSurface(
   const onNeutralSurface = paint === null;
   const terrainHeight = getTerrainHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg);
   const terrainBelowWater = terrainHeight < cfg.terrain.waterLevel;
-  // Player is above water if their position hasn't yet dropped below the water sphere.
-  const waterSurfaceRadius =
-    cfg.planet.radius + cfg.terrain.waterLevel + cfg.movement.standingHeight;
-  const playerAboveWater =
-    vlen(sub(state.pos, planet.center)) >= waterSurfaceRadius - cfg.movement.surfaceSnapDistance;
-  // Terrain below water triggers water skiing when the player is still at the surface,
-  // or when they're already water skiing (to prevent submerged paint pulling them down).
-  const onWater =
-    terrainBelowWater && (playerAboveWater || state.surfState === PlayerSurfState.SkiWater);
+  // Keep all players on the water surface whenever terrain falls below sea level.
+  // This preserves a clean separation between land concealment and any future
+  // underwater traversal mode we may reintroduce later.
+  const onWater = terrainBelowWater;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const wasSkiActive = state.surfState !== PlayerSurfState.None;
   let skiActive = wasSkiActive;
 
-  if (onWater) {
-    // Don't water ski if the player is already submerged and on paint — they intentionally went under.
-    const wasSubmerged =
-      !playerAboveWater &&
-      (state.surfState === PlayerSurfState.SurfmingMoving ||
-        state.surfState === PlayerSurfState.SurfmingHidden);
-    skiActive = wasSkiActive && !wasSubmerged && !toggleSubmerge;
-  } else if (toggleSubmerge) {
+  if (toggleSubmerge) {
     skiActive = !skiActive;
   }
 
@@ -661,11 +649,7 @@ function stepAirborne(
     const upDir = scale(gravDir, -1);
     const rawLandingRadius = getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
     const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
-    // Skiers land at the water surface, not the ocean floor — preserves ski state through the arc.
-    const landingRadius =
-      state.surfState !== PlayerSurfState.None && rawLandingRadius < waterRadius
-        ? waterRadius
-        : rawLandingRadius;
+    const landingRadius = Math.max(rawLandingRadius, waterRadius);
     if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
       // Only land when moving toward the planet — prevents re-landing immediately after a jump.
       const velToward = dot(state.vel, gravDir);

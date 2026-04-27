@@ -5,10 +5,12 @@ import {
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
+import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import { createStampBuckets } from "./paintDetection.ts";
 import { applyPaintImpact } from "./stampPaint.ts";
 import { createTerritoryCells } from "./territoryGrid.ts";
 import type { SimMatchState } from "../match/simState.ts";
+import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
 
 function createSimState(): SimMatchState {
   return {
@@ -37,6 +39,33 @@ function createPlanetState() {
     stamps: [],
     stampBuckets: createStampBuckets(rows, cols),
   };
+}
+
+function findTerrainNormal(
+  predicate: (height: number) => boolean,
+): { x: number; y: number; z: number } {
+  const rows = 48;
+  const cols = 96;
+  for (let row = 0; row < rows; row++) {
+    const v = (row + 0.5) / rows;
+    const theta = v * Math.PI;
+    const sinTheta = Math.sin(theta);
+    for (let col = 0; col < cols; col++) {
+      const u = col / cols;
+      const phi = u * Math.PI * 2;
+      const normal = {
+        x: sinTheta * Math.cos(phi),
+        y: Math.cos(theta),
+        z: sinTheta * Math.sin(phi),
+      };
+      const height = getTerrainHeight(normal.x, normal.y, normal.z, GAME_CONFIG);
+      if (predicate(height)) {
+        return normal;
+      }
+    }
+  }
+
+  throw new Error("expected a terrain sample matching the requested predicate");
 }
 
 describe("stampPaint", () => {
@@ -85,5 +114,64 @@ describe("stampPaint", () => {
 
     expect(stamp).toBeNull();
     expect(simState.paintSeq).toBe(0);
+  });
+
+  it("allows impacts in shallow water", () => {
+    const simState = createSimState();
+    const planetState = createPlanetState();
+    const planet = PLANET_POSITIONS[0]!;
+    const normal = findTerrainNormal((height) => {
+      const depth = GAME_CONFIG.terrain.waterLevel - height;
+      return depth > 0 && depth <= GAME_CONFIG.terrain.sandBand;
+    });
+    const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+
+    const stamp = applyPaintImpact(simState, planetState, {
+      planetId: "planet-0",
+      pos: {
+        x: planet.x + normal.x * radius,
+        y: planet.y + normal.y * radius,
+        z: planet.z + normal.z * radius,
+      },
+      paintGroupId: 0,
+      slimeColor: 0x00e5ff,
+      patternId: 0,
+      radiusMultiplier: 1,
+    });
+
+    expect(stamp).not.toBeNull();
+    expect(simState.paintSeq).toBe(1);
+    expect(planetState.stamps).toHaveLength(1);
+  });
+
+  it("ignores impacts in deep water without mutating territory or paint sequence", () => {
+    const simState = createSimState();
+    const planetState = createPlanetState();
+    const planet = PLANET_POSITIONS[0]!;
+    const normal = findTerrainNormal(
+      (height) => GAME_CONFIG.terrain.waterLevel - height > GAME_CONFIG.terrain.sandBand,
+    );
+    const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+
+    const stamp = applyPaintImpact(simState, planetState, {
+      planetId: "planet-0",
+      pos: {
+        x: planet.x + normal.x * radius,
+        y: planet.y + normal.y * radius,
+        z: planet.z + normal.z * radius,
+      },
+      paintGroupId: 0,
+      slimeColor: 0x00e5ff,
+      patternId: 0,
+      radiusMultiplier: 1,
+    });
+
+    expect(stamp).toBeNull();
+    expect(simState.paintSeq).toBe(0);
+    expect(simState.scores.size).toBe(0);
+    expect(planetState.stamps).toHaveLength(0);
+    expect(
+      planetState.cells.every((cell) => cell.ownerPaintGroupId === NO_PAINT_GROUP_ID && cell.color === 0),
+    ).toBe(true);
   });
 });
