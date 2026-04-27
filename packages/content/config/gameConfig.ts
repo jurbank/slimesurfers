@@ -264,6 +264,20 @@ export const GAME_CONFIG = {
     visualRadius: 0.4,
   },
 
+  // -- Bots ------------------------------------------------------------------
+  bot: {
+    targetPopulation: 4,
+    scanRadius: 60,
+    shootRadius: 40,
+    minReactionTimeMs: 150,
+    maxReactionTimeMs: 800,
+    minAccuracyRadius: 0.5,
+    maxAccuracyRadius: 4.5,
+    minFireRateMs: 200,
+    maxFireRateMs: 1200,
+    refillSlimeThreshold: 20,
+  },
+
   // -- Debug -----------------------------------------------------------------
   debug: {
     showColliders: false,

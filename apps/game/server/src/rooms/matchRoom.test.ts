@@ -143,7 +143,7 @@ describe("MatchRoom", () => {
   it("wires room lifecycle setup on create", () => {
     const harness = createRoomHarness();
 
-    expect(harness.room.state.players.size).toBe(0);
+    expect(harness.room.state.players.size).toBe(4); // Bots fill the room
     expect(harness.messageHandlers.has(MessageType.Input)).toBe(true);
     expect(harness.scheduledIntervalMs).toBeGreaterThan(0);
   });

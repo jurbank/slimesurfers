@@ -100,6 +100,7 @@ export const NO_TEAM_ID = 255;
 export interface SimPlayerState {
   // Identity
   sessionId: string;
+  isBot: boolean;
   name: string;
   teamId: number;
   paintGroupId: number;

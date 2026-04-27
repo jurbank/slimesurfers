@@ -14,6 +14,7 @@ function createSimState(): SimMatchState {
   return {
     players: new Map(),
     planets: new Map(),
+    railStates: new Map(),
     projectiles: new Map(),
     pickups: new Map(),
     matchPhase: MatchPhase.Active,

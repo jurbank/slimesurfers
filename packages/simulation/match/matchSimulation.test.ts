@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   CLUSTER_WEAPON_PICKUP_SPAWNS,
   DEFAULT_WEAPON_ID,
@@ -20,6 +20,7 @@ import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
+import { generateBotInput } from "../ai/botController.ts";
 
 function createForwardInput(seq: number): InputMessage {
   return {
@@ -164,6 +165,26 @@ function trickInput(seq: number, pressedKeys: number): InputMessage {
 }
 
 describe("MatchSimulation", () => {
+  it("does not leave lobby when only bots are present", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
+
+    const bot = simulation.addBot("bot-1");
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(bot.name.endsWith("Bot")).toBe(true);
+    expect(simulation.matchState.matchPhase).toBe(MatchPhase.Lobby);
+  });
+
+  it("adds the Bot suffix to custom bot names exactly once", () => {
+    const simulation = new MatchSimulation();
+
+    const namedBot = simulation.addBot("bot-1", "Alpha");
+    const preSuffixedBot = simulation.addBot("bot-2", "Bravo Bot");
+
+    expect(namedBot.name).toBe("Alpha Bot");
+    expect(preSuffixedBot.name).toBe("Bravo Bot");
+  });
+
   it("can seed large friendly and enemy slime regions for movement testing when enabled", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: true });
     const planetPaint = simulation.matchState.planets;
@@ -864,6 +885,32 @@ describe("MatchSimulation", () => {
 
     expect(target.surfState).toBe(PlayerSurfState.None);
     expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
+  });
+
+  it("prevents bots from targeting a player hidden in their own slime", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      const simulation = new MatchSimulation();
+      const bot = simulation.addBot("bot-1");
+      const target = simulation.addPlayer("session-1", "Hidden");
+
+      bot.pos = { ...target.pos };
+      bot.planetId = target.planetId;
+      bot.teamId = 255;
+
+      paintPlayerSurface(simulation, target.sessionId, target.paintGroupId);
+      target.surfState = PlayerSurfState.SurfmingHidden;
+
+      const hiddenInput = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+      expect(hiddenInput.keys & InputKey.Fire).toBe(0);
+
+      simulation.matchState.elapsedMs += 1000;
+      target.lastFireTimeMs = simulation.matchState.elapsedMs;
+      const revealedInput = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+      expect(revealedInput.keys & InputKey.Fire).toBe(InputKey.Fire);
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it("recharges slime slowly by default, faster on friendly paint, and fastest while submerged", () => {

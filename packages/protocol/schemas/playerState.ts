@@ -37,6 +37,7 @@ defineTypes(Quat, { x: "float32", y: "float32", z: "float32", w: "float32" });
 export class PlayerState extends Schema {
   // Identity
   declare sessionId: string;
+  declare isBot: boolean;
   declare name: string;
   /** Team assignment for team-based modes. NO_TEAM_ID means unteamed (FFA). */
   declare teamId: number;
@@ -61,6 +62,7 @@ export class PlayerState extends Schema {
 }
 defineTypes(PlayerState, {
   sessionId: "string",
+  isBot: "boolean",
   name: "string",
   teamId: "uint8",
   paintGroupId: "uint16",

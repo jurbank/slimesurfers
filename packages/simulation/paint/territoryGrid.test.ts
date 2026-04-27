@@ -13,6 +13,7 @@ import type { SimMatchState, SimPlayerState } from "../match/simState.ts";
 function createPlayer(sessionId: string, paintGroupId: number, slimeColor: number): SimPlayerState {
   return {
     sessionId,
+    isBot: false,
     name: sessionId,
     teamId: 255,
     paintGroupId,
@@ -68,6 +69,7 @@ function createSimState(): SimMatchState {
       ["session-2", createPlayer("session-2", 1, 0xff6200)],
     ]),
     planets: new Map(),
+    railStates: new Map(),
     projectiles: new Map(),
     pickups: new Map(),
     matchPhase: MatchPhase.Active,

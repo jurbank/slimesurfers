@@ -66,6 +66,7 @@ function schemaRailFromSim(simRail: SimRailPaintState): RailPaintState {
 function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
   const schema = new PlayerState();
   schema.sessionId = sim.sessionId;
+  schema.isBot = sim.isBot;
   schema.name = sim.name;
   schema.teamId = sim.teamId;
   schema.paintGroupId = sim.paintGroupId;

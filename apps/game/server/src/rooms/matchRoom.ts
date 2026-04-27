@@ -1,5 +1,6 @@
 import { Room, type Client } from "@colyseus/core";
 import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
@@ -32,6 +33,7 @@ function resolveWeaponPickupLayout(): "map" | "cluster" {
 export class MatchRoom extends Room<{ state: GameState }> {
   private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
   private emoteSeq = 0;
+  private nextBotId = 0;
   private readonly lastEmotePostMs = new Map<string, number>();
   private readonly db = new SupabaseService();
   private readonly playerUuids = new Map<string, string>();
@@ -54,6 +56,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
       this.handleEmotePost(client, msg);
     });
 
+    this.evaluateBotPopulation();
     this.setSimulationInterval((dt) => this.tick(dt), this.simulation.tickIntervalMs);
   }
 
@@ -63,6 +66,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
   ) {
     const simPlayer = this.simulation.addPlayer(client.sessionId, options.name, options.colorIndex);
     addSimPlayerToRoomState(this.state, simPlayer);
+    this.evaluateBotPopulation();
     void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
 
     if (typeof options.playerUuid === "string" && UUID_RE.test(options.playerUuid)) {
@@ -99,7 +103,61 @@ export class MatchRoom extends Room<{ state: GameState }> {
     this.state.players.delete(client.sessionId);
     this.lastEmotePostMs.delete(client.sessionId);
     this.playerUuids.delete(client.sessionId);
+    this.evaluateBotPopulation();
     void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+  }
+
+  onDispose() {
+    for (const player of this.simulation.players.values()) {
+      if (player.isBot) {
+        this.simulation.removePlayer(player.sessionId);
+      }
+    }
+  }
+
+  private resolveTargetBotPopulation(): number {
+    const parsed = Number.parseInt(
+      process.env.TARGET_BOT_POPULATION ?? String(GAME_CONFIG.bot.targetPopulation),
+      10,
+    );
+    const configured = Number.isFinite(parsed) ? parsed : GAME_CONFIG.bot.targetPopulation;
+    return Math.max(0, Math.min(this.simulation.maxPlayers, configured));
+  }
+
+  private createBotSessionId(): string {
+    return `bot-${this.roomId || "room"}-${this.nextBotId++}`;
+  }
+
+  private evaluateBotPopulation(): void {
+    const players = Array.from(this.simulation.players.values());
+    const humanCount = players.filter((p) => !p.isBot).length;
+    const botCount = players.filter((p) => p.isBot).length;
+    const targetPopulation = this.resolveTargetBotPopulation();
+    const targetBotCount =
+      this.simulation.matchState.matchPhase === MatchPhase.Ended
+        ? 0
+        : Math.max(0, targetPopulation - humanCount);
+
+    if (botCount < targetBotCount) {
+      const botsToAdd = targetBotCount - botCount;
+      for (let i = 0; i < botsToAdd; i++) {
+        const botId = this.createBotSessionId();
+        const simPlayer = this.simulation.addBot(botId);
+        addSimPlayerToRoomState(this.state, simPlayer);
+      }
+      void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+    } else if (botCount > targetBotCount) {
+      const botsToRemove = botCount - targetBotCount;
+      const botPlayers = players.filter((p) => p.isBot);
+      for (let i = 0; i < botsToRemove; i++) {
+        const bot = botPlayers[i];
+        if (bot) {
+          this.simulation.removePlayer(bot.sessionId);
+          this.state.players.delete(bot.sessionId);
+        }
+      }
+      void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+    }
   }
 
   private handleEmotePost(client: Client, msg: EmotePostMessage): void {
@@ -133,6 +191,9 @@ export class MatchRoom extends Room<{ state: GameState }> {
   }
 
   private tick(dt: number): void {
+    if (this.simulation.matchState.elapsedMs % 5000 < dt) {
+      this.evaluateBotPopulation();
+    }
     const result = this.simulation.tick(dt);
     syncRoomStateFromSimulation(this.state, this.simulation.matchState);
 

@@ -35,7 +35,8 @@ import { buildComputedRail, type ComputedRail, sampleRailAt } from "../movement/
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { applyPaintImpact } from "../paint/stampPaint.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
-import { RAIL_PAINT_NODES, NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
+import { generateBotInput, removeBotState } from "../ai/botController.ts";
+import { RAIL_PAINT_NODES } from "@splat/protocol/schemas/paintedState.ts";
 import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
 import { cleanName } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
@@ -276,6 +277,7 @@ export interface MatchSimulationOptions {
 
 function createSimPlayer(
   sessionId: string,
+  isBot: boolean,
   playerIndex: number,
   name: unknown,
   paletteIndex: number,
@@ -291,10 +293,13 @@ function createSimPlayer(
   );
   const planetPos =
     PLANET_POSITIONS.find((planet) => planet.id === spawn.planetId) ?? PLANET_POSITIONS[0]!;
+  const cleanedName = cleanName(name, generateGuestPlayerName(playerIndex));
+  const resolvedName = isBot && !cleanedName.endsWith("-Bot") ? `${cleanedName} Bot` : cleanedName;
 
   return {
     sessionId,
-    name: cleanName(name, generateGuestPlayerName(playerIndex)),
+    isBot,
+    name: resolvedName,
     teamId: slot.teamId,
     paintGroupId: slot.paintGroupId,
     paletteIndex: slot.paletteIndex,
@@ -434,6 +439,7 @@ export class MatchSimulation {
     );
     const player = createSimPlayer(
       sessionId,
+      false,
       playerIndex,
       name,
       paletteIndex,
@@ -445,9 +451,27 @@ export class MatchSimulation {
     return player;
   }
 
+  addBot(sessionId: string, name?: unknown): SimPlayerState {
+    const playerIndex = this.playerCount++;
+    const assignedSlot = this.mode.assignPlayerSlot(playerIndex);
+    const paletteIndex = this.resolvePaletteIndex(playerIndex, null, assignedSlot.teamId);
+    const player = createSimPlayer(
+      sessionId,
+      true,
+      playerIndex,
+      name ?? generateGuestPlayerName(playerIndex),
+      paletteIndex,
+      this.mode,
+      this.simState.players.values(),
+    );
+    this.simState.players.set(sessionId, player);
+    return player;
+  }
+
   removePlayer(sessionId: string): void {
     this.simState.players.delete(sessionId);
     this.inputQueues.delete(sessionId);
+    removeBotState(sessionId);
   }
 
   getRecentPaintStamps(): readonly PaintStampMessage[] {
@@ -585,9 +609,12 @@ export class MatchSimulation {
     this.tickCount++;
     const serverDtSec = dtMs / 1000;
     let shouldBroadcastMatchPhase = false;
+    const hasHumanPlayers = Array.from(this.simState.players.values()).some(
+      (player) => !player.isBot,
+    );
 
     if (this.simState.matchPhase === MatchPhase.Lobby) {
-      if (this.simState.players.size > 0) {
+      if (hasHumanPlayers) {
         this.simState.matchPhase = MatchPhase.Countdown;
         this.simState.matchTimer = GAME_CONFIG.match.countdownSeconds;
         shouldBroadcastMatchPhase = true;
@@ -614,7 +641,9 @@ export class MatchSimulation {
     tickWeaponPickups(this.simState, serverDtSec);
 
     this.simState.players.forEach((player, sessionId) => {
-      const queue = this.inputQueues.get(sessionId);
+      const queue = player.isBot
+        ? [generateBotInput(player, this.simState, dtMs)]
+        : this.inputQueues.get(sessionId);
       if (queue && queue.length > 0) {
         const actionNowMs = this.simState.elapsedMs;
         const inputDtSec = serverDtSec / queue.length;
@@ -668,7 +697,9 @@ export class MatchSimulation {
           }
         }
         player.inputSeq = queue[queue.length - 1]!.seq;
-        queue.length = 0;
+        if (!player.isBot) {
+          queue.length = 0;
+        }
       } else {
         player.weaponTriggerHeldSinceMs = -1;
         const wasAirborne = player.movementState === PlayerMovementState.Airborne;
