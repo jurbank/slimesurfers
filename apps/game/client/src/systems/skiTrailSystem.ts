@@ -7,7 +7,8 @@ const TRAIL_EMIT_DISTANCE = 0.12;
 const TRAIL_HALF_WIDTH = 0.3;
 const TRAIL_HALF_WIDTH_WATER = 0.44;
 const WATER_TRAIL_COLOR = 0xc8ecff;
-const TRAIL_FADE_SPEED = 3.0;
+const TRAIL_FADE_SPEED = 6.0;
+const TRAIL_SURFACE_OFFSET = 0.9;
 
 export class SkiTrailSystem {
   private readonly scene: THREE.Scene;
@@ -126,10 +127,16 @@ export class SkiTrailSystem {
       this.trailCount === 0 ||
       dx * dx + dy * dy + dz * dz >= TRAIL_EMIT_DISTANCE * TRAIL_EMIT_DISTANCE
     ) {
+      // Offset the point down toward the surface so the trail sits at board level.
+      const toPlanetX = x - planetCenter.x;
+      const toPlanetY = y - planetCenter.y;
+      const toPlanetZ = z - planetCenter.z;
+      const radLen = Math.sqrt(toPlanetX * toPlanetX + toPlanetY * toPlanetY + toPlanetZ * toPlanetZ);
+      const invLen = radLen > 1e-8 ? 1 / radLen : 0;
       this.trailHead = (this.trailHead + 1) % TRAIL_MAX_POINTS;
-      this.trailPosX[this.trailHead] = x;
-      this.trailPosY[this.trailHead] = y;
-      this.trailPosZ[this.trailHead] = z;
+      this.trailPosX[this.trailHead] = x - toPlanetX * invLen * TRAIL_SURFACE_OFFSET;
+      this.trailPosY[this.trailHead] = y - toPlanetY * invLen * TRAIL_SURFACE_OFFSET;
+      this.trailPosZ[this.trailHead] = z - toPlanetZ * invLen * TRAIL_SURFACE_OFFSET;
       if (this.trailCount < TRAIL_MAX_POINTS) this.trailCount++;
       this.lastEmitX = x;
       this.lastEmitY = y;
@@ -182,8 +189,10 @@ export class SkiTrailSystem {
 
       this._side.crossVectors(this._dir, this._up).normalize();
 
-      // Alpha: 1 at head, 0 at tail — scaled down when barely moving.
-      const alpha = ((N - 1 - i) / (N - 1)) * speedScale;
+      // Alpha: fades in from the head over the first few points, fades out at the tail.
+      const tailFade = (N - 1 - i) / (N - 1);
+      const headFade = Math.min(1, i / 4);
+      const alpha = tailFade * headFade * speedScale;
 
       const vi = i * 2;
       posArr[vi * 3] = px - this._side.x * halfWidth;
@@ -205,7 +214,7 @@ export class SkiTrailSystem {
         posArr[(i * 2 + 1) * 3] =
         posArr[(i * 2 + 1) * 3 + 1] =
         posArr[(i * 2 + 1) * 3 + 2] =
-          0;
+        0;
       alphaArr[i * 2] = alphaArr[i * 2 + 1] = 0;
     }
 

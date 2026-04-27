@@ -8,7 +8,11 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
-import { PlanetPaintState, TerritoryCell, RailPaintState } from "@splat/protocol/schemas/paintedState.ts";
+import {
+  PlanetPaintState,
+  TerritoryCell,
+  RailPaintState,
+} from "@splat/protocol/schemas/paintedState.ts";
 import { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 import { MatchSimulation, type TickResult } from "@splat/simulation/match/matchSimulation.ts";
 import type {

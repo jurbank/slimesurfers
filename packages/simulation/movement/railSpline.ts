@@ -245,7 +245,13 @@ export function sampleRailAt(
   if (a.segmentIndex === b.segmentIndex) {
     const seg = a.segmentIndex;
     const localT = a.localT + (b.localT - a.localT) * t;
-    const rawTangent = catmullRomTangent(pts[seg]!, pts[seg + 1]!, pts[seg + 2]!, pts[seg + 3]!, localT);
+    const rawTangent = catmullRomTangent(
+      pts[seg]!,
+      pts[seg + 1]!,
+      pts[seg + 2]!,
+      pts[seg + 3]!,
+      localT,
+    );
     tangent = normalize(
       rawTangent.x === 0 && rawTangent.y === 0 && rawTangent.z === 0
         ? { x: 0, y: 0, z: 1 }

@@ -38,21 +38,21 @@ export const RAIL_DEFS: RailDef[] = [
     paintCorridorRadius: 8.0,
     controlPoints: [
       // Spanning ~280 degrees longitude to ensure a clear gap between ends
-      { nx: -0.383, ny: -0.866, nz: -0.321, heightOffset: 4.5 },  // -140 deg
-      { nx: -0.25, ny: -0.866, nz: -0.433, heightOffset: 6.0 },   // -120
+      { nx: -0.383, ny: -0.866, nz: -0.321, heightOffset: 4.5 }, // -140 deg
+      { nx: -0.25, ny: -0.866, nz: -0.433, heightOffset: 6.0 }, // -120
       { nx: -0.087, ny: -0.866, nz: -0.492, heightOffset: 10.0 }, // -100
-      { nx: 0.087, ny: -0.866, nz: -0.492, heightOffset: 12.0 },  // -80
-      { nx: 0.25, ny: -0.866, nz: -0.433, heightOffset: 12.0 },   // -60
-      { nx: 0.383, ny: -0.866, nz: -0.321, heightOffset: 12.0 },  // -40
-      { nx: 0.47, ny: -0.866, nz: -0.171, heightOffset: 12.0 },   // -20
-      { nx: 0.5, ny: -0.866, nz: 0, heightOffset: 12.0 },          // 0
-      { nx: 0.47, ny: -0.866, nz: 0.171, heightOffset: 12.0 },    // 20
-      { nx: 0.383, ny: -0.866, nz: 0.321, heightOffset: 12.0 },   // 40
-      { nx: 0.25, ny: -0.866, nz: 0.433, heightOffset: 12.0 },    // 60
-      { nx: 0.087, ny: -0.866, nz: 0.492, heightOffset: 12.0 },   // 80
-      { nx: -0.087, ny: -0.866, nz: 0.492, heightOffset: 10.0 },  // 100
-      { nx: -0.25, ny: -0.866, nz: 0.433, heightOffset: 6.0 },    // 120
-      { nx: -0.383, ny: -0.866, nz: 0.321, heightOffset: 40.5 },   // 140 deg
+      { nx: 0.087, ny: -0.866, nz: -0.492, heightOffset: 12.0 }, // -80
+      { nx: 0.25, ny: -0.866, nz: -0.433, heightOffset: 12.0 }, // -60
+      { nx: 0.383, ny: -0.866, nz: -0.321, heightOffset: 12.0 }, // -40
+      { nx: 0.47, ny: -0.866, nz: -0.171, heightOffset: 12.0 }, // -20
+      { nx: 0.5, ny: -0.866, nz: 0, heightOffset: 12.0 }, // 0
+      { nx: 0.47, ny: -0.866, nz: 0.171, heightOffset: 12.0 }, // 20
+      { nx: 0.383, ny: -0.866, nz: 0.321, heightOffset: 12.0 }, // 40
+      { nx: 0.25, ny: -0.866, nz: 0.433, heightOffset: 12.0 }, // 60
+      { nx: 0.087, ny: -0.866, nz: 0.492, heightOffset: 12.0 }, // 80
+      { nx: -0.087, ny: -0.866, nz: 0.492, heightOffset: 10.0 }, // 100
+      { nx: -0.25, ny: -0.866, nz: 0.433, heightOffset: 6.0 }, // 120
+      { nx: -0.383, ny: -0.866, nz: 0.321, heightOffset: 40.5 }, // 140 deg
     ],
   },
 ];

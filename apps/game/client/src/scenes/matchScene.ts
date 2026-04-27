@@ -127,6 +127,7 @@ export class MatchScene {
   private localPlayerPatternId = -1;
   private localTrail: SkiTrailSystem | null = null;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
+  private readonly remoteTrails = new Map<string, SkiTrailSystem>();
   private readonly playerColors = new Map<string, number>();
   private readonly playerPatterns = new Map<string, number>();
   private readonly removedSessions = new Set<string>();
@@ -609,7 +610,11 @@ export class MatchScene {
     for (const player of this.remotePlayers.values()) {
       player.dispose(this.render.scene);
     }
+    for (const trail of this.remoteTrails.values()) {
+      trail.dispose();
+    }
     this.remotePlayers.clear();
+    this.remoteTrails.clear();
     this.playerColors.clear();
     this.playerPatterns.clear();
     this.removedSessions.clear();
@@ -641,7 +646,9 @@ export class MatchScene {
     // Don't recreate a mesh for a session that was explicitly removed.
     if (!existing && this.removedSessions.has(sessionId)) return;
     existing?.dispose(this.render.scene);
+    this.remoteTrails.get(sessionId)?.dispose();
     this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor, patternId));
+    this.remoteTrails.set(sessionId, new SkiTrailSystem(this.render.scene, slimeColor));
     this.playerColors.set(sessionId, slimeColor);
     this.playerPatterns.set(sessionId, patternId);
   }
@@ -653,7 +660,9 @@ export class MatchScene {
     }
     for (const sid of stale) {
       this.remotePlayers.get(sid)!.dispose(this.render.scene);
+      this.remoteTrails.get(sid)?.dispose();
       this.remotePlayers.delete(sid);
+      this.remoteTrails.delete(sid);
       this.playerColors.delete(sid);
       this.playerPatterns.delete(sid);
       this.runtime.removePlayer(sid);
@@ -792,7 +801,9 @@ export class MatchScene {
           this.combatHud.clear();
         } else {
           this.remotePlayers.get(sessionId)?.dispose(this.render.scene);
+          this.remoteTrails.get(sessionId)?.dispose();
           this.remotePlayers.delete(sessionId);
+          this.remoteTrails.delete(sessionId);
         }
         this.trickText.clear();
         this.emoteBubbles.clearPlayer(sessionId);
@@ -1182,7 +1193,17 @@ export class MatchScene {
       for (const [sessionId, remotePlayer] of this.remotePlayers) {
         if (sessionId === localSessionId) continue;
         const remoteState = this.runtime.getRemotePlayerState(sessionId, now);
-        if (remoteState) remotePlayer.update(remoteState, dt);
+        if (remoteState) {
+          remotePlayer.update(remoteState, dt);
+          const remotePos = new THREE.Vector3(
+            remoteState.pos.x,
+            remoteState.pos.y,
+            remoteState.pos.z,
+          );
+          this.remoteTrails
+            .get(sessionId)
+            ?.update(remoteState, nearestPlanetCenter(remotePos), remoteState.slimeColor);
+        }
       }
 
       this.pickups.update(now);

@@ -6,17 +6,17 @@ A 1080 Snowboarding-style grind system. Entry is automatic (earned by speed and 
 
 ## File Map
 
-| File                                                    | Role                                                                |
-| ------------------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/content/config/railDefs.ts`                   | Authoritative data — control points, paint corridor radius          |
-| `packages/content/config/gameConfig.ts`                 | Tuning constants under the `rail` key                               |
-| `packages/simulation/movement/railSpline.ts`            | Catmull-Rom spline math, arc-length table                           |
-| `packages/simulation/movement/simulatedRailGrinding.ts` | Grind entry, exit physics                                           |
-| `packages/simulation/movement/simulatedMovement.ts`     | Three hook lines that dispatch to the above                         |
-| `packages/simulation/match/matchSimulation.ts`          | Builds `ComputedRail[]` at startup; stamps territory incrementally  |
-| `apps/game/client/src/systems/railSystem.ts`            | Visual: tube mesh (with paint shader) + support columns             |
-| `apps/game/client/src/shaders/railShader.ts`            | Fragment shader for dynamic rail painting                           |
-| `apps/game/client/src/network/runtimeState.ts`          | Client prediction: carries grind state through snapshots            |
+| File                                                    | Role                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `packages/content/config/railDefs.ts`                   | Authoritative data — control points, paint corridor radius         |
+| `packages/content/config/gameConfig.ts`                 | Tuning constants under the `rail` key                              |
+| `packages/simulation/movement/railSpline.ts`            | Catmull-Rom spline math, arc-length table                          |
+| `packages/simulation/movement/simulatedRailGrinding.ts` | Grind entry, exit physics                                          |
+| `packages/simulation/movement/simulatedMovement.ts`     | Three hook lines that dispatch to the above                        |
+| `packages/simulation/match/matchSimulation.ts`          | Builds `ComputedRail[]` at startup; stamps territory incrementally |
+| `apps/game/client/src/systems/railSystem.ts`            | Visual: tube mesh (with paint shader) + support columns            |
+| `apps/game/client/src/shaders/railShader.ts`            | Fragment shader for dynamic rail painting                          |
+| `apps/game/client/src/network/runtimeState.ts`          | Client prediction: carries grind state through snapshots           |
 
 ---
 
@@ -110,12 +110,12 @@ Player is snapped to the spline at the new `grindT`. Velocity is set to `tangent
 
 ### New state fields on `SimPlayerState`
 
-| Field         | Type     | Meaning                                            |
-| ------------- | -------- | -------------------------------------------------- |
-| `grindRailId` | `number` | Index into `RAILS[]`, or −1 when not grinding      |
-| `grindT`      | `number` | Current arc-length position along the rail (wu)    |
-| `lastGrindT`  | `number` | Arc-length position from the previous tick (wu)    |
-| `grindSpeed`  | `number` | Signed wu/s along the rail tangent                 |
+| Field         | Type     | Meaning                                         |
+| ------------- | -------- | ----------------------------------------------- |
+| `grindRailId` | `number` | Index into `RAILS[]`, or −1 when not grinding   |
+| `grindT`      | `number` | Current arc-length position along the rail (wu) |
+| `lastGrindT`  | `number` | Arc-length position from the previous tick (wu) |
+| `grindSpeed`  | `number` | Signed wu/s along the rail tangent              |
 
 ---
 
