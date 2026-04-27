@@ -6,6 +6,36 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+export interface BotBehaviorProfile {
+  aggression: number;
+  prefersSurfBias: number;
+  prefersAttackBias: number;
+  prefersTerritoryBias: number;
+}
+
+export interface BotConfigEntry extends Partial<BotBehaviorProfile> {
+  name?: string;
+}
+
+export interface WeightedBotConfigEntry extends BotConfigEntry {
+  weight: number;
+}
+
+export function resolveBotBehaviorProfile(
+  override: Partial<BotBehaviorProfile> = {},
+): BotBehaviorProfile {
+  const defaults = GAME_CONFIG.bot.behaviorDefaults;
+  return {
+    aggression: clamp(override.aggression ?? defaults.aggression, 0, 10),
+    prefersSurfBias: Math.max(0, override.prefersSurfBias ?? defaults.prefersSurfBias),
+    prefersAttackBias: Math.max(0, override.prefersAttackBias ?? defaults.prefersAttackBias),
+    prefersTerritoryBias: Math.max(
+      0,
+      override.prefersTerritoryBias ?? defaults.prefersTerritoryBias,
+    ),
+  };
+}
+
 /**
  * GAME_CONFIG — authoritative game-feel constants.
  *
@@ -266,16 +296,59 @@ export const GAME_CONFIG = {
 
   // -- Bots ------------------------------------------------------------------
   bot: {
-    targetPopulation: 4,
+    // Desired total players in the room, including humans. Missing slots are filled with bots.
+    targetPopulation: 3,
+    // Max distance at which a bot looks for enemies to track or engage.
     scanRadius: 60,
+    // Max distance at which a bot is allowed to start shooting a tracked target.
     shootRadius: 40,
-    minReactionTimeMs: 150,
+    // Fastest possible delay before reacting to a newly seen target or state change.
+    minReactionTimeMs: 250,
+    // Slowest possible delay before reacting; higher values make bots feel less snappy.
     maxReactionTimeMs: 800,
+    // Best-case aim error radius in world units; lower values make close shots more precise.
     minAccuracyRadius: 0.5,
+    // Worst-case aim error radius in world units; higher values make inaccurate bots miss wider.
     maxAccuracyRadius: 4.5,
+    // Fastest allowed gap between shots once a bot has decided to fire.
     minFireRateMs: 200,
+    // Slowest allowed gap between shots; higher values reduce sustained pressure.
     maxFireRateMs: 1200,
+    // If slime drops below this, the bot prioritizes refilling instead of continuing pressure.
     refillSlimeThreshold: 20,
+    behaviorDefaults: {
+      aggression: 5,
+      prefersSurfBias: 0.3,
+      prefersAttackBias: 0.4,
+      prefersTerritoryBias: 0.6,
+    },
+    // Authored bots with stable names and hand-tuned behavior.
+    namedBots: [{
+      name: "SlimeMaster",
+      prefersSurfBias: 0.2,
+      prefersAttackBias: 0.35,
+      prefersTerritoryBias: 1.0,
+      aggression: 4,
+    },
+    {
+      name: "N00bHunter",
+      prefersSurfBias: 0.15,
+      prefersAttackBias: 1.0,
+      prefersTerritoryBias: 0.2,
+      aggression: 9,
+    },
+    {
+      name: "Slip360",
+      prefersSurfBias: 1.0,
+      prefersAttackBias: 0.2,
+      prefersTerritoryBias: 0.35,
+      aggression: 2,
+    },] as BotConfigEntry[],
+    // Procedurally generated bots sampled from a weighted mix of behavior profiles.
+    generatedBots: {
+      count: 0,
+      mix: [] as WeightedBotConfigEntry[],
+    },
   },
 
   // -- Debug -----------------------------------------------------------------

@@ -7,7 +7,12 @@ import {
 } from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { createStampBuckets } from "./paintDetection.ts";
-import { createTerritoryCells, applyPaintToTerritoryAtPoint } from "./territoryGrid.ts";
+import {
+  applyPaintToTerritoryAtPoint,
+  countPaintableTerritoryCells,
+  createTerritoryCells,
+  isTerritoryCellPaintable,
+} from "./territoryGrid.ts";
 import type { SimMatchState, SimPlayerState } from "../match/simState.ts";
 
 function createPlayer(sessionId: string, paintGroupId: number, slimeColor: number): SimPlayerState {
@@ -104,6 +109,27 @@ function surfacePointForCell(row: number, col: number): { x: number; y: number; 
 }
 
 describe("territoryGrid", () => {
+  it("counts only paintable cells toward total territory coverage", () => {
+    const { rows, cols } = getPaintTerritoryDimensions();
+    const totalCells = rows * cols;
+    const paintableCells = countPaintableTerritoryCells(rows, cols);
+
+    expect(paintableCells).toBeGreaterThan(0);
+    expect(paintableCells).toBeLessThan(totalCells);
+
+    let blockedCellCount = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (!isTerritoryCellPaintable(row, col, rows, cols)) {
+          blockedCellCount++;
+        }
+      }
+    }
+
+    expect(blockedCellCount).toBe(totalCells - paintableCells);
+    expect(blockedCellCount).toBeGreaterThan(0);
+  });
+
   it("claims neutral cells once and does not double-count repainting the same owned area", () => {
     const simState = createSimState();
     const { rows, cols } = getPaintTerritoryDimensions();

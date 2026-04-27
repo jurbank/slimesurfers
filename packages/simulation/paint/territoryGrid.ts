@@ -1,6 +1,8 @@
 import { getPaintStampAngularRadius, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import type { SimMatchState, SimPlanetPaintState, SimTerritoryCell } from "../match/simState.ts";
+import { getTerrainHeight } from "../terrain/planetTerrain.ts";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -21,6 +23,13 @@ function getCellNormal(row: number, col: number, rows: number, cols: number) {
     y: Math.cos(theta),
     z: sinTheta * Math.sin(phi),
   };
+}
+
+function getWaterDepthAtCell(row: number, col: number, rows: number, cols: number): number {
+  const normal = getCellNormal(row, col, rows, cols);
+  return (
+    GAME_CONFIG.terrain.waterLevel - getTerrainHeight(normal.x, normal.y, normal.z, GAME_CONFIG)
+  );
 }
 
 function dot(
@@ -59,6 +68,27 @@ export function createTerritoryCells(rows: number, cols: number): SimTerritoryCe
     });
   }
   return cells;
+}
+
+export function isTerritoryCellPaintable(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+): boolean {
+  return getWaterDepthAtCell(row, col, rows, cols) <= GAME_CONFIG.terrain.sandBand;
+}
+
+export function countPaintableTerritoryCells(rows: number, cols: number): number {
+  let count = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (isTerritoryCellPaintable(row, col, rows, cols)) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 export interface PaintPlayerInput {

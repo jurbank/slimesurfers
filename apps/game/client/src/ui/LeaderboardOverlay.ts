@@ -4,6 +4,7 @@ import type {
   LeaderboardEntry,
   LeaderboardMessage,
 } from "@splat/protocol/network/serverMessages.ts";
+import { countPaintableTerritoryCells } from "@splat/simulation/paint/territoryGrid.ts";
 import { formatKillFeedLine, type FormattedKillFeedLine } from "./formatKillFeedLine.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
@@ -14,7 +15,9 @@ const KILL_FEED_ENTER_MS = 180;
 const KILL_FEED_FADE_MS = 900;
 const JOIN_PILL_LIFETIME_MS = 5000;
 const { rows: TOTAL_TERRITORY_ROWS, cols: TOTAL_TERRITORY_COLS } = getPaintTerritoryDimensions();
-const TOTAL_CELLS = TOTAL_TERRITORY_ROWS * TOTAL_TERRITORY_COLS * GAME_CONFIG.planet.count;
+const TOTAL_PAINTABLE_CELLS =
+  countPaintableTerritoryCells(TOTAL_TERRITORY_ROWS, TOTAL_TERRITORY_COLS) *
+  GAME_CONFIG.planet.count;
 
 interface ActiveKillFeedItem {
   createdAtMs: number;
@@ -150,7 +153,7 @@ export class LeaderboardOverlay {
     });
 
     this.progressLabel = document.createElement("div");
-    this.progressLabel.textContent = "Planet surface covered in slime";
+    this.progressLabel.textContent = "Paintable surface covered in slime";
     Object.assign(this.progressLabel.style, {
       fontSize: "0.7rem",
       textTransform: "uppercase",
@@ -558,7 +561,7 @@ export class LeaderboardOverlay {
   private renderTeamProgressBar(message: LeaderboardMessage): void {
     let totalClaimed = 0;
     message.teamScores.forEach((score, teamId) => {
-      const width = (score / TOTAL_CELLS) * 100;
+      const width = (score / TOTAL_PAINTABLE_CELLS) * 100;
       totalClaimed += width;
       if (width > 0) {
         const segment = this.createProgressSegment(
@@ -579,7 +582,7 @@ export class LeaderboardOverlay {
     );
 
     stableEntries.forEach((entry) => {
-      const width = (entry.paintScore / TOTAL_CELLS) * 100;
+      const width = (entry.paintScore / TOTAL_PAINTABLE_CELLS) * 100;
       totalClaimed += width;
       if (width > 0.5) {
         const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);

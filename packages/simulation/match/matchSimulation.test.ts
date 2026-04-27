@@ -891,7 +891,14 @@ describe("MatchSimulation", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
     try {
       const simulation = new MatchSimulation();
-      const bot = simulation.addBot("bot-1");
+      const bot = simulation.addBot("bot-1", undefined, {
+        profile: {
+          aggression: 8,
+          prefersAttackBias: 1,
+          prefersTerritoryBias: 0.2,
+          prefersSurfBias: 0.1,
+        },
+      });
       const target = simulation.addPlayer("session-1", "Hidden");
 
       bot.pos = { ...target.pos };
@@ -908,6 +915,96 @@ describe("MatchSimulation", () => {
       target.lastFireTimeMs = simulation.matchState.elapsedMs;
       const revealedInput = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
       expect(revealedInput.keys & InputKey.Fire).toBe(InputKey.Fire);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("keeps bots in ski mode on the surface instead of leaving them unsurfed", () => {
+    const simulation = new MatchSimulation();
+    const bot = simulation.addBot("bot-surf", undefined, {
+      profile: {
+        aggression: 4,
+        prefersAttackBias: 0.3,
+        prefersTerritoryBias: 0.7,
+        prefersSurfBias: 0.5,
+      },
+    });
+
+    const input = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+
+    expect(input.keys & InputKey.Submerge).toBe(InputKey.Submerge);
+  });
+
+  it("makes bots fire at territory when no enemy target is available", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      const simulation = new MatchSimulation();
+      const bot = simulation.addBot("bot-territory", undefined, {
+        profile: {
+          aggression: 4,
+          prefersAttackBias: 0.2,
+          prefersTerritoryBias: 1,
+          prefersSurfBias: 0.1,
+        },
+      });
+
+      simulation.matchState.elapsedMs = 1000;
+      const input = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+
+      expect(input.keys & InputKey.Fire).toBe(InputKey.Fire);
+      expect(input.keys & InputKey.Forward).toBe(InputKey.Forward);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("makes surfer bots emit airborne trick inputs", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      const simulation = new MatchSimulation();
+      const bot = simulation.addBot("bot-surfer-tricks", undefined, {
+        profile: {
+          aggression: 2,
+          prefersAttackBias: 0.1,
+          prefersTerritoryBias: 0.3,
+          prefersSurfBias: 1,
+        },
+      });
+
+      makeAirborneSkier(bot);
+
+      const first = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+      const second = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+
+      expect(first.pressedKeys).toBe(InputKey.Left);
+      expect(second.pressedKeys).toBe(InputKey.Forward);
+      expect(first.keys & InputKey.Left).toBe(InputKey.Left);
+      expect(second.keys & InputKey.Forward).toBe(InputKey.Forward);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("allows non-surfer bots to emit airborne trick inputs too", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.1);
+    try {
+      const simulation = new MatchSimulation();
+      const bot = simulation.addBot("bot-territory-tricks", undefined, {
+        profile: {
+          aggression: 4,
+          prefersAttackBias: 0.2,
+          prefersTerritoryBias: 1,
+          prefersSurfBias: 0.2,
+        },
+      });
+
+      makeAirborneSkier(bot);
+
+      const input = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
+
+      expect(input.pressedKeys).toBe(InputKey.Left);
+      expect(input.keys & InputKey.Left).toBe(InputKey.Left);
     } finally {
       randomSpy.mockRestore();
     }

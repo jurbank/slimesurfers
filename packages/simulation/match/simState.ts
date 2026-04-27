@@ -1,5 +1,6 @@
 import type { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
+import type { BotBehaviorProfile } from "@splat/content/config/gameConfig.ts";
 
 // Plain simulation types — no framework imports.
 
@@ -94,6 +95,7 @@ export const PlayerSurfState = {
 export type PlayerSurfState = (typeof PlayerSurfState)[keyof typeof PlayerSurfState];
 
 export const NO_TEAM_ID = 255;
+export type BotOrigin = "named" | "generated";
 
 // -- Player state ------------------------------------------------------------
 
@@ -102,6 +104,9 @@ export interface SimPlayerState {
   sessionId: string;
   isBot: boolean;
   name: string;
+  botProfile?: BotBehaviorProfile;
+  botOrigin?: BotOrigin;
+  botConfigIndex?: number;
   teamId: number;
   paintGroupId: number;
   paletteIndex: number;

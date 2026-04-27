@@ -6,6 +6,8 @@ import {
   getPlanetSurfaceChordRadius,
   getPaintTerritoryDimensions,
   PLANET_POSITIONS,
+  resolveBotBehaviorProfile,
+  type BotBehaviorProfile,
 } from "@splat/content/config/gameConfig.ts";
 import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
@@ -44,6 +46,7 @@ import {
   NO_TEAM_ID,
   PlayerMovementState,
   PlayerSurfState,
+  type BotOrigin,
   type SimMatchState,
   type SimPlanetPaintState,
   type SimPlayerState,
@@ -283,6 +286,11 @@ function createSimPlayer(
   paletteIndex: number,
   mode: GameModeDefinition,
   existingPlayers: Iterable<SimPlayerState>,
+  botOptions?: {
+    profile?: Partial<BotBehaviorProfile>;
+    origin?: BotOrigin;
+    configIndex?: number;
+  },
 ): SimPlayerState {
   const slot = { ...mode.assignPlayerSlot(playerIndex), paletteIndex };
   const spawn = selectSpawnSurface(
@@ -294,12 +302,15 @@ function createSimPlayer(
   const planetPos =
     PLANET_POSITIONS.find((planet) => planet.id === spawn.planetId) ?? PLANET_POSITIONS[0]!;
   const cleanedName = cleanName(name, generateGuestPlayerName(playerIndex));
-  const resolvedName = isBot && !cleanedName.endsWith("-Bot") ? `${cleanedName} Bot` : cleanedName;
+  const resolvedName = isBot && !cleanedName.endsWith(" Bot") ? `${cleanedName} Bot` : cleanedName;
 
   return {
     sessionId,
     isBot,
     name: resolvedName,
+    botProfile: isBot ? resolveBotBehaviorProfile(botOptions?.profile) : undefined,
+    botOrigin: isBot ? botOptions?.origin : undefined,
+    botConfigIndex: isBot ? botOptions?.configIndex : undefined,
     teamId: slot.teamId,
     paintGroupId: slot.paintGroupId,
     paletteIndex: slot.paletteIndex,
@@ -451,7 +462,15 @@ export class MatchSimulation {
     return player;
   }
 
-  addBot(sessionId: string, name?: unknown): SimPlayerState {
+  addBot(
+    sessionId: string,
+    name?: unknown,
+    botOptions?: {
+      profile?: Partial<BotBehaviorProfile>;
+      origin?: BotOrigin;
+      configIndex?: number;
+    },
+  ): SimPlayerState {
     const playerIndex = this.playerCount++;
     const assignedSlot = this.mode.assignPlayerSlot(playerIndex);
     const paletteIndex = this.resolvePaletteIndex(playerIndex, null, assignedSlot.teamId);
@@ -463,6 +482,7 @@ export class MatchSimulation {
       paletteIndex,
       this.mode,
       this.simState.players.values(),
+      botOptions,
     );
     this.simState.players.set(sessionId, player);
     return player;

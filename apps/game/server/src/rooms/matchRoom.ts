@@ -1,6 +1,10 @@
 import { Room, type Client } from "@colyseus/core";
 import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  resolveBotBehaviorProfile,
+  type BotConfigEntry,
+} from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
@@ -116,12 +120,36 @@ export class MatchRoom extends Room<{ state: GameState }> {
   }
 
   private resolveTargetBotPopulation(): number {
+    const configuredBotCount =
+      GAME_CONFIG.bot.namedBots.length + Math.max(0, GAME_CONFIG.bot.generatedBots.count);
     const parsed = Number.parseInt(
-      process.env.TARGET_BOT_POPULATION ?? String(GAME_CONFIG.bot.targetPopulation),
+      process.env.TARGET_BOT_POPULATION ??
+        String(configuredBotCount > 0 ? configuredBotCount : GAME_CONFIG.bot.targetPopulation),
       10,
     );
-    const configured = Number.isFinite(parsed) ? parsed : GAME_CONFIG.bot.targetPopulation;
+    const configured = Number.isFinite(parsed)
+      ? parsed
+      : configuredBotCount > 0
+        ? configuredBotCount
+        : GAME_CONFIG.bot.targetPopulation;
     return Math.max(0, Math.min(this.simulation.maxPlayers, configured));
+  }
+
+  private pickGeneratedBotTemplate(): BotConfigEntry {
+    const mix = GAME_CONFIG.bot.generatedBots.mix;
+    if (mix.length === 0) return {};
+
+    const totalWeight = mix.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
+    if (totalWeight <= 0) return mix[0] ?? {};
+
+    let roll = Math.random() * totalWeight;
+    for (const entry of mix) {
+      const weight = Math.max(0, entry.weight);
+      if (roll < weight) return entry;
+      roll -= weight;
+    }
+
+    return mix[mix.length - 1] ?? {};
   }
 
   private createBotSessionId(): string {
@@ -131,31 +159,71 @@ export class MatchRoom extends Room<{ state: GameState }> {
   private evaluateBotPopulation(): void {
     const players = Array.from(this.simulation.players.values());
     const humanCount = players.filter((p) => !p.isBot).length;
-    const botCount = players.filter((p) => p.isBot).length;
+    const botPlayers = players.filter((p) => p.isBot);
     const targetPopulation = this.resolveTargetBotPopulation();
     const targetBotCount =
       this.simulation.matchState.matchPhase === MatchPhase.Ended
         ? 0
         : Math.max(0, targetPopulation - humanCount);
+    const desiredNamedCount = Math.min(GAME_CONFIG.bot.namedBots.length, targetBotCount);
+    const desiredGeneratedCount = Math.max(0, targetBotCount - desiredNamedCount);
 
-    if (botCount < targetBotCount) {
-      const botsToAdd = targetBotCount - botCount;
+    const existingNamedByIndex = new Map<number, (typeof botPlayers)[number]>();
+    const existingGenerated: typeof botPlayers = [];
+    for (const bot of botPlayers) {
+      if (bot.botOrigin === "named" && typeof bot.botConfigIndex === "number") {
+        existingNamedByIndex.set(bot.botConfigIndex, bot);
+      } else {
+        existingGenerated.push(bot);
+      }
+    }
+
+    let changed = false;
+
+    for (let index = 0; index < desiredNamedCount; index++) {
+      if (existingNamedByIndex.has(index)) continue;
+      const config = GAME_CONFIG.bot.namedBots[index] ?? {};
+      const botId = this.createBotSessionId();
+      const simPlayer = this.simulation.addBot(botId, config.name, {
+        profile: resolveBotBehaviorProfile(config),
+        origin: "named",
+        configIndex: index,
+      });
+      addSimPlayerToRoomState(this.state, simPlayer);
+      changed = true;
+    }
+
+    for (const [index, bot] of existingNamedByIndex) {
+      if (index < desiredNamedCount) continue;
+      this.simulation.removePlayer(bot.sessionId);
+      this.state.players.delete(bot.sessionId);
+      changed = true;
+    }
+
+    if (existingGenerated.length < desiredGeneratedCount) {
+      const botsToAdd = desiredGeneratedCount - existingGenerated.length;
       for (let i = 0; i < botsToAdd; i++) {
+        const template = this.pickGeneratedBotTemplate();
         const botId = this.createBotSessionId();
-        const simPlayer = this.simulation.addBot(botId);
+        const simPlayer = this.simulation.addBot(botId, template.name, {
+          profile: resolveBotBehaviorProfile(template),
+          origin: "generated",
+        });
         addSimPlayerToRoomState(this.state, simPlayer);
       }
-      void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
-    } else if (botCount > targetBotCount) {
-      const botsToRemove = botCount - targetBotCount;
-      const botPlayers = players.filter((p) => p.isBot);
+      changed = true;
+    } else if (existingGenerated.length > desiredGeneratedCount) {
+      const botsToRemove = existingGenerated.length - desiredGeneratedCount;
       for (let i = 0; i < botsToRemove; i++) {
-        const bot = botPlayers[i];
-        if (bot) {
-          this.simulation.removePlayer(bot.sessionId);
-          this.state.players.delete(bot.sessionId);
-        }
+        const bot = existingGenerated[i];
+        if (!bot) continue;
+        this.simulation.removePlayer(bot.sessionId);
+        this.state.players.delete(bot.sessionId);
       }
+      changed = true;
+    }
+
+    if (changed) {
       void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
     }
   }

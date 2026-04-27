@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { MatchRoom } from "./matchRoom.ts";
 
@@ -7,9 +8,9 @@ function createRoomHarness() {
   (room as any).setState = (state: any) => {
     (room as any).state = state;
   };
-  (room as any).onMessage = () => { };
-  (room as any).setSimulationInterval = () => { };
-  (room as any).broadcast = () => { };
+  (room as any).onMessage = () => {};
+  (room as any).setSimulationInterval = () => {};
+  (room as any).broadcast = () => {};
   (room as any).setMetadata = () => Promise.resolve();
 
   room.onCreate();
@@ -17,7 +18,7 @@ function createRoomHarness() {
 }
 
 function createFakeClient(sessionId: string) {
-  return { sessionId, send: () => { } };
+  return { sessionId, send: () => {} };
 }
 
 function withTargetBotPopulation(value: string, run: () => void) {
@@ -31,6 +32,29 @@ function withTargetBotPopulation(value: string, run: () => void) {
     } else {
       process.env.TARGET_BOT_POPULATION = previous;
     }
+  }
+}
+
+function withBotConfig(
+  patch: {
+    namedBots: typeof GAME_CONFIG.bot.namedBots;
+    generatedBots: typeof GAME_CONFIG.bot.generatedBots;
+  },
+  run: () => void,
+) {
+  const previousNamedBots = GAME_CONFIG.bot.namedBots;
+  const previousGeneratedBots = GAME_CONFIG.bot.generatedBots;
+  try {
+    (GAME_CONFIG.bot as { namedBots: typeof GAME_CONFIG.bot.namedBots }).namedBots =
+      patch.namedBots;
+    (GAME_CONFIG.bot as { generatedBots: typeof GAME_CONFIG.bot.generatedBots }).generatedBots =
+      patch.generatedBots;
+    run();
+  } finally {
+    (GAME_CONFIG.bot as { namedBots: typeof GAME_CONFIG.bot.namedBots }).namedBots =
+      previousNamedBots;
+    (GAME_CONFIG.bot as { generatedBots: typeof GAME_CONFIG.bot.generatedBots }).generatedBots =
+      previousGeneratedBots;
   }
 }
 
@@ -114,5 +138,56 @@ describe("Bot Population", () => {
 
       expect(simulation.matchState.matchPhase).toBe(MatchPhase.Lobby);
     });
+  });
+
+  it("spawns named bots first and fills remaining slots from generated mixes", () => {
+    withBotConfig(
+      {
+        namedBots: [
+          {
+            name: "Shaper",
+            aggression: 3,
+            prefersAttackBias: 0.2,
+            prefersTerritoryBias: 1,
+            prefersSurfBias: 0.1,
+          },
+          {
+            name: "Hunter",
+            aggression: 9,
+            prefersAttackBias: 1,
+            prefersTerritoryBias: 0.2,
+            prefersSurfBias: 0.1,
+          },
+        ],
+        generatedBots: {
+          count: 2,
+          mix: [
+            {
+              weight: 1,
+              aggression: 2,
+              prefersAttackBias: 0.1,
+              prefersTerritoryBias: 0.2,
+              prefersSurfBias: 1,
+            },
+          ],
+        },
+      },
+      () => {
+        const { room } = createRoomHarness();
+        const players = Array.from((room as any).simulation.players.values()).filter(
+          (p: any) => p.isBot,
+        );
+
+        expect(players).toHaveLength(4);
+        expect(players.filter((p: any) => p.botOrigin === "named")).toHaveLength(2);
+        expect(players.filter((p: any) => p.botOrigin === "generated")).toHaveLength(2);
+        expect(
+          players.some((p: any) => typeof p.name === "string" && p.name.endsWith("Shaper Bot")),
+        ).toBe(true);
+        expect(
+          players.some((p: any) => typeof p.name === "string" && p.name.endsWith("Hunter Bot")),
+        ).toBe(true);
+      },
+    );
   });
 });
