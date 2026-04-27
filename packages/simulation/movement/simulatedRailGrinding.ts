@@ -96,11 +96,14 @@ function applyGrindSnap(
   const offset = cfg.rail.visualRadius + cfg.movement.standingHeight;
   assign(state.pos, add(pos, scale(up, offset)));
 
-  assign(state.vel, scale(tangent, snap.speed));
+  // Guarantee a comfortable minimum speed so slow-angle entries feel punchy.
+  const dir = snap.speed >= 0 ? 1 : -1;
+  const snapSpeed = dir * Math.max(Math.abs(snap.speed), cfg.rail.minEntrySpeed);
+  assign(state.vel, scale(tangent, snapSpeed));
   state.grindRailId = snap.railIndex;
   state.grindT = snap.arcLength;
   state.lastGrindT = snap.arcLength;
-  state.grindSpeed = snap.speed;
+  state.grindSpeed = snapSpeed;
   state.movementState = PlayerMovementState.Grinding;
   state.planetId = "";
   state.surfState = PlayerSurfState.SkiVisible;
@@ -184,11 +187,18 @@ export function stepGrinding(
 
   const { pos, tangent } = sampleRailAt(rail, state.grindT);
 
-  // Carve-charge: hold Anchor to build jump charge, release to launch.
+  // Carve-charge: hold Anchor to build jump charge and accelerate, release to launch.
   const anchorHeld = (input.keys & InputKey.Anchor) !== 0;
   if (anchorHeld) {
     state.skiJumpCharge = Math.min(1, state.skiJumpCharge + dt * 1.25);
     state.isCarving = true;
+    const cDir = state.grindSpeed >= 0 ? 1 : -1;
+    state.grindSpeed =
+      cDir *
+      Math.min(
+        Math.abs(state.grindSpeed) + cfg.rail.carveAccelerationPerSecond * dt,
+        cfg.rail.maxGrindSpeed,
+      );
   } else if (state.skiJumpCharge > 0) {
     const baseSpeed = cfg.movement.moveSpeed * cfg.movement.waterSkiSpeedMultiplier;
     const speedRatio = Math.min(Math.abs(state.grindSpeed) / baseSpeed, 2.0);

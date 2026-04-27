@@ -23,6 +23,8 @@ export interface RailSample {
   pos: Vec3Data;
   tangent: Vec3Data; // unit vector in direction of increasing arcLength
   arcLength: number; // cumulative distance from rail start (wu)
+  segmentIndex: number; // which Catmull-Rom segment this sample belongs to
+  localT: number; // t within that segment [0, 1]
 }
 
 export interface ComputedRail {
@@ -32,6 +34,7 @@ export interface ComputedRail {
   samples: RailSample[];
   totalLength: number;
   paintCorridorRadius: number;
+  pts: Vec3Data[]; // padded control points for analytical re-evaluation
 }
 
 // -- Vec3 helpers (local, no imports needed) ---------------------------------
@@ -128,7 +131,7 @@ export function buildComputedRail(
   planetCenter: Vec3Data,
   cfg: TerrainConfig,
 ): ComputedRail {
-  const SAMPLES_PER_SEGMENT = 30;
+  const SAMPLES_PER_SEGMENT = 60;
 
   // Convert control points to world positions.
   const worldPts: Vec3Data[] = def.controlPoints.map((cp) => {
@@ -142,7 +145,15 @@ export function buildComputedRail(
 
   const n = worldPts.length;
   if (n < 2)
-    return { id: def.id, planetId: def.planetId, planetCenter, samples: [], totalLength: 0 };
+    return {
+      id: def.id,
+      planetId: def.planetId,
+      planetCenter,
+      samples: [],
+      totalLength: 0,
+      paintCorridorRadius: def.paintCorridorRadius,
+      pts: [],
+    };
 
   // Ghost points for clamped Catmull-Rom at both ends.
   const pts: Vec3Data[] = [
@@ -163,9 +174,9 @@ export function buildComputedRail(
     const count = isLastSeg ? SAMPLES_PER_SEGMENT + 1 : SAMPLES_PER_SEGMENT;
 
     for (let j = 0; j < count; j++) {
-      const t = j / SAMPLES_PER_SEGMENT;
-      const pos = catmullRomPoint(p0, p1, p2, p3, t);
-      const rawTangent = catmullRomTangent(p0, p1, p2, p3, t);
+      const localT = j / SAMPLES_PER_SEGMENT;
+      const pos = catmullRomPoint(p0, p1, p2, p3, localT);
+      const rawTangent = catmullRomTangent(p0, p1, p2, p3, localT);
       const tangent = normalize(
         rawTangent.x === 0 && rawTangent.y === 0 && rawTangent.z === 0
           ? { x: 0, y: 0, z: 1 }
@@ -175,7 +186,7 @@ export function buildComputedRail(
       if (samples.length > 0) {
         arcLength += vlen(sub(pos, samples[samples.length - 1]!.pos));
       }
-      samples.push({ pos, tangent, arcLength });
+      samples.push({ pos, tangent, arcLength, segmentIndex: seg, localT });
     }
   }
 
@@ -186,18 +197,21 @@ export function buildComputedRail(
     samples,
     totalLength: arcLength,
     paintCorridorRadius: def.paintCorridorRadius,
+    pts,
   };
 }
 
 /**
  * Sample the rail at a given arc-length (clamped to [0, totalLength]).
- * Returns interpolated position and tangent.
+ * Position is linearly interpolated between pre-sampled points.
+ * Tangent is evaluated analytically from the Catmull-Rom curve to avoid
+ * the piecewise-linear jitter that lerping stored tangents produces on curves.
  */
 export function sampleRailAt(
   rail: ComputedRail,
   arcLen: number,
 ): { pos: Vec3Data; tangent: Vec3Data } {
-  const { samples } = rail;
+  const { samples, pts } = rail;
   if (samples.length === 0) return { pos: { x: 0, y: 0, z: 0 }, tangent: { x: 0, y: 0, z: 1 } };
   if (samples.length === 1) return { pos: samples[0]!.pos, tangent: samples[0]!.tangent };
 
@@ -218,18 +232,32 @@ export function sampleRailAt(
   if (span < 1e-8) return { pos: a.pos, tangent: a.tangent };
 
   const t = (clamped - a.arcLength) / span;
-  return {
-    pos: {
-      x: a.pos.x + (b.pos.x - a.pos.x) * t,
-      y: a.pos.y + (b.pos.y - a.pos.y) * t,
-      z: a.pos.z + (b.pos.z - a.pos.z) * t,
-    },
-    tangent: normalize({
-      x: a.tangent.x + (b.tangent.x - a.tangent.x) * t,
-      y: a.tangent.y + (b.tangent.y - a.tangent.y) * t,
-      z: a.tangent.z + (b.tangent.z - a.tangent.z) * t,
-    }),
+
+  const pos: Vec3Data = {
+    x: a.pos.x + (b.pos.x - a.pos.x) * t,
+    y: a.pos.y + (b.pos.y - a.pos.y) * t,
+    z: a.pos.z + (b.pos.z - a.pos.z) * t,
   };
+
+  // Analytical tangent: interpolate localT within the segment and evaluate the
+  // Catmull-Rom derivative directly. Falls back to lerp at segment boundaries.
+  let tangent: Vec3Data;
+  if (a.segmentIndex === b.segmentIndex) {
+    const seg = a.segmentIndex;
+    const localT = a.localT + (b.localT - a.localT) * t;
+    const rawTangent = catmullRomTangent(pts[seg]!, pts[seg + 1]!, pts[seg + 2]!, pts[seg + 3]!, localT);
+    tangent = normalize(
+      rawTangent.x === 0 && rawTangent.y === 0 && rawTangent.z === 0
+        ? { x: 0, y: 0, z: 1 }
+        : rawTangent,
+    );
+  } else {
+    // Segment boundary: use the chord direction between the two flanking sample
+    // positions — always continuous and accurate at any sample density.
+    tangent = normalize(sub(b.pos, a.pos));
+  }
+
+  return { pos, tangent };
 }
 
 /**

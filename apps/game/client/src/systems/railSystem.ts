@@ -6,8 +6,7 @@ import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
 import { railVertexShader, railFragmentShader } from "../shaders/railShader.ts";
 import type { GameState } from "@splat/protocol/schemas/gameState.ts";
 
-const TUBE_SEGMENTS_PER_UNIT = 0.8; // samples per wu of rail length
-const TUBE_RADIAL_SEGMENTS = 8;
+const TUBE_RADIAL_SEGMENTS = 12;
 const COLUMN_SPACING = 18; // wu between support columns
 const COLUMN_RADIUS = 0.18;
 const COLUMN_RADIAL_SEGMENTS = 6;
@@ -32,17 +31,17 @@ export class RailSystem {
       if (rail.samples.length < 2) continue;
 
       // --- Tube ---------------------------------------------------------------
-      const tubeSamples = Math.max(16, Math.round(rail.totalLength * TUBE_SEGMENTS_PER_UNIT));
-      const curvePoints: THREE.Vector3[] = [];
-      for (let i = 0; i <= tubeSamples; i++) {
-        const { pos } = sampleRailAt(rail, (i / tubeSamples) * rail.totalLength);
-        curvePoints.push(new THREE.Vector3(pos.x, pos.y, pos.z));
-      }
+      // Use physics sample positions directly as curve control points so the
+      // tube passes through the exact same points the player rides along.
+      // CatmullRomCurve3.getPoint(i/(N-1)) == points[i], so TubeGeometry with
+      // N-1 segments evaluates at precisely each sample — zero visual/physics drift.
+      const curvePoints = rail.samples.map((s) => new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z));
+      const tubularSegments = curvePoints.length - 1;
 
       const curve = new THREE.CatmullRomCurve3(curvePoints);
       const tubeGeo = new THREE.TubeGeometry(
         curve,
-        tubeSamples,
+        tubularSegments,
         GAME_CONFIG.rail.visualRadius,
         TUBE_RADIAL_SEGMENTS,
         false,

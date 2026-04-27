@@ -74,14 +74,10 @@ export interface StepConfig {
   rail: {
     snapDistance: number;
     minEntrySpeed: number;
-    balanceDriftRate: number;
-    balanceInputScale: number;
-    balanceRestoreRate: number;
-    bailThreshold: number;
     paintCorridorRadius: number;
     paintStampSpacing: number;
     maxGrindSpeed: number;
-    centerBoostPerSecond: number;
+    carveAccelerationPerSecond: number;
     visualRadius: number;
   };
   terrain: {

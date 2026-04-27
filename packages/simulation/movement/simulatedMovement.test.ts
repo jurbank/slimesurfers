@@ -48,10 +48,11 @@ const TEST_CONFIG = {
   },
   rail: {
     snapDistance: 4.0,
-    minEntrySpeed: 12.0,
+    minEntrySpeed: 8.0,
     paintCorridorRadius: 3.5,
     paintStampSpacing: 4.0,
     maxGrindSpeed: 35.0,
+    carveAccelerationPerSecond: 12.0,
     visualRadius: 0.4,
   },
   terrain: {
