@@ -1,5 +1,5 @@
 import { Room, type Client } from "@colyseus/core";
-import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
+import { BOT_EMOTE_LEXICONS, EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
 import {
   GAME_CONFIG,
   resolveBotBehaviorProfile,
@@ -24,7 +24,7 @@ import { SupabaseService } from "../db/supabaseService.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type DepartedEntry = LeaderboardEntry & { playerUuid?: string };
+type DepartedEntry = LeaderboardEntry & { playerUuid?: string; isBot?: boolean };
 
 function isEnvFlagEnabled(value: string | undefined): boolean {
   return value === "true";
@@ -100,6 +100,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
           killCount: sim.killCount,
           deathCount: sim.deathCount,
           playerUuid: this.playerUuids.get(client.sessionId),
+          isBot: sim.isBot,
         });
       }
     }
@@ -186,6 +187,8 @@ export class MatchRoom extends Room<{ state: GameState }> {
       const botId = this.createBotSessionId();
       const simPlayer = this.simulation.addBot(botId, config.name, {
         profile: resolveBotBehaviorProfile(config),
+        emoteTemperament: config.emoteTemperament,
+        emoteFrequency: config.emoteFrequency,
         origin: "named",
         configIndex: index,
       });
@@ -207,6 +210,8 @@ export class MatchRoom extends Room<{ state: GameState }> {
         const botId = this.createBotSessionId();
         const simPlayer = this.simulation.addBot(botId, template.name, {
           profile: resolveBotBehaviorProfile(template),
+          emoteTemperament: template.emoteTemperament,
+          emoteFrequency: template.emoteFrequency,
           origin: "generated",
         });
         addSimPlayerToRoomState(this.state, simPlayer);
@@ -258,11 +263,53 @@ export class MatchRoom extends Room<{ state: GameState }> {
     });
   }
 
+  private maybePostBotEmotes(dt: number): void {
+    if (this.simulation.matchState.matchPhase !== MatchPhase.Active) return;
+
+    const now = Date.now();
+    const cooldownMs = EMOTE_CONFIG.postCooldownMs;
+
+    for (const bot of this.simulation.players.values()) {
+      if (!bot.isBot || bot.respawnTimer > 0 || !bot.botEmoteTemperament) continue;
+      const lastPostMs = this.lastEmotePostMs.get(bot.sessionId) ?? 0;
+      if (now - lastPostMs < cooldownMs) continue;
+
+      const frequency = Math.max(0, Math.min(1, bot.botEmoteFrequency ?? 0));
+      if (frequency <= 0) continue;
+      const chance = frequency * (dt / cooldownMs);
+      if (Math.random() >= chance) continue;
+
+      const lexicon = BOT_EMOTE_LEXICONS[bot.botEmoteTemperament];
+      if (!lexicon || lexicon.length === 0) continue;
+
+      const emoteCount = Math.random() < 0.2 ? 2 : 1;
+      const emoteIds: string[] = [];
+      for (let i = 0; i < emoteCount; i++) {
+        const choice = lexicon[Math.floor(Math.random() * lexicon.length)];
+        if (!choice || emoteIds.includes(choice)) continue;
+        emoteIds.push(choice);
+      }
+      if (emoteIds.length === 0) continue;
+
+      this.lastEmotePostMs.set(bot.sessionId, now);
+      this.broadcast(MessageType.EmoteEvents, {
+        events: [
+          {
+            playerId: bot.sessionId,
+            emoteIds,
+            seq: ++this.emoteSeq,
+          },
+        ],
+      });
+    }
+  }
+
   private tick(dt: number): void {
     if (this.simulation.matchState.elapsedMs % 5000 < dt) {
       this.evaluateBotPopulation();
     }
     const result = this.simulation.tick(dt);
+    this.maybePostBotEmotes(dt);
     syncRoomStateFromSimulation(this.state, this.simulation.matchState);
 
     const broadcasts = buildTickBroadcasts(result, this.simulation);
@@ -297,6 +344,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     const allEntries: DepartedEntry[] = leaderboard.entries.map((e) => ({
       ...e,
       playerUuid: this.playerUuids.get(e.sessionId),
+      isBot: this.simulation.players.get(e.sessionId)?.isBot ?? false,
     }));
     for (const [sessionId, departed] of this.departedPlayers) {
       if (!allEntries.some((e) => e.sessionId === sessionId)) {
@@ -314,10 +362,12 @@ export class MatchRoom extends Room<{ state: GameState }> {
     );
 
     await this.db.saveMatch({
-      entries: allEntries.map((entry, index) => ({
-        ...entry,
-        placement: index + 1,
-      })),
+      entries: allEntries
+        .filter((entry) => !entry.isBot)
+        .map((entry, index) => ({
+          ...entry,
+          placement: index + 1,
+        })),
     });
   }
 }

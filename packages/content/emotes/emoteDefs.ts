@@ -47,6 +47,15 @@ export const EMOTE_DEFS = [
 ] as const;
 
 export type EmoteId = (typeof EMOTE_DEFS)[number]["id"];
+export type BotEmoteTemperament = "friendly" | "proud" | "playful" | "taunting" | "serious";
+
+export const BOT_EMOTE_LEXICONS: Record<BotEmoteTemperament, readonly EmoteId[]> = {
+  friendly: ["smile", "wave", "heart", "thumbsUp", "ok", "leaf", "sparkles"],
+  proud: ["cool", "crown", "trophy", "star", "rocket", "fire", "salute"],
+  playful: ["laugh", "party", "zap", "eyes", "sparkles", "rocket", "clown"],
+  taunting: ["warning", "target", "angry", "thumbsDown", "shush", "bomb", "skull"],
+  serious: ["target", "warning", "eyes", "thinking", "salute", "question", "exclamation"],
+} as const;
 
 const EMOTE_IDS = new Set<string>(EMOTE_DEFS.map((emote) => emote.id));
 

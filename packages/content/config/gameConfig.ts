@@ -1,3 +1,5 @@
+import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
+
 const DEFAULT_PLANET_RADIUS = 50;
 const DEFAULT_TERRITORY_ROWS = 12;
 const DEFAULT_IMPACT_STAMP_RADIUS = 0.03;
@@ -15,6 +17,8 @@ export interface BotBehaviorProfile {
 
 export interface BotConfigEntry extends Partial<BotBehaviorProfile> {
   name?: string;
+  emoteTemperament?: BotEmoteTemperament;
+  emoteFrequency?: number;
 }
 
 export interface WeightedBotConfigEntry extends BotConfigEntry {
@@ -34,6 +38,14 @@ export function resolveBotBehaviorProfile(
       override.prefersTerritoryBias ?? defaults.prefersTerritoryBias,
     ),
   };
+}
+
+export function resolveBotEmoteTemperament(override?: BotEmoteTemperament): BotEmoteTemperament {
+  return override ?? GAME_CONFIG.bot.emoteDefaults.temperament;
+}
+
+export function resolveBotEmoteFrequency(override?: number): number {
+  return clamp(override ?? GAME_CONFIG.bot.emoteDefaults.frequency, 0, 1);
 }
 
 /**
@@ -322,28 +334,40 @@ export const GAME_CONFIG = {
       prefersAttackBias: 0.4,
       prefersTerritoryBias: 0.6,
     },
+    emoteDefaults: {
+      temperament: "playful" as BotEmoteTemperament,
+      frequency: 0.2,
+    },
     // Authored bots with stable names and hand-tuned behavior.
-    namedBots: [{
-      name: "SlimeMaster",
-      prefersSurfBias: 0.2,
-      prefersAttackBias: 0.35,
-      prefersTerritoryBias: 1.0,
-      aggression: 4,
-    },
-    {
-      name: "N00bHunter",
-      prefersSurfBias: 0.15,
-      prefersAttackBias: 1.0,
-      prefersTerritoryBias: 0.2,
-      aggression: 9,
-    },
-    {
-      name: "Slip360",
-      prefersSurfBias: 1.0,
-      prefersAttackBias: 0.2,
-      prefersTerritoryBias: 0.35,
-      aggression: 2,
-    },] as BotConfigEntry[],
+    namedBots: [
+      {
+        name: "SlimeMaster",
+        prefersSurfBias: 0.2,
+        prefersAttackBias: 0.35,
+        prefersTerritoryBias: 1.0,
+        aggression: 4,
+        emoteTemperament: "proud",
+        emoteFrequency: 0.35,
+      },
+      {
+        name: "N00bHunter",
+        prefersSurfBias: 0.15,
+        prefersAttackBias: 1.0,
+        prefersTerritoryBias: 0.2,
+        aggression: 9,
+        emoteTemperament: "taunting",
+        emoteFrequency: 0.25,
+      },
+      {
+        name: "Slip360",
+        prefersSurfBias: 1.0,
+        prefersAttackBias: 0.2,
+        prefersTerritoryBias: 0.35,
+        aggression: 2,
+        emoteTemperament: "playful",
+        emoteFrequency: 0.5,
+      },
+    ] as BotConfigEntry[],
     // Procedurally generated bots sampled from a weighted mix of behavior profiles.
     generatedBots: {
       count: 0,

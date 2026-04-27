@@ -1,6 +1,7 @@
 import type { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import type { BotBehaviorProfile } from "@splat/content/config/gameConfig.ts";
+import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
 
 // Plain simulation types — no framework imports.
 
@@ -105,6 +106,8 @@ export interface SimPlayerState {
   isBot: boolean;
   name: string;
   botProfile?: BotBehaviorProfile;
+  botEmoteTemperament?: BotEmoteTemperament;
+  botEmoteFrequency?: number;
   botOrigin?: BotOrigin;
   botConfigIndex?: number;
   teamId: number;

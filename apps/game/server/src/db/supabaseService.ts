@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { LeaderboardEntry } from "@splat/protocol/network/serverMessages.ts";
 
 interface SaveMatchOptions {
-  entries: Array<LeaderboardEntry & { placement: number; playerUuid?: string }>;
+  entries: Array<LeaderboardEntry & { placement: number; playerUuid?: string; isBot?: boolean }>;
 }
 
 export class SupabaseService {
@@ -25,7 +25,9 @@ export class SupabaseService {
     if (!this.client) return;
 
     const rows = opts.entries
-      .filter((e): e is typeof e & { playerUuid: string } => e.playerUuid != null)
+      .filter(
+        (e): e is typeof e & { playerUuid: string } => e.playerUuid != null && e.isBot !== true,
+      )
       .map((e) => ({
         id: e.playerUuid,
         name: e.name,

@@ -7,8 +7,11 @@ import {
   getPaintTerritoryDimensions,
   PLANET_POSITIONS,
   resolveBotBehaviorProfile,
+  resolveBotEmoteFrequency,
+  resolveBotEmoteTemperament,
   type BotBehaviorProfile,
 } from "@splat/content/config/gameConfig.ts";
+import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
 import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
@@ -288,6 +291,8 @@ function createSimPlayer(
   existingPlayers: Iterable<SimPlayerState>,
   botOptions?: {
     profile?: Partial<BotBehaviorProfile>;
+    emoteTemperament?: BotEmoteTemperament;
+    emoteFrequency?: number;
     origin?: BotOrigin;
     configIndex?: number;
   },
@@ -309,6 +314,10 @@ function createSimPlayer(
     isBot,
     name: resolvedName,
     botProfile: isBot ? resolveBotBehaviorProfile(botOptions?.profile) : undefined,
+    botEmoteTemperament: isBot
+      ? resolveBotEmoteTemperament(botOptions?.emoteTemperament)
+      : undefined,
+    botEmoteFrequency: isBot ? resolveBotEmoteFrequency(botOptions?.emoteFrequency) : undefined,
     botOrigin: isBot ? botOptions?.origin : undefined,
     botConfigIndex: isBot ? botOptions?.configIndex : undefined,
     teamId: slot.teamId,
@@ -467,6 +476,8 @@ export class MatchSimulation {
     name?: unknown,
     botOptions?: {
       profile?: Partial<BotBehaviorProfile>;
+      emoteTemperament?: BotEmoteTemperament;
+      emoteFrequency?: number;
       origin?: BotOrigin;
       configIndex?: number;
     },

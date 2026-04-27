@@ -1,20 +1,24 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { MatchRoom } from "./matchRoom.ts";
 
 function createRoomHarness() {
   const room = new MatchRoom();
+  const broadcasts: Array<{ type: string; payload: unknown }> = [];
   (room as any).setState = (state: any) => {
     (room as any).state = state;
   };
   (room as any).onMessage = () => {};
   (room as any).setSimulationInterval = () => {};
-  (room as any).broadcast = () => {};
+  (room as any).broadcast = (type: string, payload: unknown) => {
+    broadcasts.push({ type, payload });
+  };
   (room as any).setMetadata = () => Promise.resolve();
 
   room.onCreate();
-  return { room };
+  return { room, broadcasts };
 }
 
 function createFakeClient(sessionId: string) {
@@ -189,5 +193,53 @@ describe("Bot Population", () => {
         ).toBe(true);
       },
     );
+  });
+
+  it("allows bots to broadcast temperament-based emote events", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    const dateSpy = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      withBotConfig(
+        {
+          namedBots: [
+            {
+              name: "Cheer",
+              aggression: 3,
+              prefersAttackBias: 0.2,
+              prefersTerritoryBias: 0.6,
+              prefersSurfBias: 0.4,
+              emoteTemperament: "friendly",
+              emoteFrequency: 1,
+            },
+          ],
+          generatedBots: {
+            count: 0,
+            mix: [],
+          },
+        },
+        () => {
+          const { room, broadcasts } = createRoomHarness();
+          const simulation = (room as any).simulation;
+          simulation.matchState.matchPhase = MatchPhase.Active;
+          simulation.matchState.matchTimer = 30;
+
+          (room as any).tick(simulation.tickIntervalMs);
+
+          const emoteBroadcast = broadcasts.find((entry) => entry.type === MessageType.EmoteEvents);
+          expect(emoteBroadcast).toBeDefined();
+          expect(
+            (emoteBroadcast?.payload as { events: Array<{ playerId: string; emoteIds: string[] }> })
+              .events[0]?.playerId,
+          ).toMatch(/^bot-/);
+          expect(
+            (emoteBroadcast?.payload as { events: Array<{ playerId: string; emoteIds: string[] }> })
+              .events[0]?.emoteIds.length,
+          ).toBeGreaterThan(0);
+        },
+      );
+    } finally {
+      randomSpy.mockRestore();
+      dateSpy.mockRestore();
+    }
   });
 });
