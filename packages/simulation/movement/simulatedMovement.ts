@@ -11,6 +11,8 @@ import {
 } from "../match/simState.ts";
 import { getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { type ComputedRail } from "./railSpline.ts";
+import { tryEnterGrind, stepGrinding } from "./simulatedRailGrinding.ts";
 
 // -- Public interfaces -------------------------------------------------------
 
@@ -31,6 +33,12 @@ export interface PlayerPhysics {
   surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
+  grindRailId: number;
+  grindT: number;
+  lastGrindT: number;
+  grindBalance: number;
+  grindSpeed: number;
+  grindCooldownMs: number;
 }
 
 /**
@@ -63,6 +71,19 @@ export interface StepConfig {
     waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
     waterSkiLateralDrag: number;
+  };
+  rail: {
+    snapDistance: number;
+    minEntrySpeed: number;
+    balanceDriftRate: number;
+    balanceInputScale: number;
+    balanceRestoreRate: number;
+    bailThreshold: number;
+    paintCorridorRadius: number;
+    paintStampSpacing: number;
+    maxGrindSpeed: number;
+    centerBoostPerSecond: number;
+    visualRadius: number;
   };
   terrain: {
     seed: number;
@@ -589,6 +610,7 @@ function stepAirborne(
   planets: PlanetData[],
   cfg: StepConfig,
 ): void {
+  state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   state.skiJumpCharge = 0;
@@ -679,15 +701,28 @@ export function stepPlayer(
   planets: PlanetData[],
   cfg: StepConfig,
   planetPaint: Map<string, SimPlanetPaintState>,
+  rails: ComputedRail[] = [],
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
     state.surfState = PlayerSurfState.None;
     state.isCarving = false;
     return;
   }
+  if (state.movementState === PlayerMovementState.Grinding) {
+    stepGrinding(state, input, rails, dt, cfg);
+    return;
+  }
   if (state.planetId !== "") {
     stepOnSurface(state, input, dt, planets, cfg, planetPaint);
   } else {
     stepAirborne(state, input, dt, planets, cfg);
+    // After airborne integration, check if the player is close enough to a rail to snap.
+    if (
+      state.movementState === PlayerMovementState.Airborne &&
+      rails.length > 0 &&
+      state.grindCooldownMs <= 0
+    ) {
+      tryEnterGrind(state, rails, cfg);
+    }
   }
 }

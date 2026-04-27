@@ -5,6 +5,7 @@
   "exports": {
     "./match/matchSimulation.ts": "./match/matchSimulation.ts",
     "./match/simState.ts": "./match/simState.ts",
+    "./movement/railSpline.ts": "./movement/railSpline.ts",
     "./movement/simulatedMovement.ts": "./movement/simulatedMovement.ts",
     "./paint/paintDetection.ts": "./paint/paintDetection.ts",
     "./paint/stampPaint.ts": "./paint/stampPaint.ts",

@@ -29,3 +29,18 @@ defineTypes(PlanetPaintState, {
   territoryCols: "uint16",
   cells: [TerritoryCell],
 });
+
+// -- RailPaintState ----------------------------------------------------------
+// Authoritative paint nodes for a rail. Keyed in GameState by railId string.
+
+export const RAIL_PAINT_NODES = 64;
+
+export class RailPaintState extends Schema {
+  declare railId: number;
+  /** Fixed-size array of 0xRRGGBB colors for nodes along the rail. */
+  declare nodes: ArraySchema<number>;
+}
+defineTypes(RailPaintState, {
+  railId: "uint32",
+  nodes: ["uint32"],
+});

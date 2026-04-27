@@ -2,10 +2,12 @@ import { FFA_MODE, type GameModeDefinition } from "@splat/content/modes/gameMode
 import { DEFAULT_WEAPON_ID, type WeaponPickupLayout } from "@splat/content/combat/weaponDefs.ts";
 import {
   GAME_CONFIG,
+  getPaintStampChordRadius,
   getPlanetSurfaceChordRadius,
   getPaintTerritoryDimensions,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
+import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -29,8 +31,11 @@ import {
   tickWeaponPickups,
 } from "../combat/weaponPickups.ts";
 import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
+import { buildComputedRail, type ComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
+import { applyPaintImpact } from "../paint/stampPaint.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
+import { RAIL_PAINT_NODES, NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
 import { cleanName } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
@@ -66,6 +71,11 @@ const PLANETS: PlanetData[] = PLANET_POSITIONS.map((p) => ({
   center: { x: p.x, y: p.y, z: p.z },
   radius: GAME_CONFIG.planet.radius,
 }));
+
+const RAILS: ComputedRail[] = RAIL_DEFS.map((def) => {
+  const planet = PLANET_POSITIONS.find((p) => p.id === def.planetId) ?? PLANET_POSITIONS[0]!;
+  return buildComputedRail(def, { x: planet.x, y: planet.y, z: planet.z }, GAME_CONFIG);
+});
 
 // Used when no client input has arrived for a player this tick.
 const IDLE_INPUT: InputMessage = {
@@ -233,6 +243,15 @@ function createSimMatchState(
     planets: new Map(
       PLANET_POSITIONS.map((planet) => [planet.id, createSimPlanetState(planet.id)]),
     ),
+    railStates: new Map(
+      RAILS.map((rail, idx) => [
+        idx,
+        {
+          railId: idx,
+          nodes: Array(RAIL_PAINT_NODES).fill(0xffffff),
+        },
+      ]),
+    ),
     projectiles: new Map(),
     pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
@@ -295,6 +314,11 @@ function createSimPlayer(
     surfState: PlayerSurfState.None,
     isCarving: false,
     skiJumpCharge: 0,
+    grindRailId: -1,
+    grindT: 0,
+    grindBalance: 0,
+    grindSpeed: 0,
+    grindCooldownMs: 0,
     inputSeq: 0,
     airTrickCombo: 0,
     airTrickAirTimeMs: 0,
@@ -459,6 +483,9 @@ export class MatchSimulation {
         stampBuckets: createStampBuckets(rows, cols),
       });
     }
+    for (const railState of this.simState.railStates.values()) {
+      railState.nodes.fill(0xffffff);
+    }
     this.simState.scores.clear();
     this.recentPaintStamps.clear();
     this.simState.projectiles.clear();
@@ -478,6 +505,54 @@ export class MatchSimulation {
       planetMessages.splice(0, planetMessages.length - GAME_CONFIG.paint.maxVisualStampsPerPlanet);
     }
     this.recentPaintStamps.set(message.planetId, planetMessages);
+  }
+
+  private maybeStampRailCorridor(player: SimPlayerState, prevGrindId: number): void {
+    if (player.grindRailId === -1 || player.grindRailId !== prevGrindId) return;
+    const rail = RAILS[player.grindRailId];
+    const planetState = this.simState.planets.get(rail?.planetId ?? "");
+    const railState = this.simState.railStates.get(player.grindRailId);
+    if (!rail || !planetState || !railState) return;
+
+    const radiusMultiplier =
+      getPlanetSurfaceChordRadius(rail.paintCorridorRadius) / getPaintStampChordRadius();
+
+    // Use incremental painting between last position and current position
+    const startT = player.lastGrindT;
+    const endT = player.grindT;
+    const dist = Math.abs(endT - startT);
+    const step = GAME_CONFIG.rail.paintStampSpacing;
+
+    // Stamp the ground
+    if (dist > 0.01) {
+      const dir = Math.sign(endT - startT);
+      // Ensure we stamp at both start and end, and enough points in between
+      const numStamps = Math.max(1, Math.ceil(dist / step));
+      for (let i = 0; i <= numStamps; i++) {
+        const t = startT + (i / numStamps) * dist * dir;
+        const { pos } = sampleRailAt(rail, t);
+        const msg = applyPaintImpact(this.simState, planetState, {
+          planetId: rail.planetId,
+          pos,
+          paintGroupId: player.paintGroupId,
+          slimeColor: player.slimeColor,
+          patternId: player.patternId,
+          radiusMultiplier,
+        });
+        if (msg) this.recordPaintStamp(msg);
+      }
+    }
+
+    // Update rail nodes
+    const nodesPerUnit = (RAIL_PAINT_NODES - 1) / rail.totalLength;
+    const nodeStart = Math.min(startT, endT) * nodesPerUnit;
+    const nodeEnd = Math.max(startT, endT) * nodesPerUnit;
+
+    for (let i = Math.floor(nodeStart); i <= Math.ceil(nodeEnd); i++) {
+      if (i >= 0 && i < RAIL_PAINT_NODES) {
+        railState.nodes[i] = player.slimeColor;
+      }
+    }
   }
 
   private recordKillEvent(message: Omit<KillEventMessage, "seq">): void {
@@ -545,7 +620,9 @@ export class MatchSimulation {
         const inputDtSec = serverDtSec / queue.length;
         for (const input of queue) {
           const wasAirborne = player.movementState === PlayerMovementState.Airborne;
-          stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+          const prevGrindId = player.grindRailId;
+          stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets, RAILS);
+          this.maybeStampRailCorridor(player, prevGrindId);
           if (player.movementState === PlayerMovementState.Airborne) {
             const tricks = processAirTricks(
               this.simState,
@@ -595,7 +672,17 @@ export class MatchSimulation {
       } else {
         player.weaponTriggerHeldSinceMs = -1;
         const wasAirborne = player.movementState === PlayerMovementState.Airborne;
-        stepPlayer(player, IDLE_INPUT, serverDtSec, PLANETS, GAME_CONFIG, this.simState.planets);
+        const prevGrindId = player.grindRailId;
+        stepPlayer(
+          player,
+          IDLE_INPUT,
+          serverDtSec,
+          PLANETS,
+          GAME_CONFIG,
+          this.simState.planets,
+          RAILS,
+        );
+        this.maybeStampRailCorridor(player, prevGrindId);
         if (player.movementState === PlayerMovementState.Airborne) {
           const tricks = processAirTricks(
             this.simState,

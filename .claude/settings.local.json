@@ -32,7 +32,12 @@
       "mcp__supabase__get_publishable_keys",
       "mcp__supabase__apply_migration",
       "mcp__supabase__execute_sql",
-      "Bash(xargs sed *)"
+      "Bash(xargs sed *)",
+      "Bash(sed -n '890,930p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/scenes/matchScene.ts)",
+      "Bash(sed -n '1075,1160p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/scenes/matchScene.ts)",
+      "Bash(sed -n '88,102p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/scenes/matchScene.ts)",
+      "Bash(sed -n '325,345p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/scenes/matchScene.ts)",
+      "Bash(vp lint *)"
     ]
   },
   "enableAllProjectMcpServers": true,

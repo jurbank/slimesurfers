@@ -189,6 +189,12 @@ describe("MatchRoom", () => {
       throw new Error("expected joined players in simulation");
     }
 
+    // Advance past lobby and countdown (countdownSeconds may be 0, so two ticks suffice)
+    const advanceTick = () =>
+      (harness.room as unknown as { tick(dt: number): void }).tick(simulation.tickIntervalMs);
+    advanceTick(); // Lobby → Countdown
+    advanceTick(); // Countdown → Active (resets match state; no projectiles placed yet)
+
     for (let shot = 0; shot < 3; shot++) {
       simulation.matchState.projectiles.set(`room-kill-${shot}`, {
         id: `room-kill-${shot}`,

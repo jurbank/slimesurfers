@@ -31,6 +31,7 @@ import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
+import { RailSystem } from "../systems/railSystem.ts";
 import { SoundSystem } from "../systems/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -103,6 +104,7 @@ export class MatchScene {
   private readonly projectiles: ProjectileSystem;
   private readonly trickText: TrickTextSystem;
   private readonly emoteBubbles: EmoteBubbleSystem;
+  private readonly rails: RailSystem;
   private readonly sound: SoundSystem;
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
@@ -337,6 +339,7 @@ export class MatchScene {
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.trickText = new TrickTextSystem();
     this.emoteBubbles = new EmoteBubbleSystem();
+    this.rails = new RailSystem(this.render.scene);
     this.sound = new SoundSystem();
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
@@ -859,6 +862,7 @@ export class MatchScene {
         this.props.dispose();
         this.pickups.clear();
         this.projectiles.clear();
+        this.rails.dispose(this.render.scene);
         this.trickText.clear();
         this.emoteBubbles.clear();
         this.leaderboard.clear();
@@ -1184,6 +1188,7 @@ export class MatchScene {
       this.pickups.update(now);
       this.portal?.update(now, playerPos);
       this.projectiles.update(now);
+      this.rails.update(this.connection.roomState);
       if (this.currentPhase === MatchPhase.Countdown) {
         this.countdown.setSeconds(this.connection.matchTimer);
       }

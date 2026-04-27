@@ -112,7 +112,7 @@ export const GAME_CONFIG = {
   // -- Match -----------------------------------------------------------------
   match: {
     durationSeconds: 15 * 60,
-    countdownSeconds: 10,
+    countdownSeconds: 0,
     teamCount: 2,
     teamColors: [0x00aaff, 0xff6600] as const,
     /** Free-for-all palette — one colour per player slot (index = player.paletteIndex in FFA mode) */
@@ -251,6 +251,21 @@ export const GAME_CONFIG = {
       cactusDensity: 200,
       rocketEnabled: true,
     },
+  },
+
+  // -- Rails -----------------------------------------------------------------
+  rail: {
+    snapDistance: 4.5,
+    minEntrySpeed: 12.0,
+    balanceDriftRate: 0.35,
+    balanceInputScale: 1.2,
+    balanceRestoreRate: 0.4,
+    bailThreshold: 0.95,
+    paintCorridorRadius: 6.0,
+    paintStampSpacing: 4.0,
+    maxGrindSpeed: 35.0,
+    centerBoostPerSecond: 2.0,
+    visualRadius: 0.4,
   },
 
   // -- Debug -----------------------------------------------------------------

@@ -41,6 +41,11 @@ export interface SimPlanetPaintState {
   stampBuckets: SimPaintStamp[][];
 }
 
+export interface SimRailPaintState {
+  railId: number;
+  nodes: number[]; // Array of 0xRRGGBB colors
+}
+
 export interface SimProjectileState {
   id: string;
   ownerId: string;
@@ -75,6 +80,7 @@ export const PlayerMovementState = {
   Moving: 1,
   Airborne: 2,
   Dead: 3,
+  Grinding: 4,
 } as const;
 export type PlayerMovementState = (typeof PlayerMovementState)[keyof typeof PlayerMovementState];
 
@@ -112,6 +118,12 @@ export interface SimPlayerState {
   surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
+  grindRailId: number; // -1 = not grinding
+  grindT: number; // arc-length parameter along rail (wu from start)
+  lastGrindT: number; // arc-length parameter from the previous tick
+  grindBalance: number; // -1.0 to 1.0, 0 = centered
+  grindSpeed: number; // signed wu/s along rail tangent
+  grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
   inputSeq: number;
   airTrickCombo: number;
   airTrickAirTimeMs: number;
@@ -144,6 +156,7 @@ export interface SimPlayerState {
 export interface SimMatchState {
   players: Map<string, SimPlayerState>;
   planets: Map<string, SimPlanetPaintState>;
+  railStates: Map<number, SimRailPaintState>;
   projectiles: Map<string, SimProjectileState>;
   pickups: Map<string, SimWeaponPickupState>;
   matchPhase: MatchPhase;

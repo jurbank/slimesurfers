@@ -46,6 +46,19 @@ const TEST_CONFIG = {
     waterSkiFriction: 0.6,
     waterSkiLateralDrag: 4.0,
   },
+  rail: {
+    snapDistance: 4.0,
+    minEntrySpeed: 12.0,
+    balanceDriftRate: 0.35,
+    balanceInputScale: 1.2,
+    balanceRestoreRate: 0.4,
+    bailThreshold: 0.95,
+    paintCorridorRadius: 3.5,
+    paintStampSpacing: 4.0,
+    maxGrindSpeed: 35.0,
+    centerBoostPerSecond: 2.0,
+    visualRadius: 0.4,
+  },
   terrain: {
     seed: 42,
     baseAmplitude: 6.0,
@@ -85,6 +98,11 @@ function createPlayer(): PlayerPhysics {
     surfState: PlayerSurfState.None,
     isCarving: false,
     skiJumpCharge: 0,
+    grindRailId: -1,
+    grindT: 0,
+    grindBalance: 0,
+    grindSpeed: 0,
+    grindCooldownMs: 0,
   };
 }
 

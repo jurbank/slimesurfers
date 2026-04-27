@@ -8,7 +8,7 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
-import { PlanetPaintState, TerritoryCell } from "@splat/protocol/schemas/paintedState.ts";
+import { PlanetPaintState, TerritoryCell, RailPaintState } from "@splat/protocol/schemas/paintedState.ts";
 import { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 import { MatchSimulation, type TickResult } from "@splat/simulation/match/matchSimulation.ts";
 import type {
@@ -16,6 +16,7 @@ import type {
   SimPlanetPaintState,
   SimPlayerState,
   SimTerritoryCell,
+  SimRailPaintState,
 } from "@splat/simulation/match/simState.ts";
 
 export interface MatchRoomTickBroadcasts {
@@ -51,6 +52,13 @@ function schemaPlanetFromSim(simPlanet: SimPlanetPaintState): PlanetPaintState {
   return schemaPlanet;
 }
 
+function schemaRailFromSim(simRail: SimRailPaintState): RailPaintState {
+  const schemaRail = new RailPaintState();
+  schemaRail.railId = simRail.railId;
+  schemaRail.nodes = new ArraySchema<number>(...simRail.nodes);
+  return schemaRail;
+}
+
 function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
   const schema = new PlayerState();
   schema.sessionId = sim.sessionId;
@@ -73,12 +81,17 @@ export function createRoomState(simState: SimMatchState): GameState {
   const state = new GameState();
   state.players = new MapSchema<PlayerState>();
   state.planets = new MapSchema<PlanetPaintState>();
+  state.railStates = new MapSchema<RailPaintState>();
   state.scores = new MapSchema<number>();
   state.matchPhase = simState.matchPhase;
   state.matchTimer = simState.matchTimer;
 
   simState.planets.forEach((planet, planetId) => {
     state.planets.set(planetId, schemaPlanetFromSim(planet));
+  });
+
+  simState.railStates.forEach((rail, railId) => {
+    state.railStates.set(railId.toString(), schemaRailFromSim(rail));
   });
 
   return state;
@@ -123,6 +136,23 @@ export function syncRoomStateFromSimulation(state: GameState, simState: SimMatch
       const simCell = simPlanet.cells[index];
       if (!schemaCell || !simCell) continue;
       syncCell(schemaCell, simCell);
+    }
+  });
+
+  simState.railStates.forEach((simRail, railId) => {
+    const key = railId.toString();
+    let schemaRail = state.railStates.get(key);
+    if (!schemaRail) {
+      schemaRail = schemaRailFromSim(simRail);
+      state.railStates.set(key, schemaRail);
+      return;
+    }
+
+    // Direct node sync
+    for (let i = 0; i < simRail.nodes.length; i++) {
+      if (schemaRail.nodes[i] !== simRail.nodes[i]) {
+        schemaRail.nodes[i] = simRail.nodes[i];
+      }
     }
   });
 

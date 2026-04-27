@@ -52,6 +52,10 @@ export class RoomConnection {
     return this.room?.sessionId ?? null;
   }
 
+  get roomState(): GameState | undefined {
+    return this.room?.state;
+  }
+
   get matchTimer(): number {
     return this.room?.state.matchTimer ?? 0;
   }

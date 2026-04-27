@@ -2,7 +2,7 @@ import { Encoder, Schema, MapSchema, defineTypes } from "@colyseus/schema";
 
 Encoder.BUFFER_SIZE = 64 * 1024;
 import { PlayerState } from "./playerState.ts";
-import { PlanetPaintState } from "./paintedState.ts";
+import { PlanetPaintState, RailPaintState } from "./paintedState.ts";
 
 import { MatchPhase } from "../network/matchPhase.ts";
 export { MatchPhase };
@@ -14,6 +14,8 @@ export class GameState extends Schema {
   declare players: MapSchema<PlayerState>;
   /** Per-planet authoritative territory ownership keyed by planetId. */
   declare planets: MapSchema<PlanetPaintState>;
+  /** Per-rail authoritative paint status keyed by railId. */
+  declare railStates: MapSchema<RailPaintState>;
 
   declare matchPhase: MatchPhase;
   /** Seconds remaining in the current phase (countdown or match timer) */
@@ -24,6 +26,7 @@ export class GameState extends Schema {
 defineTypes(GameState, {
   players: { map: PlayerState },
   planets: { map: PlanetPaintState },
+  railStates: { map: RailPaintState },
   matchPhase: "uint8",
   matchTimer: "float32",
   scores: { map: "uint32" },
