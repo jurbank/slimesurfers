@@ -920,6 +920,8 @@ export class MatchScene {
       // Always update debug lines if enabled
       this.updateDebugLines();
 
+      if (this.input.consumeMenuPress()) this.setPaused(true);
+
       const localSessionId = this.connection.sessionId;
       const localState = this.runtime.getLocalPlayerState();
       if (!localSessionId || !localState) {

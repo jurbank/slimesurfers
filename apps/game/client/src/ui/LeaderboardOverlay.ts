@@ -194,12 +194,24 @@ export class LeaderboardOverlay {
     });
 
     this.killFeedSection.append(this.killFeedHeader, this.killFeedList);
+
+    const goalsSection = this.buildInfoSection("Goals", [
+      "Cover the planet in your slime",
+      "Waste your enemies",
+    ]);
+    const tipsSection = this.buildInfoSection("Tips", [
+      "You move faster on your own slime",
+      "Carve (E) to accelerate downhill",
+    ]);
+
     this.root.append(
       this.title,
       this.list,
       this.progressLabel,
       this.progressBar,
       this.killFeedSection,
+      goalsSection,
+      tipsSection,
     );
     document.body.appendChild(this.root);
   }
@@ -664,6 +676,40 @@ export class LeaderboardOverlay {
     const m = Math.floor(s / 60);
     const rem = s % 60;
     return `${m}:${rem.toString().padStart(2, "0")}`;
+  }
+
+  private buildInfoSection(title: string, items: string[]): HTMLDivElement {
+    const section = document.createElement("div");
+    Object.assign(section.style, {
+      marginTop: "12px",
+      paddingTop: "10px",
+      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+    });
+
+    const header = document.createElement("div");
+    header.textContent = title;
+    Object.assign(header.style, {
+      fontSize: "0.72rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.12em",
+      color: "#9fb3c8",
+      marginBottom: "6px",
+    });
+    section.appendChild(header);
+
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.textContent = `• ${item}`;
+      Object.assign(row.style, {
+        fontSize: "0.75rem",
+        color: "#6b7d8f",
+        lineHeight: "1.5",
+        paddingLeft: "4px",
+      });
+      section.appendChild(row);
+    }
+
+    return section;
   }
 
   private updateVisibility(): void {

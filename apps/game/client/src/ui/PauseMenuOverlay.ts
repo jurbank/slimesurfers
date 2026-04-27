@@ -8,7 +8,7 @@ const CONTROLS = [
   ["Move", "W A S D"],
   ["Surf", "E"],
   ["Fire", "Left Mouse"],
-  ["Jump / Crouch", "Space"],
+  ["Jump / Carve", "Space"],
   ["😊 Emotes", "Q"],
   ["Pause", "Esc"],
 ] as const;

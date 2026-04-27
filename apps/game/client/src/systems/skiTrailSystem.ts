@@ -131,7 +131,9 @@ export class SkiTrailSystem {
       const toPlanetX = x - planetCenter.x;
       const toPlanetY = y - planetCenter.y;
       const toPlanetZ = z - planetCenter.z;
-      const radLen = Math.sqrt(toPlanetX * toPlanetX + toPlanetY * toPlanetY + toPlanetZ * toPlanetZ);
+      const radLen = Math.sqrt(
+        toPlanetX * toPlanetX + toPlanetY * toPlanetY + toPlanetZ * toPlanetZ,
+      );
       const invLen = radLen > 1e-8 ? 1 / radLen : 0;
       this.trailHead = (this.trailHead + 1) % TRAIL_MAX_POINTS;
       this.trailPosX[this.trailHead] = x - toPlanetX * invLen * TRAIL_SURFACE_OFFSET;
@@ -214,7 +216,7 @@ export class SkiTrailSystem {
         posArr[(i * 2 + 1) * 3] =
         posArr[(i * 2 + 1) * 3 + 1] =
         posArr[(i * 2 + 1) * 3 + 2] =
-        0;
+          0;
       alphaArr[i * 2] = alphaArr[i * 2 + 1] = 0;
     }
 

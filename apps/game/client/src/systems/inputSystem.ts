@@ -15,11 +15,13 @@ class MobileControls {
   private readonly moveStickZone = document.createElement("div");
   private readonly moveManager: NippleManager;
   private readonly submergeButton: HTMLButtonElement;
+  private readonly anchorButton: HTMLButtonElement;
   private moveX = 0;
   private moveY = 0;
   private fireDown = false;
   private anchorDown = false;
   private submergePressed = false;
+  private menuPressed = false;
 
   static create(): MobileControls | null {
     if (!window.matchMedia("(pointer: coarse)").matches && navigator.maxTouchPoints <= 0) {
@@ -80,8 +82,8 @@ class MobileControls {
       touchAction: "none",
     });
 
-    const anchorButton = this.createButton("JUMP");
-    this.bindHoldButton(anchorButton, (down) => {
+    this.anchorButton = this.createButton("JUMP");
+    this.bindHoldButton(this.anchorButton, (down) => {
       this.anchorDown = down;
     });
 
@@ -95,9 +97,22 @@ class MobileControls {
       this.submergePressed = true;
     });
 
+    const menuButton = this.createButton("MENU");
+    Object.assign(menuButton.style, {
+      position: "absolute",
+      top: "60px",
+      right: "16px",
+      width: "64px",
+      height: "36px",
+      pointerEvents: "auto",
+    });
+    this.bindPressButton(menuButton, () => {
+      this.menuPressed = true;
+    });
+
     leftButtons.append(this.submergeButton);
-    rightButtons.append(anchorButton, fireButton);
-    this.root.append(this.moveStickZone, leftButtons, rightButtons);
+    rightButtons.append(this.anchorButton, fireButton);
+    this.root.append(this.moveStickZone, leftButtons, rightButtons, menuButton);
     document.body.append(this.root);
 
     this.moveManager = nipplejs.create({
@@ -141,7 +156,14 @@ class MobileControls {
     return pressed;
   }
 
+  consumeMenuPress(): boolean {
+    const pressed = this.menuPressed;
+    this.menuPressed = false;
+    return pressed;
+  }
+
   setSubmergeActive(active: boolean): void {
+    this.anchorButton.textContent = active ? "JUMP / CARVE" : "JUMP";
     if (active) {
       this.submergeButton.style.border = "2px solid #66ffb8";
       this.submergeButton.style.background = "rgba(102, 255, 184, 0.3)";
@@ -161,6 +183,7 @@ class MobileControls {
     this.fireDown = false;
     this.anchorDown = false;
     this.submergePressed = false;
+    this.menuPressed = false;
   }
 
   private createButton(label: string): HTMLButtonElement {
@@ -378,6 +401,10 @@ export class InputSystem {
 
   setSubmergeActive(active: boolean): void {
     this.mobileControls?.setSubmergeActive(active);
+  }
+
+  consumeMenuPress(): boolean {
+    return this.mobileControls?.consumeMenuPress() ?? false;
   }
 
   /**

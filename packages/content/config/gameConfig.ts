@@ -112,7 +112,7 @@ export const GAME_CONFIG = {
   // -- Match -----------------------------------------------------------------
   match: {
     durationSeconds: 15 * 60,
-    countdownSeconds: 0,
+    countdownSeconds: 10,
     teamCount: 2,
     teamColors: [0x00aaff, 0xff6600] as const,
     /** Free-for-all palette — one colour per player slot (index = player.paletteIndex in FFA mode) */
@@ -255,7 +255,7 @@ export const GAME_CONFIG = {
 
   // -- Rails -----------------------------------------------------------------
   rail: {
-    snapDistance: 5.0,
+    snapDistance: 4.0,
     minEntrySpeed: 8.0,
     paintCorridorRadius: 8.0,
     paintStampSpacing: 4.0,
