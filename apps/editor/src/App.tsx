@@ -101,6 +101,20 @@ export function App() {
 
       <main className="flex-1 relative bg-zinc-950 min-w-0">
         <PlanetPreview initialConfig={config} onScene={handleScene} />
+        <button
+          onClick={() => sceneRef.current?.resetCamera()}
+          title="Reset camera"
+          className="absolute bottom-4 right-4 px-2 py-2 flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
       </main>
 
       <aside className="w-72 border-l border-zinc-700 flex flex-col shrink-0">

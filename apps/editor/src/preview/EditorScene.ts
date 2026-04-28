@@ -185,6 +185,12 @@ export class EditorScene {
     }
   }
 
+  resetCamera(): void {
+    this.camera.position.set(0, 40, 230);
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+  }
+
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
