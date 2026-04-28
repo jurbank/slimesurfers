@@ -1,4 +1,4 @@
-import type { EditorConfig } from "../types.ts";
+import { defaultEditorConfig, type EditorConfig } from "../types.ts";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
@@ -32,9 +32,21 @@ export function ShadersPanel({ config, onShadersChange }: ShadersPanelProps) {
     onShadersChange({ ...config.shaders, lighting: { ...lighting, [key]: val } });
   }
 
+  function resetLighting() {
+    onShadersChange({ ...config.shaders, lighting: defaultEditorConfig().shaders.lighting });
+  }
+
+  function resetCel() {
+    onShadersChange({ ...config.shaders, cel: defaultEditorConfig().shaders.cel });
+  }
+
+  function resetAtmosphere() {
+    onShadersChange({ ...config.shaders, atmosphere: defaultEditorConfig().shaders.atmosphere });
+  }
+
   return (
     <div className="space-y-4">
-      <Section title="Lighting">
+      <Section title="Lighting" onReset={resetLighting}>
         <Slider
           label="Sun Azimuth"
           value={lighting.sunAzimuth}
@@ -93,7 +105,7 @@ export function ShadersPanel({ config, onShadersChange }: ShadersPanelProps) {
         />
       </Section>
 
-      <Section title="Cel Shading">
+      <Section title="Cel Shading" onReset={resetCel}>
         <Slider
           label="Bands"
           value={cel.bands}
@@ -131,7 +143,7 @@ export function ShadersPanel({ config, onShadersChange }: ShadersPanelProps) {
         />
       </Section>
 
-      <Section title="Atmosphere">
+      <Section title="Atmosphere" onReset={resetAtmosphere}>
         <ColorSwatch label="Color" value={atmosphere.color} onChange={(v) => setAtmo("color", v)} />
         <Slider
           label="Intensity"

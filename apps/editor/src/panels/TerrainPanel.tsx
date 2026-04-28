@@ -1,4 +1,4 @@
-import type { EditorConfig } from "../types.ts";
+import { defaultEditorConfig, type EditorConfig } from "../types.ts";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
@@ -21,9 +21,40 @@ export function TerrainPanel({ config, onTerrainChange, onColorsChange }: Terrai
     onColorsChange({ ...c, [key]: val });
   }
 
+  function resetShape() {
+    const d = defaultEditorConfig().terrain;
+    onTerrainChange({
+      ...t,
+      seed: d.seed,
+      baseAmplitude: d.baseAmplitude,
+      frequency: d.frequency,
+      octaves: d.octaves,
+      lacunarity: d.lacunarity,
+      persistence: d.persistence,
+      heightSmoothingStrength: d.heightSmoothingStrength,
+      heightSmoothingSampleAngle: d.heightSmoothingSampleAngle,
+      icosahedronDetail: d.icosahedronDetail,
+    });
+  }
+
+  function resetBiomes() {
+    const d = defaultEditorConfig().terrain;
+    onTerrainChange({
+      ...t,
+      waterLevel: d.waterLevel,
+      sandBand: d.sandBand,
+      rockLevel: d.rockLevel,
+      snowLevel: d.snowLevel,
+    });
+  }
+
+  function resetColors() {
+    onColorsChange(defaultEditorConfig().colors);
+  }
+
   return (
     <div className="space-y-4">
-      <Section title="Shape">
+      <Section title="Shape" onReset={resetShape}>
         <div className="flex items-center justify-between">
           <label className="text-xs text-zinc-400">Seed</label>
           <input
@@ -94,7 +125,7 @@ export function TerrainPanel({ config, onTerrainChange, onColorsChange }: Terrai
         />
       </Section>
 
-      <Section title="Biomes">
+      <Section title="Biomes" onReset={resetBiomes}>
         <Slider
           label="Water Level"
           value={t.waterLevel}
@@ -129,7 +160,7 @@ export function TerrainPanel({ config, onTerrainChange, onColorsChange }: Terrai
         />
       </Section>
 
-      <Section title="Colors">
+      <Section title="Colors" onReset={resetColors}>
         <ColorSwatch label="Sand" value={c.sand} onChange={(v) => setC("sand", v)} />
         <ColorSwatch label="Grass" value={c.grass} onChange={(v) => setC("grass", v)} />
         <ColorSwatch label="Rock" value={c.rock} onChange={(v) => setC("rock", v)} />
