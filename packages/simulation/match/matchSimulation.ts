@@ -42,7 +42,11 @@ import { applyPaintImpact } from "../paint/stampPaint.ts";
 import { createTerritoryCells } from "../paint/territoryGrid.ts";
 import { generateBotInput, removeBotState } from "../ai/botController.ts";
 import { RAIL_PAINT_NODES } from "@splat/protocol/schemas/paintedState.ts";
-import { processAirTricks, settleAirTricksOnLanding } from "../tricks/airTricks.ts";
+import {
+  isTrickMovementState,
+  processAirTricks,
+  settleAirTricksOnLanding,
+} from "../tricks/airTricks.ts";
 import { cleanName } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
 import {
@@ -679,11 +683,11 @@ export class MatchSimulation {
         const actionNowMs = this.simState.elapsedMs;
         const inputDtSec = serverDtSec / queue.length;
         for (const input of queue) {
-          const wasAirborne = player.movementState === PlayerMovementState.Airborne;
+          const wasTrickActive = isTrickMovementState(player.movementState);
           const prevGrindId = player.grindRailId;
           stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets, RAILS);
           this.maybeStampRailCorridor(player, prevGrindId);
-          if (player.movementState === PlayerMovementState.Airborne) {
+          if (isTrickMovementState(player.movementState)) {
             const tricks = processAirTricks(
               this.simState,
               player,
@@ -692,7 +696,7 @@ export class MatchSimulation {
               actionNowMs,
             );
             this.pendingTrickEvents.push(...tricks.trickEvents);
-          } else if (wasAirborne) {
+          } else if (wasTrickActive) {
             for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
               this.recordPaintStamp(stamp);
             }
@@ -733,7 +737,7 @@ export class MatchSimulation {
         }
       } else {
         player.weaponTriggerHeldSinceMs = -1;
-        const wasAirborne = player.movementState === PlayerMovementState.Airborne;
+        const wasTrickActive = isTrickMovementState(player.movementState);
         const prevGrindId = player.grindRailId;
         stepPlayer(
           player,
@@ -745,7 +749,7 @@ export class MatchSimulation {
           RAILS,
         );
         this.maybeStampRailCorridor(player, prevGrindId);
-        if (player.movementState === PlayerMovementState.Airborne) {
+        if (isTrickMovementState(player.movementState)) {
           const tricks = processAirTricks(
             this.simState,
             player,
@@ -754,7 +758,7 @@ export class MatchSimulation {
             this.simState.elapsedMs,
           );
           this.pendingTrickEvents.push(...tricks.trickEvents);
-        } else if (wasAirborne) {
+        } else if (wasTrickActive) {
           for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
             this.recordPaintStamp(stamp);
           }

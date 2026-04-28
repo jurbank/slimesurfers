@@ -15,9 +15,11 @@ import {
   getPaintTerritoryDimensions,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
+import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { buildComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
 import { generateBotInput } from "../ai/botController.ts";
@@ -152,6 +154,42 @@ function landAirbornePlayer(
   player.movementState = PlayerMovementState.Airborne;
   simulation.tick(simulation.tickIntervalMs);
   simulation.tick(simulation.tickIntervalMs);
+}
+
+function makeGrindingSkier(player: ReturnType<MatchSimulation["addPlayer"]>): void {
+  const railDef = RAIL_DEFS[0]!;
+  const planet =
+    PLANET_POSITIONS.find((entry) => entry.id === railDef.planetId) ?? PLANET_POSITIONS[0]!;
+  const rail = buildComputedRail(railDef, { x: planet.x, y: planet.y, z: planet.z }, GAME_CONFIG);
+  const railT = rail.totalLength * 0.35;
+  const { pos, tangent } = sampleRailAt(rail, railT);
+  const up = (() => {
+    const dx = pos.x - planet.x;
+    const dy = pos.y - planet.y;
+    const dz = pos.z - planet.z;
+    const len = Math.hypot(dx, dy, dz);
+    return { x: dx / len, y: dy / len, z: dz / len };
+  })();
+  const offset = GAME_CONFIG.rail.visualRadius + GAME_CONFIG.movement.standingHeight;
+
+  player.pos = {
+    x: pos.x + up.x * offset,
+    y: pos.y + up.y * offset,
+    z: pos.z + up.z * offset,
+  };
+  player.vel = {
+    x: tangent.x * GAME_CONFIG.rail.minEntrySpeed,
+    y: tangent.y * GAME_CONFIG.rail.minEntrySpeed,
+    z: tangent.z * GAME_CONFIG.rail.minEntrySpeed,
+  };
+  player.planetId = "";
+  player.movementState = PlayerMovementState.Grinding;
+  player.surfState = PlayerSurfState.SkiVisible;
+  player.grindRailId = railDef.id;
+  player.grindT = railT;
+  player.lastGrindT = railT;
+  player.grindSpeed = GAME_CONFIG.rail.minEntrySpeed;
+  player.airTrickAirTimeMs = 0;
 }
 
 function trickInput(seq: number, pressedKeys: number): InputMessage {
@@ -739,6 +777,43 @@ describe("MatchSimulation", () => {
     const stamps = simulation.drainPaintStampMessages();
     expect(stamps).toHaveLength(1);
     expect(stamps[0]?.radius).toBe(getPaintStampChordRadius() * 4.2);
+  });
+
+  it("lets grinding players trigger trick combos and carry them until they land", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const player = simulation.addPlayer("session-1", "Alpha");
+    makeGrindingSkier(player);
+    player.slimeLevel = GAME_CONFIG.slime.maxLevel;
+
+    simulation.recordInput("session-1", trickInput(1, InputKey.Left));
+    simulation.tick(simulation.tickIntervalMs);
+    simulation.recordInput("session-1", trickInput(2, InputKey.Right));
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(player.movementState).toBe(PlayerMovementState.Grinding);
+    expect(player.airTrickCombo).toBe(1);
+    expect(simulation.drainTrickEventMessages()).toEqual([
+      {
+        playerId: player.sessionId,
+        trickId: "kickflip",
+        combo: 1,
+        seq: 1,
+      },
+    ]);
+    simulation.drainPaintStampMessages();
+
+    player.grindT = 0.01;
+    player.lastGrindT = player.grindT;
+    player.grindSpeed = -GAME_CONFIG.rail.maxGrindSpeed * 12;
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(player.movementState).toBe(PlayerMovementState.Airborne);
+    expect(player.airTrickCombo).toBe(1);
+    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+
+    landAirbornePlayer(simulation, player);
+    expect(simulation.drainPaintStampMessages()).toHaveLength(1);
+    expect(player.airTrickCombo).toBe(0);
   });
 
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {

@@ -36,6 +36,12 @@ const SEQUENCE_TRICKS = AIR_TRICK_DEFS.filter(
     trick.kind === "sequence" && Array.isArray(trick.sequence),
 ).sort((a, b) => b.sequence.length - a.sequence.length);
 
+export function isTrickMovementState(movementState: number): boolean {
+  return (
+    movementState === PlayerMovementState.Airborne || movementState === PlayerMovementState.Grinding
+  );
+}
+
 function normalize(vec: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
   const length = Math.hypot(vec.x, vec.y, vec.z);
   if (length < 1e-8) return { x: 0, y: 1, z: 0 };
@@ -212,16 +218,23 @@ export function processAirTricks(
     return empty;
   }
 
-  if (player.movementState !== PlayerMovementState.Airborne) {
+  if (!isTrickMovementState(player.movementState)) {
     resetAirTrickState(player);
     return empty;
   }
 
-  player.airTrickAirTimeMs += dtMs;
   player.airTrickInputAgeMs += dtMs;
+  if (player.movementState === PlayerMovementState.Airborne) {
+    player.airTrickAirTimeMs += dtMs;
+  }
 
   if (player.surfState === PlayerSurfState.None) return empty;
-  if (player.airTrickAirTimeMs < GAME_CONFIG.tricks.minAirTimeMs) return empty;
+  if (
+    player.movementState === PlayerMovementState.Airborne &&
+    player.airTrickAirTimeMs < GAME_CONFIG.tricks.minAirTimeMs
+  ) {
+    return empty;
+  }
 
   if (player.airTrickInputAgeMs > GAME_CONFIG.tricks.inputWindowMs) {
     player.airTrickInputSequence.length = 0;
