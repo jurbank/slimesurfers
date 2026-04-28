@@ -17,6 +17,7 @@ export interface BrushConnectOptions {
   scene: THREE.Scene;
   planetMeshes: THREE.Mesh[];
   onStroke: () => void;
+  shouldOrbit: () => boolean;
 }
 
 export class BrushTool {
@@ -30,6 +31,7 @@ export class BrushTool {
   private camera: THREE.Camera | null = null;
   private planetMeshes: THREE.Mesh[] = [];
   private onStroke: (() => void) | null = null;
+  private shouldOrbit: (() => boolean) | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private brushCursor: THREE.LineLoop | null = null;
 
@@ -49,6 +51,7 @@ export class BrushTool {
     this.camera = options.camera;
     this.planetMeshes = options.planetMeshes;
     this.onStroke = options.onStroke;
+    this.shouldOrbit = options.shouldOrbit;
 
     this.brushCursor = this.createBrushCursor();
     options.scene.add(this.brushCursor);
@@ -300,7 +303,7 @@ export class BrushTool {
   };
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    if (!this.brushState || e.button !== 0 || e.altKey) return;
+    if (!this.brushState || e.button !== 0 || this.shouldOrbit?.()) return;
     const hit = this.raycastPlanet(e);
     if (!hit) return;
 

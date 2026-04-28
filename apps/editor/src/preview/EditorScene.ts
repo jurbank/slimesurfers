@@ -31,6 +31,7 @@ export class EditorScene {
 
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
+  private isSpaceHeld = false;
 
   constructor(canvas: HTMLCanvasElement, width: number, height: number, config: EditorConfig) {
     this.currentConfig = config;
@@ -94,6 +95,9 @@ export class EditorScene {
       this.scene.add(this.waterMesh);
     }
 
+    window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
+
     // Phase 2: connect brush tool now that the scene and meshes exist
     this.brushTool.connect({
       canvas,
@@ -101,6 +105,7 @@ export class EditorScene {
       scene: this.scene,
       planetMeshes: this.planetMeshes,
       onStroke: () => this.rebuildPlanetMeshes(),
+      shouldOrbit: () => this.isSpaceHeld,
     });
 
     this.updateUniforms(config);
@@ -191,6 +196,8 @@ export class EditorScene {
     this.controls.dispose();
     this.renderer.dispose();
     this.brushTool.dispose();
+    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
   }
 
   private rebuildPlanetMeshes(): void {
@@ -200,6 +207,14 @@ export class EditorScene {
       mesh.geometry = newGeo;
     }
   }
+
+  private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (e.code === "Space") this.isSpaceHeld = true;
+  };
+
+  private readonly onKeyUp = (e: KeyboardEvent): void => {
+    if (e.code === "Space") this.isSpaceHeld = false;
+  };
 
   private start(): void {
     const tick = (): void => {
