@@ -6,7 +6,8 @@ import { createOutlineMaterial } from "../rendering/outlineMaterial.ts";
 import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeometry.ts";
 import { createPlanetMaterial } from "../rendering/planetMaterial.ts";
 import { createWaterMaterial } from "../rendering/waterMaterial.ts";
-import type { EditorConfig } from "../types.ts";
+import { BrushTool } from "../tools/brush/BrushTool.ts";
+import type { BrushState, EditorConfig } from "../types.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -28,7 +29,12 @@ export class EditorScene {
   private waterMesh: THREE.Mesh | null = null;
   private animFrameId = 0;
 
+  private currentConfig: EditorConfig;
+  private readonly brushTool: BrushTool;
+
   constructor(canvas: HTMLCanvasElement, width: number, height: number, config: EditorConfig) {
+    this.currentConfig = config;
+
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
@@ -52,10 +58,13 @@ export class EditorScene {
     this.controls.maxDistance = 600;
     this.controls.target.set(0, 0, 0);
 
+    // Phase 1: init sculpt data before planet build
+    this.brushTool = new BrushTool(config);
+
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
 
-    const planetGeo = buildPlanetGeometry(config);
+    const planetGeo = buildPlanetGeometry(config, this.brushTool.getDisplacements());
     this.planetMaterial = createPlanetMaterial({
       paintMask: null,
       planetCenter: new THREE.Vector3(0, 0, 0),
@@ -85,16 +94,27 @@ export class EditorScene {
       this.scene.add(this.waterMesh);
     }
 
+    // Phase 2: connect brush tool now that the scene and meshes exist
+    this.brushTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMeshes: this.planetMeshes,
+      onStroke: () => this.rebuildPlanetMeshes(),
+    });
+
     this.updateUniforms(config);
     this.start();
   }
 
+  setBrushState(state: BrushState | null): void {
+    this.brushTool.setBrushState(state);
+  }
+
   rebuildPlanet(config: EditorConfig): void {
-    const newGeo = buildPlanetGeometry(config);
-    for (const mesh of this.planetMeshes) {
-      mesh.geometry.dispose();
-      mesh.geometry = newGeo;
-    }
+    this.currentConfig = config;
+    this.brushTool.syncDetail(config);
+    this.rebuildPlanetMeshes();
     this.rebuildWater(config);
     this.updateUniforms(config);
   }
@@ -108,6 +128,7 @@ export class EditorScene {
   }
 
   updateUniforms(config: EditorConfig): void {
+    this.currentConfig = config;
     const u = this.planetMaterial.uniforms;
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
 
@@ -169,6 +190,15 @@ export class EditorScene {
     cancelAnimationFrame(this.animFrameId);
     this.controls.dispose();
     this.renderer.dispose();
+    this.brushTool.dispose();
+  }
+
+  private rebuildPlanetMeshes(): void {
+    const newGeo = buildPlanetGeometry(this.currentConfig, this.brushTool.getDisplacements());
+    for (const mesh of this.planetMeshes) {
+      mesh.geometry.dispose();
+      mesh.geometry = newGeo;
+    }
   }
 
   private start(): void {

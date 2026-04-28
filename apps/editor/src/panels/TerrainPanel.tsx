@@ -1,17 +1,81 @@
-import { defaultEditorConfig, type EditorConfig } from "../types.ts";
+import { useEffect, useState } from "react";
+import {
+  defaultEditorConfig,
+  type BrushFalloff,
+  type BrushMode,
+  type BrushState,
+  type EditorConfig,
+} from "../types.ts";
+import { BrushSettings } from "./ui/BrushSettings.tsx";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
+
+const BRUSH_MODES: { id: BrushMode; label: string }[] = [
+  { id: "raise", label: "Raise" },
+  { id: "lower", label: "Lower" },
+  { id: "smooth", label: "Smooth" },
+  { id: "flatten", label: "Flatten" },
+];
 
 interface TerrainPanelProps {
   config: EditorConfig;
   onTerrainChange: (t: EditorConfig["terrain"]) => void;
   onColorsChange: (c: EditorConfig["colors"]) => void;
+  onBrushChange: (state: BrushState | null) => void;
 }
 
-export function TerrainPanel({ config, onTerrainChange, onColorsChange }: TerrainPanelProps) {
+export function TerrainPanel({
+  config,
+  onTerrainChange,
+  onColorsChange,
+  onBrushChange,
+}: TerrainPanelProps) {
   const t = config.terrain;
   const c = config.colors;
+
+  const [brushMode, setBrushMode] = useState<BrushMode | null>(null);
+  const [brushSize, setBrushSize] = useState(8);
+  const [brushStrength, setBrushStrength] = useState(0.5);
+  const [brushFalloff, setBrushFalloff] = useState<BrushFalloff>("smooth");
+
+  useEffect(() => {
+    return () => {
+      onBrushChange(null);
+    };
+    // onBrushChange is stable (useCallback in App)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function notifyBrush(
+    mode: BrushMode | null,
+    size: number,
+    strength: number,
+    falloff: BrushFalloff,
+  ) {
+    onBrushChange(mode ? { mode, size, strength, falloff } : null);
+  }
+
+  function handleModeClick(mode: BrushMode) {
+    const next = brushMode === mode ? null : mode;
+    setBrushMode(next);
+    notifyBrush(next, brushSize, brushStrength, brushFalloff);
+  }
+
+  function handleSizeChange(v: number) {
+    setBrushSize(v);
+    if (brushMode) notifyBrush(brushMode, v, brushStrength, brushFalloff);
+  }
+
+  function handleStrengthChange(v: number) {
+    setBrushStrength(v);
+    if (brushMode) notifyBrush(brushMode, brushSize, v, brushFalloff);
+  }
+
+  function handleFalloffChange(v: BrushFalloff) {
+    setBrushFalloff(v);
+    if (brushMode) notifyBrush(brushMode, brushSize, brushStrength, v);
+  }
 
   function setT<K extends keyof EditorConfig["terrain"]>(key: K, val: EditorConfig["terrain"][K]) {
     onTerrainChange({ ...t, [key]: val });
@@ -54,6 +118,37 @@ export function TerrainPanel({ config, onTerrainChange, onColorsChange }: Terrai
 
   return (
     <div className="space-y-4">
+      <Section title="Sculpt">
+        <div className="grid grid-cols-4 gap-1">
+          {BRUSH_MODES.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => handleModeClick(id)}
+              className={`py-1 text-xs rounded transition-colors ${
+                brushMode === id
+                  ? "bg-cyan-500 text-black font-semibold"
+                  : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {brushMode && (
+          <div className="mt-3 space-y-2">
+            <BrushSettings
+              size={brushSize}
+              strength={brushStrength}
+              falloff={brushFalloff}
+              onSizeChange={handleSizeChange}
+              onStrengthChange={handleStrengthChange}
+              onFalloffChange={handleFalloffChange}
+            />
+            <p className="text-xs text-zinc-500 pt-1">Alt + drag to orbit</p>
+          </div>
+        )}
+      </Section>
+
       <Section title="Shape" onReset={resetShape}>
         <div className="flex items-center justify-between">
           <label className="text-xs text-zinc-400">Seed</label>

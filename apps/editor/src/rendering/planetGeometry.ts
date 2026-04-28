@@ -6,7 +6,10 @@ import {
 } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { EditorConfig } from "../types.ts";
 
-export function buildPlanetGeometry(config: EditorConfig): THREE.BufferGeometry {
+export function buildPlanetGeometry(
+  config: EditorConfig,
+  sculptDisplacements?: Float32Array | null,
+): THREE.BufferGeometry {
   const detail = config.terrain.icosahedronDetail;
   const indexed = new THREE.IcosahedronGeometry(config.planet.radius, detail);
   const geometry = indexed.toNonIndexed();
@@ -28,7 +31,9 @@ export function buildPlanetGeometry(config: EditorConfig): THREE.BufferGeometry 
     const ny = y / len;
     const nz = z / len;
 
-    const radius = getTerrainRadius(nx, ny, nz, config);
+    const radius =
+      getTerrainRadius(nx, ny, nz, config) +
+      (sculptDisplacements ? (sculptDisplacements[i] ?? 0) : 0);
     posAttr.setXYZ(i, nx * radius, ny * radius, nz * radius);
 
     const terrainNormal = getTerrainNormal(nx, ny, nz, config);

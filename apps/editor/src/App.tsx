@@ -4,7 +4,12 @@ import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
 import type { EditorScene } from "./preview/EditorScene.ts";
-import { defaultEditorConfig, GEOMETRY_TERRAIN_KEYS, type EditorConfig } from "./types.ts";
+import {
+  defaultEditorConfig,
+  GEOMETRY_TERRAIN_KEYS,
+  type BrushState,
+  type EditorConfig,
+} from "./types.ts";
 
 type Panel = "terrain" | "shaders" | "props" | "spawns";
 
@@ -26,6 +31,10 @@ export function App() {
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
+  }, []);
+
+  const handleBrushChange = useCallback((state: BrushState | null) => {
+    sceneRef.current?.setBrushState(state);
   }, []);
 
   const scheduleRebuild = useCallback(() => {
@@ -76,7 +85,14 @@ export function App() {
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
           {PANELS.map(({ id, label }) => (
-            <NavItem key={id} active={activePanel === id} onClick={() => setActivePanel(id)}>
+            <NavItem
+              key={id}
+              active={activePanel === id}
+              onClick={() => {
+                if (id !== "terrain") sceneRef.current?.setBrushState(null);
+                setActivePanel(id);
+              }}
+            >
               {label}
             </NavItem>
           ))}
@@ -97,6 +113,7 @@ export function App() {
               config={config}
               onTerrainChange={handleTerrainChange}
               onColorsChange={handleColorsChange}
+              onBrushChange={handleBrushChange}
             />
           )}
           {activePanel === "shaders" && (
