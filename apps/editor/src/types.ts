@@ -70,6 +70,32 @@ export interface EditorConfig {
   };
 }
 
+export interface PerformanceMetricGroup {
+  id: string;
+  label: string;
+  triangles: number;
+  drawCalls: number;
+  meshes: number;
+  instances?: number;
+  notes?: string;
+}
+
+export interface PerformanceStats {
+  updatedAt: number;
+  totals: {
+    triangles: number;
+    drawCalls: number;
+    meshes: number;
+    instancedMeshes: number;
+    instances: number;
+    shaderMaterials: number;
+    transparentObjects: number;
+    geometries: number;
+    textures: number;
+  };
+  groups: PerformanceMetricGroup[];
+}
+
 function rgbToHex(r: number, g: number, b: number): number {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }

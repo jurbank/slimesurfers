@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { PropBrushState } from "../../types.ts";
+import type { PerformanceMetricGroup, PropBrushState } from "../../types.ts";
 import { MAX_SKATE_PARK_INSTANCES, SkateParkProp } from "./SkateParkProp.ts";
 import { MAX_TREE_INSTANCES, TreesProp } from "./TreesProp.ts";
 
@@ -67,6 +67,10 @@ export class PropPaintTool {
     }
     if (state.propId !== "ramp") this.skateParkProp.setPreview("ramp", null);
     if (this.canvas) this.canvas.style.cursor = "crosshair";
+  }
+
+  getPerformanceStats(): PerformanceMetricGroup[] {
+    return [...this.treesProp.getPerformanceStats(), ...this.skateParkProp.getPerformanceStats()];
   }
 
   dispose(): void {

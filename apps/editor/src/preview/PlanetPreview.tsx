@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { EditorConfig } from "../types.ts";
+import type { EditorConfig, PerformanceStats } from "../types.ts";
 import type { TrackState } from "../tools/tracks/TrackTypes.ts";
 import { EditorScene } from "./EditorScene.ts";
 
@@ -8,6 +8,7 @@ interface PlanetPreviewProps {
   onScene: (scene: EditorScene) => void;
   onTrackChange: (track: TrackState) => void;
   onTrackPointSelectionChange: (pointId: string | null) => void;
+  onPerformanceStats: (stats: PerformanceStats) => void;
 }
 
 export function PlanetPreview({
@@ -15,6 +16,7 @@ export function PlanetPreview({
   onScene,
   onTrackChange,
   onTrackPointSelectionChange,
+  onPerformanceStats,
 }: PlanetPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -32,6 +34,7 @@ export function PlanetPreview({
       initialConfig,
       onTrackChange,
       onTrackPointSelectionChange,
+      onPerformanceStats,
     );
     onScene(scene);
 

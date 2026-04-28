@@ -6,11 +6,12 @@ import { createOutlineMaterial } from "../rendering/outlineMaterial.ts";
 import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeometry.ts";
 import { createPlanetMaterial } from "../rendering/planetMaterial.ts";
 import { createWaterMaterial } from "../rendering/waterMaterial.ts";
+import { createMetricGroup } from "../performance/geometryStats.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
 import { TrackTool } from "../tools/tracks/TrackTool.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
-import type { BrushState, EditorConfig, PropBrushState } from "../types.ts";
+import type { BrushState, EditorConfig, PerformanceStats, PropBrushState } from "../types.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -26,11 +27,15 @@ export class EditorScene {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly planetMaterial: THREE.ShaderMaterial;
+  private readonly outlineMaterial: THREE.ShaderMaterial;
   private waterMaterial: THREE.ShaderMaterial | null = null;
   private atmosphereMaterial: THREE.ShaderMaterial | null = null;
   private readonly planetMeshes: THREE.Mesh[];
   private waterMesh: THREE.Mesh | null = null;
+  private atmosphereMesh: THREE.Mesh | null = null;
   private animFrameId = 0;
+  private lastPerformanceEmit = Number.NEGATIVE_INFINITY;
+  private lastPerformanceSignature = "";
 
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
@@ -45,6 +50,7 @@ export class EditorScene {
     config: EditorConfig,
     onTrackChange: (track: TrackState) => void,
     onTrackPointSelectionChange: (pointId: string | null) => void,
+    private readonly onPerformanceStats: (stats: PerformanceStats) => void,
   ) {
     this.currentConfig = config;
 
@@ -86,20 +92,20 @@ export class EditorScene {
       waterRadius,
     });
 
-    const outlineMat = createOutlineMaterial();
+    this.outlineMaterial = createOutlineMaterial();
     const terrainMesh = new THREE.Mesh(planetGeo, this.planetMaterial);
-    const outlineMesh = new THREE.Mesh(planetGeo, outlineMat);
+    const outlineMesh = new THREE.Mesh(planetGeo, this.outlineMaterial);
     this.planetMeshes = [terrainMesh, outlineMesh];
     this.scene.add(terrainMesh, outlineMesh);
 
     if (GAME_CONFIG.shaders.atmosphere.enabled) {
       this.atmosphereMaterial = createAtmosphereMaterial();
-      const atmoMesh = new THREE.Mesh(
+      this.atmosphereMesh = new THREE.Mesh(
         new THREE.SphereGeometry(atmosphereRadius, 48, 48),
         this.atmosphereMaterial,
       );
-      atmoMesh.renderOrder = 2;
-      this.scene.add(atmoMesh);
+      this.atmosphereMesh.renderOrder = 2;
+      this.scene.add(this.atmosphereMesh);
     }
 
     if (GAME_CONFIG.shaders.water.enabled) {
@@ -232,6 +238,44 @@ export class EditorScene {
     this.controls.update();
   }
 
+  getPerformanceStats(): PerformanceStats {
+    const groups = [
+      createMetricGroup(
+        "planet",
+        "Planet Terrain",
+        this.planetMeshes,
+        "Terrain shader and outline pass both render the planet geometry",
+      ),
+      createMetricGroup("water", "Water", [this.waterMesh], "Animated transparent shader pass"),
+      createMetricGroup(
+        "atmosphere",
+        "Atmosphere",
+        [this.atmosphereMesh],
+        "Transparent fresnel shell around the planet",
+      ),
+      ...this.propPaintTool.getPerformanceStats(),
+      ...this.trackTool.getPerformanceStats(),
+    ];
+
+    const materialStats = this.getMaterialStats();
+    const rendererInfo = this.renderer.info;
+    return {
+      updatedAt: performance.now(),
+      totals: {
+        triangles: rendererInfo.render.triangles,
+        drawCalls: rendererInfo.render.calls,
+        meshes: materialStats.meshes,
+        instancedMeshes: materialStats.instancedMeshes,
+        instances: groups.reduce((sum, group) => sum + (group.instances ?? 0), 0),
+        shaderMaterials: materialStats.shaderMaterials,
+        transparentObjects: materialStats.transparentObjects,
+        geometries: rendererInfo.memory.geometries,
+        textures: rendererInfo.memory.textures,
+      },
+      groups,
+    };
+  }
+
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -241,21 +285,82 @@ export class EditorScene {
   dispose(): void {
     cancelAnimationFrame(this.animFrameId);
     this.controls.dispose();
-    this.renderer.dispose();
     this.brushTool.dispose();
     this.propPaintTool.dispose();
     this.trackTool.dispose();
+    this.disposeEditorSceneResources();
+    this.renderer.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
   }
 
   private rebuildPlanetMeshes(): void {
     const newGeo = buildPlanetGeometry(this.currentConfig, this.brushTool.getDisplacements());
+    const oldGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
     for (const mesh of this.planetMeshes) {
-      mesh.geometry.dispose();
       mesh.geometry = newGeo;
     }
+    oldGeometries.forEach((geometry) => geometry.dispose());
     this.trackTool.syncSurface();
+  }
+
+  private getMaterialStats(): {
+    meshes: number;
+    instancedMeshes: number;
+    shaderMaterials: number;
+    transparentObjects: number;
+  } {
+    let meshes = 0;
+    let instancedMeshes = 0;
+    let shaderMaterials = 0;
+    let transparentObjects = 0;
+
+    this.scene.traverse((object) => {
+      if (!object.visible || !(object instanceof THREE.Mesh)) return;
+      meshes++;
+      if (object instanceof THREE.InstancedMesh) instancedMeshes++;
+
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (materials.some((material) => material instanceof THREE.ShaderMaterial)) shaderMaterials++;
+      if (materials.some((material) => material.transparent)) transparentObjects++;
+    });
+
+    return { meshes, instancedMeshes, shaderMaterials, transparentObjects };
+  }
+
+  private emitPerformanceStats(force = false): void {
+    const now = performance.now();
+    if (!force && now - this.lastPerformanceEmit < 500) return;
+
+    const stats = this.getPerformanceStats();
+    const signature = JSON.stringify({
+      totals: stats.totals,
+      groups: stats.groups.map(({ id, triangles, drawCalls, meshes, instances }) => ({
+        id,
+        triangles,
+        drawCalls,
+        meshes,
+        instances,
+      })),
+    });
+    if (!force && signature === this.lastPerformanceSignature) return;
+
+    this.lastPerformanceEmit = now;
+    this.lastPerformanceSignature = signature;
+    this.onPerformanceStats(stats);
+  }
+
+  private disposeEditorSceneResources(): void {
+    const planetGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
+    planetGeometries.forEach((geometry) => geometry.dispose());
+    this.planetMaterial.dispose();
+    this.outlineMaterial.dispose();
+
+    if (this.waterMesh) this.waterMesh.geometry.dispose();
+    this.waterMaterial?.dispose();
+
+    if (this.atmosphereMesh) this.atmosphereMesh.geometry.dispose();
+    this.atmosphereMaterial?.dispose();
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -274,6 +379,7 @@ export class EditorScene {
       if (this.waterMaterial) this.waterMaterial.uniforms.time.value = t;
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
+      this.emitPerformanceStats();
     };
     tick();
   }

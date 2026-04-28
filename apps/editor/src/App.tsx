@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
@@ -16,6 +17,7 @@ import {
   GEOMETRY_TERRAIN_KEYS,
   type BrushState,
   type EditorConfig,
+  type PerformanceStats,
   type PropBrushState,
 } from "./types.ts";
 
@@ -56,7 +58,8 @@ export function App() {
   const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
   const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
   const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
@@ -176,6 +179,12 @@ export function App() {
     setSaveStatus(saved ? "saved" : "error");
   }
 
+  function handleClearLocalSave() {
+    const cleared = clearEditorState();
+    setSaveStatus(cleared ? "cleared" : "error");
+    if (cleared) window.location.reload();
+  }
+
   return (
     <div className="flex h-screen bg-zinc-900 text-zinc-100 overflow-hidden">
       <aside className="w-56 border-r border-zinc-700 flex flex-col shrink-0">
@@ -212,6 +221,9 @@ export function App() {
             </NavItem>
           ))}
         </nav>
+        <div className="border-t border-zinc-700 p-3 overflow-y-auto max-h-[55vh]">
+          <PerformancePanel stats={performanceStats} />
+        </div>
       </aside>
 
       <main className="flex-1 relative bg-zinc-950 min-w-0">
@@ -220,6 +232,7 @@ export function App() {
           onScene={handleScene}
           onTrackChange={handleTrackChange}
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
+          onPerformanceStats={setPerformanceStats}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
           <button
@@ -242,7 +255,36 @@ export function App() {
               <polyline points="17 21 17 13 7 13 7 21" />
               <polyline points="7 3 7 8 15 8" />
             </svg>
-            {saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
+            {saveStatus === "saved"
+              ? "Saved"
+              : saveStatus === "cleared"
+                ? "Cleared"
+                : saveStatus === "error"
+                  ? "Save failed"
+                  : "Save"}
+          </button>
+          <button
+            onClick={handleClearLocalSave}
+            title="Clear saved data"
+            className="px-2 py-2 flex items-center justify-center bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
           </button>
           <button
             onClick={() => sceneRef.current?.resetCamera()}
@@ -389,6 +431,15 @@ function saveEditorState(
       LOCAL_SAVE_KEY,
       JSON.stringify(createEditorSaveState(config, tracks, activeTrackId)),
     );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearEditorState(): boolean {
+  try {
+    localStorage.removeItem(LOCAL_SAVE_KEY);
     return true;
   } catch {
     return false;

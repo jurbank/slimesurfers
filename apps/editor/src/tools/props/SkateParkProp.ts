@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { createMetricGroup } from "../../performance/geometryStats.ts";
+import type { PerformanceMetricGroup } from "../../types.ts";
 import type { PropId } from "../../types.ts";
 
 export const MAX_SKATE_PARK_INSTANCES = 1000;
@@ -45,6 +47,17 @@ export class SkateParkProp {
 
   getCount(propId: PropId): number {
     return propId === "ramp" ? this.rampCount : 0;
+  }
+
+  getPerformanceStats(): PerformanceMetricGroup[] {
+    return [
+      createMetricGroup(
+        "props-ramp",
+        "Ramps",
+        [this.rampMesh, this.rampPreviewMesh],
+        `${this.rampCount} placed ramps plus visible placement preview`,
+      ),
+    ];
   }
 
   add(propId: PropId, matrix: THREE.Matrix4): void {

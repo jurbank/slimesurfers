@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { createMetricGroup } from "../../performance/geometryStats.ts";
+import type { PerformanceMetricGroup } from "../../types.ts";
 import { Gizmo } from "../Gizmo.ts";
 import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
 
@@ -113,6 +115,25 @@ export class TrackTool {
 
   syncSurface(): void {
     this.updateVisuals();
+  }
+
+  getPerformanceStats(): PerformanceMetricGroup[] {
+    return [
+      createMetricGroup(
+        "track-ribbon",
+        "Track Surface",
+        [this.trackMesh, this.centerLine, this.edgeLines],
+        "Ribbon mesh plus visible center and edge guide lines",
+      ),
+      createMetricGroup(
+        "track-handles",
+        "Track Handles",
+        this.handlesGroup.children.filter(
+          (child): child is THREE.Mesh => child instanceof THREE.Mesh,
+        ),
+        `${this.handlesGroup.children.length} editable control handles`,
+      ),
+    ];
   }
 
   dispose(): void {

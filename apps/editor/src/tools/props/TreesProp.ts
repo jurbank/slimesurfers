@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { createMetricGroup } from "../../performance/geometryStats.ts";
+import type { PerformanceMetricGroup } from "../../types.ts";
 import type { PropId } from "../../types.ts";
 
 export const MAX_TREE_INSTANCES = 2000;
@@ -78,6 +80,23 @@ export class TreesProp {
 
   getCount(propId: PropId): number {
     return propId === "palmTree" ? this.palmCount : this.treeCount;
+  }
+
+  getPerformanceStats(): PerformanceMetricGroup[] {
+    return [
+      createMetricGroup(
+        "props-low-poly-tree",
+        "Low Poly Trees",
+        [this.trunkMesh, this.canopyMesh, this.canopyTopMesh],
+        `${this.treeCount} trees across 3 instanced meshes`,
+      ),
+      createMetricGroup(
+        "props-palm-tree",
+        "Palm Trees",
+        [this.palmTrunkMesh, this.palmFrondsMesh],
+        `${this.palmCount} palms across 2 instanced meshes`,
+      ),
+    ];
   }
 
   add(propId: PropId, matrix: THREE.Matrix4): void {
