@@ -30,14 +30,33 @@ const PANELS: { id: Panel; label: string }[] = [
 ];
 
 const REBUILD_DELAY_MS = 600;
+const LOCAL_SAVE_KEY = "slime-surfers-editor-save";
+
+interface EditorSaveState {
+  version: 1;
+  savedAt: string;
+  config: EditorConfig;
+  tracks: {
+    version: 1;
+    tracks: TrackState[];
+  };
+  activeTrackId: string;
+}
+
+interface InitialEditorState {
+  config: EditorConfig;
+  tracks: TrackState[];
+  activeTrackId: string;
+}
 
 export function App() {
+  const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
   const [activePanel, setActivePanel] = useState<Panel>("terrain");
-  const [config, setConfig] = useState<EditorConfig>(defaultEditorConfig);
-  const initialTrack = useRef<TrackState>(createDefaultTrackState());
-  const [tracks, setTracks] = useState<TrackState[]>([initialTrack.current]);
-  const [activeTrackId, setActiveTrackId] = useState(initialTrack.current.id);
+  const [config, setConfig] = useState<EditorConfig>(initialState.config);
+  const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
+  const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
   const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
@@ -66,6 +85,7 @@ export function App() {
   }, []);
 
   const handleTrackChange = useCallback((nextTrack: TrackState) => {
+    setSaveStatus("idle");
     const nextTracks = tracksRef.current.map((track) =>
       track.id === nextTrack.id ? nextTrack : track,
     );
@@ -83,6 +103,7 @@ export function App() {
   }, []);
 
   const setActiveTrack = useCallback((trackId: string) => {
+    setSaveStatus("idle");
     activeTrackIdRef.current = trackId;
     selectedTrackPointIdRef.current = null;
     setActiveTrackId(trackId);
@@ -99,6 +120,7 @@ export function App() {
 
   const handleTracksChange = useCallback(
     (nextTracks: TrackState[], nextActiveTrackId: string, nextSelectedPointId: string | null) => {
+      setSaveStatus("idle");
       tracksRef.current = nextTracks;
       activeTrackIdRef.current = nextActiveTrackId;
       selectedTrackPointIdRef.current = nextSelectedPointId;
@@ -117,6 +139,7 @@ export function App() {
   }, []);
 
   function handleTerrainChange(terrain: EditorConfig["terrain"]) {
+    setSaveStatus("idle");
     const prev = configRef.current.terrain;
     const next = { ...configRef.current, terrain };
     configRef.current = next;
@@ -133,6 +156,7 @@ export function App() {
   }
 
   function handleColorsChange(colors: EditorConfig["colors"]) {
+    setSaveStatus("idle");
     const next = { ...configRef.current, colors };
     configRef.current = next;
     setConfig(next);
@@ -140,10 +164,16 @@ export function App() {
   }
 
   function handleShadersChange(shaders: EditorConfig["shaders"]) {
+    setSaveStatus("idle");
     const next = { ...configRef.current, shaders };
     configRef.current = next;
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
+  }
+
+  function handleSaveLocal() {
+    const saved = saveEditorState(configRef.current, tracksRef.current, activeTrackIdRef.current);
+    setSaveStatus(saved ? "saved" : "error");
   }
 
   return (
@@ -191,40 +221,64 @@ export function App() {
           onTrackChange={handleTrackChange}
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
         />
-        <button
-          onClick={() => sceneRef.current?.resetCamera()}
-          title="Reset camera"
-          className="absolute bottom-4 right-4 px-2 py-2 flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="absolute bottom-4 right-4 flex items-center gap-2">
+          <button
+            onClick={handleSaveLocal}
+            title="Save to this browser"
+            className="min-w-24 px-3 py-2 flex items-center justify-center gap-1.5 bg-cyan-500/90 hover:bg-cyan-400 border border-cyan-400 rounded text-black font-semibold text-xs transition-colors"
           >
-            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" />
-            <circle cx="12" cy="13" r="3" />
-          </svg>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            {saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
+          </button>
+          <button
+            onClick={() => sceneRef.current?.resetCamera()}
+            title="Reset camera"
+            className="px-2 py-2 flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
           >
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
+        </div>
       </main>
 
       <aside className="w-72 border-l border-zinc-700 flex flex-col shrink-0">
@@ -288,6 +342,88 @@ function exportConfig(config: EditorConfig, tracks: TrackState[]) {
   a.download = "slime-surfers-editor-config.json";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function createInitialEditorState(): InitialEditorState {
+  const saved = loadEditorState();
+  if (saved) {
+    return {
+      config: saved.config,
+      tracks: saved.tracks.tracks,
+      activeTrackId: saved.activeTrackId,
+    };
+  }
+
+  const track = createDefaultTrackState();
+  return {
+    config: defaultEditorConfig(),
+    tracks: [track],
+    activeTrackId: track.id,
+  };
+}
+
+function createEditorSaveState(
+  config: EditorConfig,
+  tracks: TrackState[],
+  activeTrackId: string,
+): EditorSaveState {
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    config,
+    tracks: {
+      version: 1,
+      tracks,
+    },
+    activeTrackId,
+  };
+}
+
+function saveEditorState(
+  config: EditorConfig,
+  tracks: TrackState[],
+  activeTrackId: string,
+): boolean {
+  try {
+    localStorage.setItem(
+      LOCAL_SAVE_KEY,
+      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId)),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadEditorState(): EditorSaveState | null {
+  const raw = localStorage.getItem(LOCAL_SAVE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<EditorSaveState>;
+    if (parsed.version !== 1) return null;
+    if (!parsed.config || !parsed.tracks || parsed.tracks.version !== 1) return null;
+    if (!Array.isArray(parsed.tracks.tracks) || parsed.tracks.tracks.length === 0) return null;
+
+    const activeTrackId =
+      typeof parsed.activeTrackId === "string" &&
+      parsed.tracks.tracks.some((track) => track.id === parsed.activeTrackId)
+        ? parsed.activeTrackId
+        : parsed.tracks.tracks[0].id;
+
+    return {
+      version: 1,
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+      config: parsed.config,
+      tracks: {
+        version: 1,
+        tracks: parsed.tracks.tracks,
+      },
+      activeTrackId,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function NavItem({
