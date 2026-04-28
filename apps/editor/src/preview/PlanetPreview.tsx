@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "react";
+import type { EditorConfig } from "../types.ts";
 import { EditorScene } from "./EditorScene.ts";
 
-export function PlanetPreview() {
+interface PlanetPreviewProps {
+  initialConfig: EditorConfig;
+  onScene: (scene: EditorScene) => void;
+}
+
+export function PlanetPreview({ initialConfig, onScene }: PlanetPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -15,7 +21,9 @@ export function PlanetPreview() {
       canvas,
       width || container.clientWidth,
       height || container.clientHeight,
+      initialConfig,
     );
+    onScene(scene);
 
     const ro = new ResizeObserver(([entry]) => {
       if (!entry) return;
@@ -28,6 +36,8 @@ export function PlanetPreview() {
       ro.disconnect();
       scene.dispose();
     };
+    // initialConfig and onScene are intentionally not in deps — scene is created once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
