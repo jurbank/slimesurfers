@@ -3,8 +3,14 @@ import type { ReactNode } from "react";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
+import { TracksPanel } from "./panels/TracksPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
 import type { EditorScene } from "./preview/EditorScene.ts";
+import {
+  createDefaultTrackState,
+  type TrackState,
+  type TrackToolState,
+} from "./tools/tracks/TrackTypes.ts";
 import {
   defaultEditorConfig,
   GEOMETRY_TERRAIN_KEYS,
@@ -13,12 +19,13 @@ import {
   type PropBrushState,
 } from "./types.ts";
 
-type Panel = "terrain" | "shaders" | "props" | "spawns";
+type Panel = "terrain" | "shaders" | "props" | "tracks" | "spawns";
 
 const PANELS: { id: Panel; label: string }[] = [
   { id: "terrain", label: "Terrain" },
   { id: "shaders", label: "Shaders" },
   { id: "props", label: "Props" },
+  { id: "tracks", label: "Tracks" },
   { id: "spawns", label: "Spawns" },
 ];
 
@@ -27,12 +34,27 @@ const REBUILD_DELAY_MS = 600;
 export function App() {
   const [activePanel, setActivePanel] = useState<Panel>("terrain");
   const [config, setConfig] = useState<EditorConfig>(defaultEditorConfig);
+  const initialTrack = useRef<TrackState>(createDefaultTrackState());
+  const [tracks, setTracks] = useState<TrackState[]>([initialTrack.current]);
+  const [activeTrackId, setActiveTrackId] = useState(initialTrack.current.id);
+  const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
   const configRef = useRef<EditorConfig>(config);
+  const tracksRef = useRef<TrackState[]>(tracks);
+  const activeTrackIdRef = useRef(activeTrackId);
+  const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
   const sceneRef = useRef<EditorScene | null>(null);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
+    const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
+    if (activeTrack) {
+      scene.setTrackToolState({
+        mode: null,
+        track: activeTrack,
+        selectedPointId: selectedTrackPointIdRef.current,
+      });
+    }
   }, []);
 
   const handleBrushChange = useCallback((state: BrushState | null) => {
@@ -42,6 +64,50 @@ export function App() {
   const handlePropBrushChange = useCallback((state: PropBrushState | null) => {
     sceneRef.current?.setPropBrushState(state);
   }, []);
+
+  const handleTrackChange = useCallback((nextTrack: TrackState) => {
+    const nextTracks = tracksRef.current.map((track) =>
+      track.id === nextTrack.id ? nextTrack : track,
+    );
+    tracksRef.current = nextTracks;
+    setTracks(nextTracks);
+  }, []);
+
+  const handleTrackToolChange = useCallback((state: TrackToolState) => {
+    sceneRef.current?.setTrackToolState(state);
+  }, []);
+
+  const handleTrackPointSelectionChange = useCallback((pointId: string | null) => {
+    selectedTrackPointIdRef.current = pointId;
+    setSelectedTrackPointId(pointId);
+  }, []);
+
+  const setActiveTrack = useCallback((trackId: string) => {
+    activeTrackIdRef.current = trackId;
+    selectedTrackPointIdRef.current = null;
+    setActiveTrackId(trackId);
+    setSelectedTrackPointId(null);
+    const activeTrack = tracksRef.current.find((track) => track.id === trackId);
+    if (activeTrack) {
+      sceneRef.current?.setTrackToolState({
+        mode: null,
+        track: activeTrack,
+        selectedPointId: null,
+      });
+    }
+  }, []);
+
+  const handleTracksChange = useCallback(
+    (nextTracks: TrackState[], nextActiveTrackId: string, nextSelectedPointId: string | null) => {
+      tracksRef.current = nextTracks;
+      activeTrackIdRef.current = nextActiveTrackId;
+      selectedTrackPointIdRef.current = nextSelectedPointId;
+      setTracks(nextTracks);
+      setActiveTrackId(nextActiveTrackId);
+      setSelectedTrackPointId(nextSelectedPointId);
+    },
+    [],
+  );
 
   const scheduleRebuild = useCallback(() => {
     if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
@@ -97,6 +163,18 @@ export function App() {
               onClick={() => {
                 if (id !== "terrain") sceneRef.current?.setBrushState(null);
                 if (id !== "props") sceneRef.current?.setPropBrushState(null);
+                if (id !== "tracks") {
+                  const activeTrack = tracksRef.current.find(
+                    (track) => track.id === activeTrackIdRef.current,
+                  );
+                  if (activeTrack) {
+                    sceneRef.current?.setTrackToolState({
+                      mode: null,
+                      track: activeTrack,
+                      selectedPointId: selectedTrackPointIdRef.current,
+                    });
+                  }
+                }
                 setActivePanel(id);
               }}
             >
@@ -107,7 +185,12 @@ export function App() {
       </aside>
 
       <main className="flex-1 relative bg-zinc-950 min-w-0">
-        <PlanetPreview initialConfig={config} onScene={handleScene} />
+        <PlanetPreview
+          initialConfig={config}
+          onScene={handleScene}
+          onTrackChange={handleTrackChange}
+          onTrackPointSelectionChange={handleTrackPointSelectionChange}
+        />
         <button
           onClick={() => sceneRef.current?.resetCamera()}
           title="Reset camera"
@@ -161,16 +244,50 @@ export function App() {
             <ShadersPanel config={config} onShadersChange={handleShadersChange} />
           )}
           {activePanel === "props" && <PropsPanel onPropBrushChange={handlePropBrushChange} />}
+          {activePanel === "tracks" && (
+            <TracksPanel
+              tracks={tracks}
+              activeTrackId={activeTrackId}
+              selectedPointId={selectedTrackPointId}
+              onActiveTrackChange={setActiveTrack}
+              onTracksChange={handleTracksChange}
+              onTrackChange={handleTrackChange}
+              onTrackToolChange={handleTrackToolChange}
+              onPointSelectionChange={handleTrackPointSelectionChange}
+            />
+          )}
           {activePanel === "spawns" && <p className="text-xs text-zinc-600 mt-2">Coming soon</p>}
         </div>
         <div className="p-4 border-t border-zinc-700">
-          <button className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors">
+          <button
+            onClick={() => exportConfig(configRef.current, tracksRef.current)}
+            className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
+          >
             Export Config
           </button>
         </div>
       </aside>
     </div>
   );
+}
+
+function exportConfig(config: EditorConfig, tracks: TrackState[]) {
+  const payload = {
+    ...config,
+    tracks: {
+      version: 1,
+      tracks,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "slime-surfers-editor-config.json";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function NavItem({

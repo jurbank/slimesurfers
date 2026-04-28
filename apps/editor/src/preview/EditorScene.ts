@@ -8,6 +8,8 @@ import { createPlanetMaterial } from "../rendering/planetMaterial.ts";
 import { createWaterMaterial } from "../rendering/waterMaterial.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
+import { TrackTool } from "../tools/tracks/TrackTool.ts";
+import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
 import type { BrushState, EditorConfig, PropBrushState } from "../types.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
@@ -33,9 +35,17 @@ export class EditorScene {
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
   private readonly propPaintTool: PropPaintTool;
+  private readonly trackTool: TrackTool;
   private isSpaceHeld = false;
 
-  constructor(canvas: HTMLCanvasElement, width: number, height: number, config: EditorConfig) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number,
+    config: EditorConfig,
+    onTrackChange: (track: TrackState) => void,
+    onTrackPointSelectionChange: (pointId: string | null) => void,
+  ) {
     this.currentConfig = config;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -64,6 +74,7 @@ export class EditorScene {
     // Phase 1: init sculpt data before planet build
     this.brushTool = new BrushTool(config);
     this.propPaintTool = new PropPaintTool();
+    this.trackTool = new TrackTool();
 
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
@@ -117,6 +128,15 @@ export class EditorScene {
       planetMesh: terrainMesh,
       shouldOrbit: () => this.isSpaceHeld,
     });
+    this.trackTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMesh: terrainMesh,
+      shouldOrbit: () => this.isSpaceHeld,
+      onTrackChange,
+      onPointSelectionChange: onTrackPointSelectionChange,
+    });
 
     this.updateUniforms(config);
     this.start();
@@ -128,6 +148,10 @@ export class EditorScene {
 
   setPropBrushState(state: PropBrushState | null): void {
     this.propPaintTool.setBrushState(state);
+  }
+
+  setTrackToolState(state: TrackToolState | null): void {
+    this.trackTool.setTrackToolState(state);
   }
 
   rebuildPlanet(config: EditorConfig): void {
@@ -217,6 +241,7 @@ export class EditorScene {
     this.renderer.dispose();
     this.brushTool.dispose();
     this.propPaintTool.dispose();
+    this.trackTool.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
   }
@@ -227,6 +252,7 @@ export class EditorScene {
       mesh.geometry.dispose();
       mesh.geometry = newGeo;
     }
+    this.trackTool.syncSurface();
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
