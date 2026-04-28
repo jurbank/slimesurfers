@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { Gizmo } from "../Gizmo.ts";
 import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
 
 export interface TrackConnectOptions {
@@ -36,7 +36,6 @@ export class TrackTool {
   private readonly raycaster = new THREE.Raycaster();
   private readonly group = new THREE.Group();
   private readonly handlesGroup = new THREE.Group();
-  private readonly gizmoTarget = new THREE.Object3D();
   private readonly handleGeometry = new THREE.SphereGeometry(HANDLE_RADIUS, 12, 8);
   private readonly handleMaterial = new THREE.MeshBasicMaterial({
     color: 0x67e8f9,
@@ -69,8 +68,7 @@ export class TrackTool {
   private centerLine: THREE.Line | null = null;
   private edgeLines: THREE.LineSegments | null = null;
   private trackMesh: THREE.Mesh | null = null;
-  private transformControls: TransformControls | null = null;
-  private transformControlsHelper: THREE.Object3D | null = null;
+  private gizmo: Gizmo | null = null;
   private selectedPointId: string | null = null;
   private isProjectingGizmo = false;
 
@@ -85,19 +83,17 @@ export class TrackTool {
     this.onGizmoDragChange = options.onGizmoDragChange;
 
     this.raycaster.params.Points.threshold = HANDLE_PICK_RADIUS;
-    this.gizmoTarget.visible = false;
-    this.group.add(this.handlesGroup, this.gizmoTarget);
+    this.group.add(this.handlesGroup);
     this.scene.add(this.group);
 
-    this.transformControls = new TransformControls(this.camera, this.canvas);
-    this.transformControls.setMode("translate");
-    this.transformControls.setSpace("local");
-    this.transformControls.setSize(0.72);
-    this.transformControls.addEventListener("objectChange", this.onGizmoObjectChange);
-    this.transformControls.addEventListener("dragging-changed", this.onGizmoDraggingChanged);
-    this.transformControlsHelper = this.transformControls.getHelper();
-    this.transformControlsHelper.visible = false;
-    this.scene.add(this.transformControlsHelper);
+    this.gizmo = new Gizmo({
+      camera: this.camera,
+      canvas: this.canvas,
+      scene: this.scene,
+      onChange: this.onGizmoObjectChange,
+      onDragChange: (dragging) => this.onGizmoDragChange?.(dragging),
+    });
+    this.group.add(this.gizmo.target);
 
     this.canvas.addEventListener("pointermove", this.onPointerMove, false);
     this.canvas.addEventListener("pointerdown", this.onPointerDown, true);
@@ -129,18 +125,11 @@ export class TrackTool {
     }
     window.removeEventListener("keydown", this.onKeyDown);
     if (this.scene) this.scene.remove(this.group);
-    if (this.scene && this.transformControlsHelper) this.scene.remove(this.transformControlsHelper);
 
     this.disposeLine(this.centerLine);
     this.disposeLine(this.edgeLines);
     if (this.trackMesh) this.trackMesh.geometry.dispose();
-    if (this.transformControls) {
-      this.transformControls.removeEventListener("objectChange", this.onGizmoObjectChange);
-      this.transformControls.removeEventListener("dragging-changed", this.onGizmoDraggingChanged);
-      this.transformControls.detach();
-      this.transformControls.dispose();
-    }
-    this.onGizmoDragChange?.(false);
+    this.gizmo?.dispose();
     this.handleGeometry.dispose();
     this.handleMaterial.dispose();
     this.selectedHandleMaterial.dispose();
@@ -174,21 +163,16 @@ export class TrackTool {
   }
 
   private updateTransformGizmo(): void {
-    if (!this.transformControls || !this.state) return;
+    if (!this.gizmo || !this.state) return;
     const point = this.state.track.points.find((item) => item.id === this.selectedPointId);
     if (!point || this.state.mode !== "move") {
-      this.transformControls.detach();
-      if (this.transformControlsHelper) this.transformControlsHelper.visible = false;
-      this.onGizmoDragChange?.(false);
+      this.gizmo.detach();
       return;
     }
 
     const position = this.positionFromPoint(point);
     if (!position) return;
-    this.gizmoTarget.position.copy(position);
-    this.orientGizmoTarget(position);
-    this.transformControls.attach(this.gizmoTarget);
-    if (this.transformControlsHelper) this.transformControlsHelper.visible = true;
+    this.gizmo.attach(position, this.getSphereBasisQuaternion(position));
   }
 
   private updateTrackGeometry(): void {
@@ -388,14 +372,14 @@ export class TrackTool {
     return this.surfacePointFromNormal(point.normal);
   }
 
-  private orientGizmoTarget(position: THREE.Vector3): void {
+  private getSphereBasisQuaternion(position: THREE.Vector3): THREE.Quaternion {
     const normal = position.clone().normalize();
     const reference =
       Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
     const tangent = new THREE.Vector3().crossVectors(reference, normal).normalize();
     const bitangent = new THREE.Vector3().crossVectors(tangent, normal).normalize();
     const basis = new THREE.Matrix4().makeBasis(tangent, normal, bitangent);
-    this.gizmoTarget.quaternion.setFromRotationMatrix(basis);
+    return new THREE.Quaternion().setFromRotationMatrix(basis);
   }
 
   private raycastPlanet(e: PointerEvent): THREE.Intersection | null {
@@ -520,7 +504,7 @@ export class TrackTool {
 
   private readonly onPointerUp = (e: PointerEvent): void => {
     if (e.button !== 0) return;
-    if (!this.transformControls?.dragging) this.onGizmoDragChange?.(false);
+    if (!this.gizmo?.isDragging()) this.onGizmoDragChange?.(false);
   };
 
   private readonly onPointerLeave = (): void => {
@@ -536,27 +520,23 @@ export class TrackTool {
 
   private readonly onGizmoObjectChange = (): void => {
     if (!this.state || !this.selectedPointId || this.isProjectingGizmo) return;
+    if (!this.gizmo) return;
     this.isProjectingGizmo = true;
-    if (this.transformControls?.axis === "XYZ") {
-      const normal = this.gizmoTarget.position.clone().normalize();
+    if (this.gizmo.getAxis() === "XYZ") {
+      const normal = this.gizmo.target.position.clone().normalize();
       const normalTuple: [number, number, number] = [normal.x, normal.y, normal.z];
       const position = this.surfacePointFromNormal(normalTuple);
-      if (position) this.gizmoTarget.position.copy(position);
-      this.orientGizmoTarget(this.gizmoTarget.position);
+      if (position) this.gizmo.target.position.copy(position);
+      this.gizmo.target.quaternion.copy(this.getSphereBasisQuaternion(this.gizmo.target.position));
       this.movePointToSurface(this.selectedPointId, normalTuple);
     } else {
-      this.movePointToPosition(this.selectedPointId, this.gizmoTarget.position);
+      this.movePointToPosition(this.selectedPointId, this.gizmo.target.position);
     }
     this.isProjectingGizmo = false;
   };
 
-  private readonly onGizmoDraggingChanged = (event: { value?: unknown }): void => {
-    this.onGizmoDragChange?.(event.value === true);
-  };
-
   private isTransformGizmoActive(): boolean {
-    if (!this.transformControls) return false;
-    return this.transformControls.dragging || this.transformControls.axis !== null;
+    return this.gizmo?.isActive() ?? false;
   }
 
   private isEditableTarget(target: EventTarget | null): boolean {
