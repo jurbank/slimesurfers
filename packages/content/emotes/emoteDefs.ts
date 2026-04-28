@@ -11,11 +11,11 @@ export const EMOTE_DEFS = [
   { id: "smile", label: "Smile", glyph: "🙂" },
   { id: "laugh", label: "Laugh", glyph: "😄" },
   { id: "wave", label: "Wave", glyph: "👋" },
-  { id: "leaf", label: "Leaf", glyph: "🍃" },
+  { id: "money", label: "money", glyph: "🤑" },
   { id: "target", label: "Target", glyph: "🎯" },
   { id: "warning", label: "Warning", glyph: "⚠️" },
   { id: "fire", label: "Fire", glyph: "🔥" },
-  { id: "heart", label: "Heart", glyph: "💚" },
+  { id: "heart", label: "Heart", glyph: "❤️" },
   { id: "skull", label: "Skull", glyph: "💀" },
   { id: "eyes", label: "Eyes", glyph: "👀" },
   { id: "thinking", label: "Thinking", glyph: "🤔" },
@@ -44,16 +44,20 @@ export const EMOTE_DEFS = [
   { id: "party", label: "Party", glyph: "🥳" },
   { id: "sleep", label: "Sleep", glyph: "😴" },
   { id: "money", label: "Money", glyph: "🤑" },
+  { id: "curse", label: "Curse", glyph: "🤬" },
+  { id: "teapot", label: "Teapot", glyph: "🫖" },
+  { id: "flex", label: "Flex", glyph: "💪" },
+  { id: "sweat", label: "Sweat", glyph: "💦" },
 ] as const;
 
 export type EmoteId = (typeof EMOTE_DEFS)[number]["id"];
 export type BotEmoteTemperament = "friendly" | "proud" | "playful" | "taunting" | "serious";
 
 export const BOT_EMOTE_LEXICONS: Record<BotEmoteTemperament, readonly EmoteId[]> = {
-  friendly: ["smile", "wave", "heart", "thumbsUp", "ok", "leaf", "sparkles"],
-  proud: ["cool", "crown", "trophy", "star", "rocket", "fire", "salute"],
+  friendly: ["smile", "wave", "heart", "thumbsUp", "ok", "star", "sparkles"],
+  proud: ["cool", "crown", "trophy", "star", "rocket", "fire", "salute", "curse", "flex", "money"],
   playful: ["laugh", "party", "zap", "eyes", "sparkles", "rocket", "clown"],
-  taunting: ["warning", "target", "angry", "thumbsDown", "shush", "bomb", "skull"],
+  taunting: ["warning", "target", "angry", "thumbsDown", "shush", "bomb", "skull", "curse", "teapot", "flex", "sweat"],
   serious: ["target", "warning", "eyes", "thinking", "salute", "question", "exclamation"],
 } as const;
 

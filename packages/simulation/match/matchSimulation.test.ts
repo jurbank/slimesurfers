@@ -249,7 +249,7 @@ describe("MatchSimulation", () => {
 
     expect(snapshot.players).toHaveLength(1);
     expect(snapshot.players[0]?.paintGroupId).toBe(player.paintGroupId);
-    expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.None);
+    expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(snapshot.players[0]?.equippedWeaponId).toBe(player.equippedWeaponId);
     expect(snapshot.players[0]?.slimeLevel).toBe(player.slimeLevel);
     expect(snapshot.pickups.length).toBeGreaterThan(0);
@@ -655,12 +655,6 @@ describe("MatchSimulation", () => {
     const surfmer = simulation.addPlayer("session-1", "Alpha");
     paintPlayerSurface(simulation, surfmer.sessionId, surfmer.paintGroupId);
 
-    simulation.recordInput("session-1", {
-      seq: 1,
-      keys: InputKey.Submerge,
-      aimDir: { x: 0, y: 0, z: 1 },
-      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
-    });
     simulation.tick(simulation.tickIntervalMs);
 
     expect(surfmer.surfState).toBe(PlayerSurfState.SurfmingHidden);
@@ -859,12 +853,6 @@ describe("MatchSimulation", () => {
     const target = simulation.addPlayer("session-2", "Bravo");
     paintPlayerSurface(simulation, target.sessionId, target.paintGroupId);
 
-    simulation.recordInput("session-2", {
-      seq: 1,
-      keys: InputKey.Submerge,
-      aimDir: { x: 0, y: 0, z: 1 },
-      dt: 1 / NETWORK_CONFIG.simulation.tickRateHz,
-    });
     simulation.tick(simulation.tickIntervalMs);
 
     expect(target.surfState).toBe(PlayerSurfState.SurfmingHidden);
@@ -933,7 +921,7 @@ describe("MatchSimulation", () => {
 
     const input = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
 
-    expect(input.keys & InputKey.Submerge).toBe(InputKey.Submerge);
+    expect(input.keys & InputKey.Submerge).toBe(0);
   });
 
   it("makes bots fire at territory when no enemy target is available", () => {
@@ -1022,6 +1010,7 @@ describe("MatchSimulation", () => {
     neutral.slimeLevel = 0;
     painted.slimeLevel = 0;
     skier.slimeLevel = 0;
+    painted.surfState = PlayerSurfState.None;
 
     paintPlayerSurface(paintedSimulation, painted.sessionId, painted.paintGroupId, 0.25);
     paintPlayerSurface(skiingSimulation, skier.sessionId, skier.paintGroupId, 0.25);
@@ -1450,6 +1439,7 @@ describe("MatchSimulation", () => {
 
     expect(target.health).toBe(GAME_CONFIG.player.maxHealth);
     expect(target.movementState).toBe(PlayerMovementState.Idle);
+    expect(target.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(target.respawnTimer).toBe(0);
     expect(distanceBetweenPlayers(shooter, target)).toBeGreaterThan(40);
   });

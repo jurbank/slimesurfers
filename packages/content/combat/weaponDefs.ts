@@ -67,7 +67,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     projectileLifetimeMs: 6000,
     projectileCollisionRadius: 0.2,
     fireCooldownMs: 80,
-    slimeCost: 5,
+    slimeCost: 3,
     directDamage: 34,
     splashDamage: 0,
     splashRadius: 0,

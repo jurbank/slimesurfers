@@ -32,7 +32,7 @@ export class SoundSystem {
   private readonly pending = new Map<string, Promise<void>>();
   private readonly sfxLastPlayedMs = new Map<string, number>();
   private activeMusic: ActiveMusic | null = null;
-  private volumes = { music: 0.75, sfx: 0.75 };
+  private volumes = { music: 0.75, sfx: 0.50 };
   private muted = { music: false, sfx: false };
 
   constructor() {

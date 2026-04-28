@@ -624,7 +624,7 @@ function respawnPlayer(
   player.slimeLevel = cfg.slime.maxLevel;
   player.respawnTimer = 0;
   player.movementState = PlayerMovementState.Idle;
-  player.surfState = PlayerSurfState.None;
+  player.surfState = PlayerSurfState.SkiVisible;
   player.isCarving = false;
   player.equippedWeaponId = DEFAULT_WEAPON_ID;
   player.disposableShotsRemaining = 0;
