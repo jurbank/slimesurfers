@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { PropBrushState } from "../../types.ts";
+import { MAX_SKATE_PARK_INSTANCES, SkateParkProp } from "./SkateParkProp.ts";
 import { MAX_TREE_INSTANCES, TreesProp } from "./TreesProp.ts";
 
 export interface PropPaintConnectOptions {
@@ -19,6 +20,7 @@ export class PropPaintTool {
 
   private readonly raycaster = new THREE.Raycaster();
   private readonly treesProp = new TreesProp();
+  private readonly skateParkProp = new SkateParkProp();
   private readonly dummy = new THREE.Object3D();
   private readonly tangent = new THREE.Vector3();
   private readonly bitangent = new THREE.Vector3();
@@ -46,7 +48,7 @@ export class PropPaintTool {
     this.shouldOrbit = options.shouldOrbit;
 
     this.brushCursor = this.createBrushCursor();
-    this.scene.add(this.treesProp.group, this.brushCursor);
+    this.scene.add(this.treesProp.group, this.skateParkProp.group, this.brushCursor);
 
     this.canvas.addEventListener("pointermove", this.onPointerMove, false);
     this.canvas.addEventListener("pointerdown", this.onPointerDown, true);
@@ -58,10 +60,12 @@ export class PropPaintTool {
     this.brushState = state;
     if (!state) {
       if (this.brushCursor) this.brushCursor.visible = false;
+      this.skateParkProp.setPreview("ramp", null);
       if (this.canvas) this.canvas.style.cursor = "";
       this.isPainting = false;
       return;
     }
+    if (state.propId !== "ramp") this.skateParkProp.setPreview("ramp", null);
     if (this.canvas) this.canvas.style.cursor = "crosshair";
   }
 
@@ -75,23 +79,38 @@ export class PropPaintTool {
     }
     if (this.scene) {
       this.scene.remove(this.treesProp.group);
+      this.scene.remove(this.skateParkProp.group);
       if (this.brushCursor) this.scene.remove(this.brushCursor);
     }
     this.treesProp.dispose();
+    this.skateParkProp.dispose();
     if (this.brushCursor) {
       this.brushCursor.geometry.dispose();
       (this.brushCursor.material as THREE.Material).dispose();
     }
   }
 
-  private paintProps(hitPoint: THREE.Vector3): void {
+  private paintProps(hit: THREE.Intersection): void {
     if (!this.brushState) return;
-    const propCount = this.treesProp.getCount(this.brushState.propId);
-    if (propCount >= MAX_TREE_INSTANCES) return;
-    const remaining = MAX_TREE_INSTANCES - propCount;
+    if (this.brushState.propId === "ramp") {
+      if (
+        this.getPropCount(this.brushState.propId) >= this.getMaxInstances(this.brushState.propId)
+      ) {
+        return;
+      }
+      if (this.composePropMatrix(hit.point, hit.face?.normal ?? hit.point, false)) {
+        this.addPropInstance(this.brushState.propId, this.matrix);
+      }
+      return;
+    }
+
+    const propCount = this.getPropCount(this.brushState.propId);
+    const maxInstances = this.getMaxInstances(this.brushState.propId);
+    if (propCount >= maxInstances) return;
+    const remaining = maxInstances - propCount;
     const count = Math.min(this.brushState.density, remaining);
     const brushAngle = (this.brushState.size * Math.PI) / 180;
-    this.centerNormal.copy(hitPoint).normalize();
+    this.centerNormal.copy(hit.point).normalize();
     this.buildBasis(this.centerNormal);
 
     for (let i = 0; i < count; i++) {
@@ -106,23 +125,48 @@ export class PropPaintTool {
 
       const surfaceHit = this.raycastNormal(this.normal);
       if (!surfaceHit) continue;
-      this.addProp(surfaceHit.point, surfaceHit.face?.normal ?? this.normal);
+      if (this.composePropMatrix(surfaceHit.point, surfaceHit.face?.normal ?? this.normal, true)) {
+        this.addPropInstance(this.brushState.propId, this.matrix);
+      }
     }
   }
 
-  private addProp(point: THREE.Vector3, localFaceNormal: THREE.Vector3): void {
-    if (!this.brushState || !this.planetMesh) return;
+  private composePropMatrix(
+    point: THREE.Vector3,
+    localFaceNormal: THREE.Vector3,
+    randomize: boolean,
+  ): boolean {
+    if (!this.brushState || !this.planetMesh) return false;
     this.normal.copy(localFaceNormal).transformDirection(this.planetMesh.matrixWorld).normalize();
     this.placement.copy(point).addScaledVector(this.normal, 0.08);
 
-    const scale = this.brushState.scale * (0.8 + Math.random() * 0.35);
+    const scale = randomize ? this.brushState.scale * (0.8 + Math.random() * 0.35) : 1;
     this.alignQuat.setFromUnitVectors(this.modelUp, this.normal);
-    this.spinQuat.setFromAxisAngle(this.normal, Math.random() * Math.PI * 2);
+    const spin = randomize ? Math.random() * Math.PI * 2 : 0;
+    this.spinQuat.setFromAxisAngle(this.normal, spin);
     this.alignQuat.premultiply(this.spinQuat);
 
     this.scaleVec.setScalar(scale);
     this.matrix.compose(this.placement, this.alignQuat, this.scaleVec);
-    this.treesProp.add(this.brushState.propId, this.matrix);
+    return true;
+  }
+
+  private getPropCount(propId: PropBrushState["propId"]): number {
+    return propId === "ramp"
+      ? this.skateParkProp.getCount(propId)
+      : this.treesProp.getCount(propId);
+  }
+
+  private getMaxInstances(propId: PropBrushState["propId"]): number {
+    return propId === "ramp" ? MAX_SKATE_PARK_INSTANCES : MAX_TREE_INSTANCES;
+  }
+
+  private addPropInstance(propId: PropBrushState["propId"], matrix: THREE.Matrix4): void {
+    if (propId === "ramp") {
+      this.skateParkProp.add(propId, matrix);
+      return;
+    }
+    this.treesProp.add(propId, matrix);
   }
 
   private buildBasis(n: THREE.Vector3): void {
@@ -198,15 +242,27 @@ export class PropPaintTool {
     const hit = this.raycastPlanet(e);
     if (!hit) {
       this.brushCursor.visible = false;
+      this.skateParkProp.setPreview("ramp", null);
       this.canvas.style.cursor = "crosshair";
       return;
     }
+
+    if (this.brushState.propId === "ramp") {
+      this.brushCursor.visible = false;
+      if (this.composePropMatrix(hit.point, hit.face?.normal ?? hit.point, false)) {
+        this.skateParkProp.setPreview("ramp", this.matrix);
+      }
+      this.canvas.style.cursor = "crosshair";
+      return;
+    }
+
+    this.skateParkProp.setPreview("ramp", null);
     this.updateBrushCursor(hit.point);
     this.brushCursor.visible = true;
     this.canvas.style.cursor = "none";
 
     if (this.isPainting && performance.now() >= this.nextPlacementTime) {
-      this.paintProps(hit.point);
+      this.paintProps(hit);
       this.nextPlacementTime = performance.now() + 80;
     }
   };
@@ -217,8 +273,10 @@ export class PropPaintTool {
     if (!hit) return;
 
     e.stopImmediatePropagation();
+    this.paintProps(hit);
+    if (this.brushState.propId === "ramp") return;
+
     this.isPainting = true;
-    this.paintProps(hit.point);
     this.nextPlacementTime = performance.now() + 80;
   };
 
@@ -228,6 +286,7 @@ export class PropPaintTool {
 
   private readonly onPointerLeave = (): void => {
     if (this.brushCursor) this.brushCursor.visible = false;
+    this.skateParkProp.setPreview("ramp", null);
     this.isPainting = false;
   };
 }

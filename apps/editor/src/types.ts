@@ -2,7 +2,7 @@ import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 
 export type BrushMode = "raise" | "lower" | "smooth" | "flatten";
 export type BrushFalloff = "smooth" | "linear" | "sharp";
-export type PropId = "lowPolyTree" | "palmTree";
+export type PropId = "lowPolyTree" | "palmTree" | "ramp";
 
 export interface BrushState {
   mode: BrushMode;
