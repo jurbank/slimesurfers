@@ -3,6 +3,7 @@ export type TrackEditMode = "add" | "move" | "delete";
 export interface TrackPoint {
   id: string;
   normal: [number, number, number];
+  position?: [number, number, number];
   width?: number;
   bank?: number;
 }

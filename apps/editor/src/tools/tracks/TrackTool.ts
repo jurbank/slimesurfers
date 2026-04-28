@@ -91,7 +91,7 @@ export class TrackTool {
 
     this.transformControls = new TransformControls(this.camera, this.canvas);
     this.transformControls.setMode("translate");
-    this.transformControls.setSpace("world");
+    this.transformControls.setSpace("local");
     this.transformControls.setSize(0.72);
     this.transformControls.addEventListener("objectChange", this.onGizmoObjectChange);
     this.transformControls.addEventListener("dragging-changed", this.onGizmoDraggingChanged);
@@ -103,6 +103,7 @@ export class TrackTool {
     this.canvas.addEventListener("pointerdown", this.onPointerDown, true);
     this.canvas.addEventListener("pointerup", this.onPointerUp, false);
     this.canvas.addEventListener("pointerleave", this.onPointerLeave, false);
+    window.addEventListener("keydown", this.onKeyDown);
   }
 
   setTrackToolState(state: TrackToolState | null): void {
@@ -126,6 +127,7 @@ export class TrackTool {
       this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
       this.canvas.style.cursor = "";
     }
+    window.removeEventListener("keydown", this.onKeyDown);
     if (this.scene) this.scene.remove(this.group);
     if (this.scene && this.transformControlsHelper) this.scene.remove(this.transformControlsHelper);
 
@@ -158,7 +160,7 @@ export class TrackTool {
     if (!this.state) return;
 
     for (const point of this.state.track.points) {
-      const position = this.surfacePointFromNormal(point.normal);
+      const position = this.positionFromPoint(point);
       if (!position) continue;
 
       const material =
@@ -181,9 +183,10 @@ export class TrackTool {
       return;
     }
 
-    const position = this.surfacePointFromNormal(point.normal);
+    const position = this.positionFromPoint(point);
     if (!position) return;
     this.gizmoTarget.position.copy(position);
+    this.orientGizmoTarget(position);
     this.transformControls.attach(this.gizmoTarget);
     if (this.transformControlsHelper) this.transformControlsHelper.visible = true;
   }
@@ -324,7 +327,7 @@ export class TrackTool {
     const { track } = this.state;
     if (track.points.length < 2) return [];
 
-    const controls = track.points.map((point) => this.surfacePointFromNormal(point.normal));
+    const controls = track.points.map((point) => this.positionFromPoint(point));
     if (controls.some((point) => point === null)) return [];
     const controlPositions = controls as THREE.Vector3[];
     const closed = track.closed && controlPositions.length >= 3;
@@ -341,9 +344,7 @@ export class TrackTool {
     const samples: TrackSample[] = [];
     for (let i = 0; i <= divisions; i++) {
       const t = i / divisions;
-      const curvePoint = curve.getPoint(t);
-      const position = this.surfacePointFromNormal([curvePoint.x, curvePoint.y, curvePoint.z]);
-      if (!position) continue;
+      const position = curve.getPoint(t);
       const scalars = this.interpolatePointScalars(t, closed);
       samples.push({ position, width: scalars.width, bank: scalars.bank });
     }
@@ -380,6 +381,21 @@ export class TrackTool {
     const hits = this.raycaster.intersectObject(this.planetMesh);
     if (hits.length === 0) return normal.multiplyScalar(radius + TRACK_SURFACE_OFFSET);
     return hits[0].point.clone().addScaledVector(normal, TRACK_SURFACE_OFFSET);
+  }
+
+  private positionFromPoint(point: TrackPoint): THREE.Vector3 | null {
+    if (point.position) return new THREE.Vector3(...point.position);
+    return this.surfacePointFromNormal(point.normal);
+  }
+
+  private orientGizmoTarget(position: THREE.Vector3): void {
+    const normal = position.clone().normalize();
+    const reference =
+      Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    const tangent = new THREE.Vector3().crossVectors(reference, normal).normalize();
+    const bitangent = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+    const basis = new THREE.Matrix4().makeBasis(tangent, normal, bitangent);
+    this.gizmoTarget.quaternion.setFromRotationMatrix(basis);
   }
 
   private raycastPlanet(e: PointerEvent): THREE.Intersection | null {
@@ -419,12 +435,29 @@ export class TrackTool {
     this.updateVisuals();
   }
 
-  private movePointToNormal(pointId: string, normalTuple: [number, number, number]): void {
+  private movePointToSurface(pointId: string, normalTuple: [number, number, number]): void {
     if (!this.state) return;
     const nextTrack = {
       ...this.state.track,
       points: this.state.track.points.map((point) =>
-        point.id === pointId ? { ...point, normal: normalTuple } : point,
+        point.id === pointId ? { ...point, normal: normalTuple, position: undefined } : point,
+      ),
+    };
+    this.state = { ...this.state, track: nextTrack };
+    this.onTrackChange?.(nextTrack);
+    this.updateHandles();
+    this.updateTrackGeometry();
+  }
+
+  private movePointToPosition(pointId: string, position: THREE.Vector3): void {
+    if (!this.state) return;
+    const normal = position.clone().normalize();
+    const normalTuple: [number, number, number] = [normal.x, normal.y, normal.z];
+    const positionTuple: [number, number, number] = [position.x, position.y, position.z];
+    const nextTrack = {
+      ...this.state.track,
+      points: this.state.track.points.map((point) =>
+        point.id === pointId ? { ...point, normal: normalTuple, position: positionTuple } : point,
       ),
     };
     this.state = { ...this.state, track: nextTrack };
@@ -494,13 +527,26 @@ export class TrackTool {
     if (this.canvas && this.state?.mode) this.canvas.style.cursor = "crosshair";
   };
 
+  private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (!this.state?.mode || !this.selectedPointId || this.isEditableTarget(e.target)) return;
+    if (e.key !== "Delete" && e.key !== "Backspace") return;
+    e.preventDefault();
+    this.deletePoint(this.selectedPointId);
+  };
+
   private readonly onGizmoObjectChange = (): void => {
     if (!this.state || !this.selectedPointId || this.isProjectingGizmo) return;
     this.isProjectingGizmo = true;
-    const normal = this.gizmoTarget.position.clone().normalize();
-    const position = this.surfacePointFromNormal([normal.x, normal.y, normal.z]);
-    if (position) this.gizmoTarget.position.copy(position);
-    this.movePointToNormal(this.selectedPointId, [normal.x, normal.y, normal.z]);
+    if (this.transformControls?.axis === "XYZ") {
+      const normal = this.gizmoTarget.position.clone().normalize();
+      const normalTuple: [number, number, number] = [normal.x, normal.y, normal.z];
+      const position = this.surfacePointFromNormal(normalTuple);
+      if (position) this.gizmoTarget.position.copy(position);
+      this.orientGizmoTarget(this.gizmoTarget.position);
+      this.movePointToSurface(this.selectedPointId, normalTuple);
+    } else {
+      this.movePointToPosition(this.selectedPointId, this.gizmoTarget.position);
+    }
     this.isProjectingGizmo = false;
   };
 
@@ -511,6 +557,12 @@ export class TrackTool {
   private isTransformGizmoActive(): boolean {
     if (!this.transformControls) return false;
     return this.transformControls.dragging || this.transformControls.axis !== null;
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
   }
 
   private disposeLine(line: THREE.Line | THREE.LineSegments | null): void {
