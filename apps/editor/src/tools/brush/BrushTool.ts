@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { BrushFalloff, BrushState, EditorConfig } from "../../types.ts";
 
 const BRUSH_COLORS: Record<string, number> = {
@@ -16,7 +17,7 @@ export interface BrushConnectOptions {
   camera: THREE.Camera;
   scene: THREE.Scene;
   planetMeshes: THREE.Mesh[];
-  onStroke: () => void;
+  onStrokeEnd: () => void;
   shouldOrbit: () => boolean;
 }
 
@@ -24,13 +25,14 @@ export class BrushTool {
   // Sculpt data — indexed in non-indexed geometry vertex order
   private sculptDetail = -1;
   private sculptBaseNormals = new Float32Array(0);
+  private sculptBaseHeights = new Float32Array(0);
   private sculptDisplacements = new Float32Array(0);
 
   // 3D / DOM resources — populated during connect()
   private canvas: HTMLCanvasElement | null = null;
   private camera: THREE.Camera | null = null;
   private planetMeshes: THREE.Mesh[] = [];
-  private onStroke: (() => void) | null = null;
+  private onStrokeEnd: (() => void) | null = null;
   private shouldOrbit: (() => boolean) | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private brushCursor: THREE.LineLoop | null = null;
@@ -50,7 +52,7 @@ export class BrushTool {
     this.canvas = options.canvas;
     this.camera = options.camera;
     this.planetMeshes = options.planetMeshes;
-    this.onStroke = options.onStroke;
+    this.onStrokeEnd = options.onStrokeEnd;
     this.shouldOrbit = options.shouldOrbit;
 
     this.brushCursor = this.createBrushCursor();
@@ -113,6 +115,7 @@ export class BrushTool {
     const pos = geo.getAttribute("position") as THREE.BufferAttribute;
     const count = pos.count;
     this.sculptBaseNormals = new Float32Array(count * 3);
+    this.sculptBaseHeights = new Float32Array(count);
     this.sculptDisplacements = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
@@ -120,9 +123,13 @@ export class BrushTool {
       const y = pos.getY(i);
       const z = pos.getZ(i);
       const len = Math.sqrt(x * x + y * y + z * z);
-      this.sculptBaseNormals[i * 3] = x / len;
-      this.sculptBaseNormals[i * 3 + 1] = y / len;
-      this.sculptBaseNormals[i * 3 + 2] = z / len;
+      const nx = x / len;
+      const ny = y / len;
+      const nz = z / len;
+      this.sculptBaseNormals[i * 3] = nx;
+      this.sculptBaseNormals[i * 3 + 1] = ny;
+      this.sculptBaseNormals[i * 3 + 2] = nz;
+      this.sculptBaseHeights[i] = getTerrainRadius(nx, ny, nz, config);
     }
 
     geo.dispose();
@@ -213,7 +220,35 @@ export class BrushTool {
       this.sculptDisplacements[i] = Math.max(-MAX_DISPLACEMENT, Math.min(MAX_DISPLACEMENT, d));
     }
 
-    this.onStroke?.();
+    this.fastUpdatePositions();
+  }
+
+  private fastUpdatePositions(): void {
+    if (this.planetMeshes.length === 0) return;
+    const geo = this.planetMeshes[0].geometry;
+    const posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
+    const count = posAttr.count;
+
+    for (let i = 0; i < count; i++) {
+      const r = this.sculptBaseHeights[i] + this.sculptDisplacements[i];
+      posAttr.setXYZ(
+        i,
+        this.sculptBaseNormals[i * 3] * r,
+        this.sculptBaseNormals[i * 3 + 1] * r,
+        this.sculptBaseNormals[i * 3 + 2] * r,
+      );
+    }
+    posAttr.needsUpdate = true;
+
+    // Recompute normals from actual displaced geometry and push to smoothNormal
+    // so the cel shader gets live-correct lighting during the stroke
+    geo.computeVertexNormals();
+    const normalAttr = geo.getAttribute("normal") as THREE.BufferAttribute;
+    const smoothNormalAttr = geo.getAttribute("smoothNormal") as THREE.BufferAttribute;
+    if (smoothNormalAttr) {
+      (smoothNormalAttr.array as Float32Array).set(normalAttr.array as Float32Array);
+      smoothNormalAttr.needsUpdate = true;
+    }
   }
 
   private falloffWeight(t: number, falloff: BrushFalloff): number {
@@ -317,6 +352,7 @@ export class BrushTool {
     if (e.button === 0 && this.isPainting) {
       this.isPainting = false;
       this.flattenTarget = null;
+      this.onStrokeEnd?.();
     }
   };
 

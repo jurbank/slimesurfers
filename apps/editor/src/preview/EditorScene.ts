@@ -104,7 +104,7 @@ export class EditorScene {
       camera: this.camera,
       scene: this.scene,
       planetMeshes: this.planetMeshes,
-      onStroke: () => this.rebuildPlanetMeshes(),
+      onStrokeEnd: () => this.rebuildPlanetMeshes(),
       shouldOrbit: () => this.isSpaceHeld,
     });
 
