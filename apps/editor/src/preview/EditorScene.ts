@@ -136,6 +136,9 @@ export class EditorScene {
       shouldOrbit: () => this.isSpaceHeld,
       onTrackChange,
       onPointSelectionChange: onTrackPointSelectionChange,
+      onGizmoDragChange: (dragging) => {
+        this.controls.enabled = !dragging;
+      },
     });
 
     this.updateUniforms(config);
