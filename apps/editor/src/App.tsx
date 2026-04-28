@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
@@ -9,6 +10,7 @@ import {
   GEOMETRY_TERRAIN_KEYS,
   type BrushState,
   type EditorConfig,
+  type PropBrushState,
 } from "./types.ts";
 
 type Panel = "terrain" | "shaders" | "props" | "spawns";
@@ -35,6 +37,10 @@ export function App() {
 
   const handleBrushChange = useCallback((state: BrushState | null) => {
     sceneRef.current?.setBrushState(state);
+  }, []);
+
+  const handlePropBrushChange = useCallback((state: PropBrushState | null) => {
+    sceneRef.current?.setPropBrushState(state);
   }, []);
 
   const scheduleRebuild = useCallback(() => {
@@ -90,6 +96,7 @@ export function App() {
               active={activePanel === id}
               onClick={() => {
                 if (id !== "terrain") sceneRef.current?.setBrushState(null);
+                if (id !== "props") sceneRef.current?.setPropBrushState(null);
                 setActivePanel(id);
               }}
             >
@@ -106,11 +113,31 @@ export function App() {
           title="Reset camera"
           className="absolute bottom-4 right-4 px-2 py-2 flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" />
             <circle cx="12" cy="13" r="3" />
           </svg>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
             <path d="M3 3v5h5" />
           </svg>
@@ -133,9 +160,8 @@ export function App() {
           {activePanel === "shaders" && (
             <ShadersPanel config={config} onShadersChange={handleShadersChange} />
           )}
-          {(activePanel === "props" || activePanel === "spawns") && (
-            <p className="text-xs text-zinc-600 mt-2">Coming soon</p>
-          )}
+          {activePanel === "props" && <PropsPanel onPropBrushChange={handlePropBrushChange} />}
+          {activePanel === "spawns" && <p className="text-xs text-zinc-600 mt-2">Coming soon</p>}
         </div>
         <div className="p-4 border-t border-zinc-700">
           <button className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors">

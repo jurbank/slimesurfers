@@ -7,7 +7,8 @@ import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeom
 import { createPlanetMaterial } from "../rendering/planetMaterial.ts";
 import { createWaterMaterial } from "../rendering/waterMaterial.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
-import type { BrushState, EditorConfig } from "../types.ts";
+import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
+import type { BrushState, EditorConfig, PropBrushState } from "../types.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -31,6 +32,7 @@ export class EditorScene {
 
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
+  private readonly propPaintTool: PropPaintTool;
   private isSpaceHeld = false;
 
   constructor(canvas: HTMLCanvasElement, width: number, height: number, config: EditorConfig) {
@@ -61,6 +63,7 @@ export class EditorScene {
 
     // Phase 1: init sculpt data before planet build
     this.brushTool = new BrushTool(config);
+    this.propPaintTool = new PropPaintTool();
 
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
@@ -107,6 +110,13 @@ export class EditorScene {
       onStrokeEnd: () => this.rebuildPlanetMeshes(),
       shouldOrbit: () => this.isSpaceHeld,
     });
+    this.propPaintTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMesh: terrainMesh,
+      shouldOrbit: () => this.isSpaceHeld,
+    });
 
     this.updateUniforms(config);
     this.start();
@@ -114,6 +124,10 @@ export class EditorScene {
 
   setBrushState(state: BrushState | null): void {
     this.brushTool.setBrushState(state);
+  }
+
+  setPropBrushState(state: PropBrushState | null): void {
+    this.propPaintTool.setBrushState(state);
   }
 
   rebuildPlanet(config: EditorConfig): void {
@@ -202,6 +216,7 @@ export class EditorScene {
     this.controls.dispose();
     this.renderer.dispose();
     this.brushTool.dispose();
+    this.propPaintTool.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
   }
