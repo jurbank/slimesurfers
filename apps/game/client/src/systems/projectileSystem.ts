@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import type { ProjectileSnapshot } from "@splat/protocol/network/serverMessages.ts";
 import { createSlimeMaterial } from "../materials/slimeMaterial.ts";
 
@@ -10,6 +10,7 @@ const CORRECTION_RATE = 18;
 
 interface ProjectileState {
   mesh: THREE.Mesh;
+  weaponId: WeaponId;
   // Last known authoritative position and velocity from the server snapshot.
   px: number;
   py: number;
@@ -22,6 +23,11 @@ interface ProjectileState {
   visualY: number;
   visualZ: number;
   lastUpdatedAtMs: number;
+}
+
+export interface RemovedProjectile {
+  weaponId: WeaponId;
+  position: THREE.Vector3;
 }
 
 export class ProjectileSystem {
@@ -62,6 +68,7 @@ export class ProjectileSystem {
       this.scene.add(mesh);
       state = {
         mesh,
+        weaponId: projectile.weaponId,
         px: projectile.pos.x,
         py: projectile.pos.y,
         pz: projectile.pos.z,
@@ -76,6 +83,7 @@ export class ProjectileSystem {
       };
       this.projectiles.set(id, state);
     } else {
+      state.weaponId = projectile.weaponId;
       state.px = projectile.pos.x;
       state.py = projectile.pos.y;
       state.pz = projectile.pos.z;
@@ -124,14 +132,20 @@ export class ProjectileSystem {
     }
   }
 
-  removeMissing(activeIds: Set<string>): void {
+  removeMissing(activeIds: Set<string>): RemovedProjectile[] {
+    const removed: RemovedProjectile[] = [];
     for (const [id, state] of this.projectiles) {
       if (activeIds.has(id)) continue;
+      removed.push({
+        weaponId: state.weaponId,
+        position: state.mesh.position.clone(),
+      });
       this.scene.remove(state.mesh);
       state.mesh.geometry.dispose();
       (state.mesh.material as THREE.Material).dispose();
       this.projectiles.delete(id);
     }
+    return removed;
   }
 
   clear(): void {

@@ -5,6 +5,7 @@ export type SoundCategory = "music" | "sfx";
 interface LoadedSound {
   buffer: AudioBuffer;
   category: SoundCategory;
+  volume: number;
 }
 
 interface ActiveMusic {
@@ -32,7 +33,7 @@ export class SoundSystem {
   private readonly pending = new Map<string, Promise<void>>();
   private readonly sfxLastPlayedMs = new Map<string, number>();
   private activeMusic: ActiveMusic | null = null;
-  private volumes = { music: 0.75, sfx: 0.50 };
+  private volumes = { music: 0.75, sfx: 0.5 };
   private muted = { music: false, sfx: false };
 
   constructor() {
@@ -63,7 +64,7 @@ export class SoundSystem {
   }
 
   // Preload a sound asset. Safe to call multiple times for the same key.
-  preload(key: string, url: string, category: SoundCategory): Promise<void> {
+  preload(key: string, url: string, category: SoundCategory, volume = 1): Promise<void> {
     if (this.loaded.has(key)) return Promise.resolve();
     if (this.pending.has(key)) return this.pending.get(key)!;
 
@@ -72,7 +73,7 @@ export class SoundSystem {
       const res = await fetch(url);
       const arrayBuffer = await res.arrayBuffer();
       const buffer = await ctx.decodeAudioData(arrayBuffer);
-      this.loaded.set(key, { buffer, category });
+      this.loaded.set(key, { buffer, category, volume });
       this.pending.delete(key);
     })();
 
@@ -94,7 +95,7 @@ export class SoundSystem {
     if (!sound || sound.category !== "sfx") return;
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
-    gain.gain.value = options.volume ?? 1;
+    gain.gain.value = options.volume ?? sound.volume;
     gain.connect(this.masterGain.sfx!);
     const source = ctx.createBufferSource();
     source.buffer = sound.buffer;
@@ -107,11 +108,18 @@ export class SoundSystem {
   playSfxAt(
     key: string,
     position: THREE.Vector3,
-    options: { volume?: number; refDistance?: number } = {},
+    options: { volume?: number; refDistance?: number; cooldownMs?: number } = {},
   ): void {
+    if (options.cooldownMs !== undefined) {
+      const last = this.sfxLastPlayedMs.get(key) ?? -Infinity;
+      if (performance.now() - last < options.cooldownMs) return;
+      this.sfxLastPlayedMs.set(key, performance.now());
+    }
     const sound = this.loaded.get(key);
     if (!sound || sound.category !== "sfx") return;
     const ctx = this.ensureContext();
+    const gain = ctx.createGain();
+    gain.gain.value = options.volume ?? sound.volume;
     const panner = ctx.createPanner();
     panner.panningModel = "HRTF";
     panner.distanceModel = "inverse";
@@ -119,7 +127,8 @@ export class SoundSystem {
     panner.positionX.value = position.x;
     panner.positionY.value = position.y;
     panner.positionZ.value = position.z;
-    panner.connect(this.masterGain.sfx!);
+    panner.connect(gain);
+    gain.connect(this.masterGain.sfx!);
     const source = ctx.createBufferSource();
     source.buffer = sound.buffer;
     source.connect(panner);

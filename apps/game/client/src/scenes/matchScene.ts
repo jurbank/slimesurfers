@@ -2,7 +2,7 @@ import * as THREE from "three";
 import {
   DEFAULT_WEAPON_ID,
   getWeaponDefinition,
-  type WeaponId,
+  WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
@@ -32,6 +32,7 @@ import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { RailSystem } from "../systems/railSystem.ts";
+import { MatchAudioSystem } from "../systems/matchAudioSystem.ts";
 import { SoundSystem } from "../systems/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
@@ -79,7 +80,6 @@ const ACQUISITION_FOV_SCALE = 0.72;
 const SNIPER_HOLD_THRESHOLD_MS = 200;
 const SNIPER_CHARGE_MS = 1500;
 const SNIPER_FOV_SCALE = 0.4;
-
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
   let nearest = PLANET_CENTERS[0];
   let minDist = Infinity;
@@ -106,6 +106,7 @@ export class MatchScene {
   private readonly emoteBubbles: EmoteBubbleSystem;
   private readonly rails: RailSystem;
   private readonly sound: SoundSystem;
+  private readonly matchAudio: MatchAudioSystem;
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
   private readonly combatHud: CombatHud;
@@ -364,6 +365,11 @@ export class MatchScene {
     this.emoteBubbles = new EmoteBubbleSystem();
     this.rails = new RailSystem(this.render.scene);
     this.sound = new SoundSystem();
+    this.matchAudio = new MatchAudioSystem(
+      this.sound,
+      (sessionId) => this.getPlayerMesh(sessionId),
+      () => this.connection.sessionId,
+    );
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
@@ -410,8 +416,8 @@ export class MatchScene {
 
     // 1. Audio
     await Promise.all(
-      audioEntries.map(async ([key, { url, category }]) => {
-        await this.sound.preload(key, url, category);
+      audioEntries.map(async ([key, { url, category, volume }]) => {
+        await this.sound.preload(key, url, category, volume);
         increment();
       }),
     );
@@ -694,19 +700,13 @@ export class MatchScene {
 
   private syncProjectiles(snapshot: SnapshotMessage, receivedAtMs: number): void {
     const liveProjectileIds = new Set<string>();
-    const localSessionId = this.connection.sessionId;
     for (const projectile of snapshot.projectiles) {
       liveProjectileIds.add(projectile.id);
       const color = projectile.slimeColor;
       const isNew = this.projectiles.syncProjectile(projectile.id, projectile, color, receivedAtMs);
-      if (isNew && projectile.ownerId !== localSessionId) {
-        this.sound.playSfxAt(
-          "pow",
-          new THREE.Vector3(projectile.pos.x, projectile.pos.y, projectile.pos.z),
-        );
-      }
+      this.matchAudio.handleProjectileSync(projectile, isNew);
     }
-    this.projectiles.removeMissing(liveProjectileIds);
+    this.matchAudio.handleRemovedProjectiles(this.projectiles.removeMissing(liveProjectileIds));
   }
 
   private syncPickups(snapshot: SnapshotMessage, receivedAtMs: number): void {
@@ -724,6 +724,7 @@ export class MatchScene {
   }
 
   private handleTrickEvents(events: TrickEventMessage[]): void {
+    this.matchAudio.handleTrickEvents(events);
     for (const event of events) {
       const trick = getAirTrickDefinition(event.trickId);
       if (event.playerId === this.connection.sessionId) {
@@ -731,18 +732,13 @@ export class MatchScene {
       } else {
         this.remotePlayers.get(event.playerId)?.triggerTrick(event.trickId, event.combo);
       }
-
-      const mesh = this.getPlayerMesh(event.playerId);
-      if (mesh) {
-        this.sound.playSfxAt(trick.soundKey, mesh.position, {
-          volume: event.combo >= 3 ? 0.9 : 0.65,
-          refDistance: 18,
-        });
-      } else {
-        this.sound.playSfx(trick.soundKey, { volume: 0.65 });
-      }
       this.trickText.show(event.playerId, `${trick.name} x${event.combo}`);
     }
+  }
+
+  private handleKillEvents(events: KillEventMessage[]): void {
+    this.leaderboard.pushKillEvents(events, this.connection.sessionId);
+    this.matchAudio.handleKillEvents(events);
   }
 
   private handleEmoteEvents(events: EmoteEventMessage[]): void {
@@ -814,6 +810,7 @@ export class MatchScene {
         this.removedSessions.add(sessionId);
         this.playerColors.delete(sessionId);
         this.playerPatterns.delete(sessionId);
+        this.matchAudio.removePlayer(sessionId);
         this.runtime.removePlayer(sessionId);
         if (sessionId === this.connection.sessionId) {
           this.localPlayer?.dispose(this.render.scene);
@@ -831,6 +828,7 @@ export class MatchScene {
         this.emoteBubbles.clearPlayer(sessionId);
       },
       onPaintStamps: (stamps) => {
+        this.matchAudio.handlePaintStamps(stamps);
         for (const stamp of stamps) {
           this.paint.addStamp(stamp);
           const planetState = this.planetPaint.get(stamp.planetId);
@@ -846,11 +844,12 @@ export class MatchScene {
         this.handleEmoteEvents(events);
       },
       onKillEvents: (events: KillEventMessage[]) => {
-        this.leaderboard.pushKillEvents(events, this.connection.sessionId);
+        this.handleKillEvents(events);
       },
       onSnapshot: (snapshot, receivedAtMs) => {
         const localSessionId = this.connection.sessionId;
         const liveRemoteIds = new Set<string>();
+        this.matchAudio.handleSnapshotPlayers(snapshot.players);
         for (const player of snapshot.players) {
           const isLocal = player.sessionId === localSessionId;
           const slimeColor = player.slimeColor;
@@ -899,6 +898,7 @@ export class MatchScene {
         this.trickText.clear();
         this.emoteBubbles.clear();
         this.leaderboard.clear();
+        this.matchAudio.clear();
         this.countdown.hide();
         this.matchEnd.hide();
         this.lastLeaderboard = null;
