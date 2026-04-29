@@ -9,6 +9,7 @@ import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import {
   GAME_CONFIG,
   getPaintTerritoryDimensions,
+  getPlayerTargetRadius,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -199,7 +200,7 @@ export class MatchScene {
     const weapon = getWeaponDefinition(weaponId);
     const playerHitRadius = Math.max(
       GAME_CONFIG.movement.collisionRadius + weapon.projectileCollisionRadius,
-      GAME_CONFIG.movement.collisionRadius * 1.2,
+      getPlayerTargetRadius(GAME_CONFIG),
     );
     const playerHitRadiusSq = playerHitRadius * playerHitRadius;
 

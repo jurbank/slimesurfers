@@ -13,6 +13,7 @@ import {
   GAME_CONFIG,
   getPaintStampChordRadius,
   getPaintTerritoryDimensions,
+  getPlayerTargetRadius,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
 import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
@@ -1285,6 +1286,14 @@ describe("MatchSimulation", () => {
 
     expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
     expect(simulation.matchState.projectiles.size).toBe(0);
+  });
+
+  it("keeps zero-radius hitscan weapons on the visible player target radius", () => {
+    expect(getWeaponDefinition(WeaponId.HeavyMachineGun).projectileCollisionRadius).toBe(0);
+    expect(getPlayerTargetRadius()).toBeCloseTo(
+      GAME_CONFIG.movement.collisionRadius * GAME_CONFIG.player.targetRadiusMultiplier,
+    );
+    expect(getPlayerTargetRadius()).toBeGreaterThan(GAME_CONFIG.movement.collisionRadius);
   });
 
   it("reverts a heavy machine gun pickup to Pew Pew after the disposable spray runs out", () => {

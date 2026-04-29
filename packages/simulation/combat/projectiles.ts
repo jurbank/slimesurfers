@@ -1,4 +1,5 @@
 import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { getPlayerTargetRadius } from "@splat/content/config/gameConfig.ts";
 
 const HOMING_TURN_RATE_STANDARD = 5; // rad/s
 const HOMING_TURN_RATE_GUARANTEED = 15; // rad/s
@@ -32,6 +33,7 @@ import type { SpawnSelection } from "../match/spawnSelection.ts";
 
 export interface CombatConfig {
   player: {
+    targetRadiusMultiplier: number;
     projectileMuzzleHeight: number;
     maxHealth: number;
   };
@@ -710,7 +712,7 @@ export function tryFireProjectile(
         capsule.bottom,
         capsule.top,
       );
-      if (distance(impactPos, playerHitPoint) > cfg.movement.collisionRadius) return;
+      if (distance(impactPos, playerHitPoint) > getPlayerTargetRadius(cfg)) return;
       const hitDistance = distance(muzzlePos, impactPos);
       if (bestPlayer && hitDistance >= bestPlayer.distance) return;
       bestPlayer = {

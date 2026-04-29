@@ -80,15 +80,21 @@ export class JoinOverlay {
 
     this.root.append(this.video, videoScrim, contentWrapper);
 
-    const title = document.createElement("h1");
-    title.textContent = "Slime Surfers";
-    Object.assign(title.style, { margin: "0 0 8px", fontSize: "2.5rem", letterSpacing: "0.15em" });
+    const logo = document.createElement("img");
+    logo.src = "/images/slime-surfers-logo.png";
+    logo.alt = "Slime Surfers";
+    Object.assign(logo.style, {
+      width: "380px",
+      height: "auto",
+      marginBottom: "12px",
+      filter: "drop-shadow(0 0 20px rgba(0, 229, 255, 0.2))",
+    });
 
     const subtitle = document.createElement("p");
     subtitle.textContent =
       "Cover the planet in slime, splat your rivals, and pull off huge tricks.";
     Object.assign(subtitle.style, {
-      margin: "0 0 12px",
+      margin: "0 0 16px",
       maxWidth: "360px",
       textAlign: "center",
       fontSize: "0.95rem",
@@ -103,7 +109,7 @@ export class JoinOverlay {
       background: "#222",
       borderRadius: "2px",
       overflow: "hidden",
-      marginBottom: "8px",
+      marginBottom: "16px",
     });
 
     this.progressBar = document.createElement("div");
@@ -129,11 +135,12 @@ export class JoinOverlay {
       outline: "none",
       width: "220px",
       boxSizing: "border-box",
+      marginBottom: "8px",
     });
 
     const colorLabel = document.createElement("p");
     colorLabel.textContent = "Choose your player / slime color";
-    Object.assign(colorLabel.style, { margin: "4px 0 0", fontSize: "0.8rem", color: "#888" });
+    Object.assign(colorLabel.style, { margin: "4px 0 8px", fontSize: "0.8rem", color: "#fff" });
 
     const swatchRow = document.createElement("div");
     Object.assign(swatchRow.style, {
@@ -142,6 +149,7 @@ export class JoinOverlay {
       flexWrap: "wrap",
       justifyContent: "center",
       maxWidth: "300px",
+      marginBottom: "16px",
     });
 
     SLOTS.forEach((slot, i) => {
@@ -182,6 +190,7 @@ export class JoinOverlay {
       color: "#888",
       cursor: "not-allowed",
       letterSpacing: "0.1em",
+      marginBottom: "8px",
     });
 
     this.statusText = document.createElement("p");
@@ -197,7 +206,7 @@ export class JoinOverlay {
       position: "absolute",
       bottom: "20px",
       fontSize: "0.8rem",
-      color: "#666",
+      color: "#fff",
       textDecoration: "none",
       transition: "color 0.2s",
     });
@@ -205,7 +214,7 @@ export class JoinOverlay {
     twitterLink.addEventListener("mouseleave", () => (twitterLink.style.color = "#666"));
 
     contentWrapper.append(
-      title,
+      logo,
       subtitle,
       this.progressContainer,
       this.nameInput,
@@ -285,7 +294,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => {});
+    void this.video.play().catch(() => { });
   }
 
   hide(): void {
