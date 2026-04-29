@@ -203,11 +203,10 @@ export class LeaderboardOverlay {
       "Waste your enemies",
     ]);
     const tipsSection = this.buildInfoSection("Tips", [
-
       "You move faster on your own slime",
       "Carve (Space) to accelerate downhill",
       "(E) to toggle surf/walk mode",
-      "Mash the arrow keys in the air to do tricks"
+      "Mash the arrow keys in the air to do tricks",
     ]);
 
     this.root.append(

@@ -57,7 +57,19 @@ export const BOT_EMOTE_LEXICONS: Record<BotEmoteTemperament, readonly EmoteId[]>
   friendly: ["smile", "wave", "heart", "thumbsUp", "ok", "star", "sparkles"],
   proud: ["cool", "crown", "trophy", "star", "rocket", "fire", "salute", "curse", "flex", "money"],
   playful: ["laugh", "party", "zap", "eyes", "sparkles", "rocket", "clown"],
-  taunting: ["warning", "target", "angry", "thumbsDown", "shush", "bomb", "skull", "curse", "teapot", "flex", "sweat"],
+  taunting: [
+    "warning",
+    "target",
+    "angry",
+    "thumbsDown",
+    "shush",
+    "bomb",
+    "skull",
+    "curse",
+    "teapot",
+    "flex",
+    "sweat",
+  ],
   serious: ["target", "warning", "eyes", "thinking", "salute", "question", "exclamation"],
 } as const;
 

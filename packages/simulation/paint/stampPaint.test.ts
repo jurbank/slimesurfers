@@ -41,9 +41,11 @@ function createPlanetState() {
   };
 }
 
-function findTerrainNormal(
-  predicate: (height: number) => boolean,
-): { x: number; y: number; z: number } {
+function findTerrainNormal(predicate: (height: number) => boolean): {
+  x: number;
+  y: number;
+  z: number;
+} {
   const rows = 48;
   const cols = 96;
   for (let row = 0; row < rows; row++) {
@@ -171,7 +173,9 @@ describe("stampPaint", () => {
     expect(simState.scores.size).toBe(0);
     expect(planetState.stamps).toHaveLength(0);
     expect(
-      planetState.cells.every((cell) => cell.ownerPaintGroupId === NO_PAINT_GROUP_ID && cell.color === 0),
+      planetState.cells.every(
+        (cell) => cell.ownerPaintGroupId === NO_PAINT_GROUP_ID && cell.color === 0,
+      ),
     ).toBe(true);
   });
 });

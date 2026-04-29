@@ -8,6 +8,7 @@ import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/si
 import { createPlayerMesh } from "./playerMesh.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
+import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
 const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
@@ -22,6 +23,7 @@ interface PlayerTransformState {
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  slimeLevel: number;
 }
 
 /** The local player's mesh — driven by server state, camera follows this. */
@@ -35,6 +37,7 @@ export class LocalPlayer {
   private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
+  private readonly slimeRechargeGauge: SlimeRechargeGauge;
   private readonly materials: THREE.Material[] = [];
   private readonly inverseMeshQuat = new THREE.Quaternion();
   private readonly localAimDir = new THREE.Vector3();
@@ -65,6 +68,8 @@ export class LocalPlayer {
       rig.slimeMaterials,
       slimeColor,
     );
+    this.slimeRechargeGauge = new SlimeRechargeGauge(slimeColor);
+    this.mesh.add(this.slimeRechargeGauge.sprite);
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
@@ -107,6 +112,7 @@ export class LocalPlayer {
       this.currentOpacity = 1;
       this.submersionTimer = 0;
       this.setOpacity(1);
+      this.slimeRechargeGauge.update(state, dt);
       return;
     }
 
@@ -161,6 +167,8 @@ export class LocalPlayer {
     } else {
       this.disturbanceMesh.visible = false;
     }
+
+    this.slimeRechargeGauge.update(state, dt);
   }
 
   triggerSkiLaunch(): void {
@@ -174,6 +182,7 @@ export class LocalPlayer {
 
   dispose(scene: THREE.Scene): void {
     scene.remove(this.mesh);
+    this.slimeRechargeGauge.dispose();
   }
 
   private setOpacity(opacity: number): void {
