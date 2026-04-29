@@ -31,6 +31,7 @@ interface PlayerTransformState {
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
   slimeLevel: number;
+  isOnFriendlyPaint: boolean;
 }
 
 /** The local player's mesh — driven by server state, camera follows this. */
@@ -159,11 +160,8 @@ export class LocalPlayer {
       this.liveMesh.scale.set(squash, stretch, squash);
     }
 
-    const isSubmerged =
-      state.surfState === PlayerSurfState.SurfmingMoving ||
-      state.surfState === PlayerSurfState.SurfmingHidden;
     const airborne = state.movementState === PlayerMovementState.Airborne;
-    const effectivelySubmerged = isSubmerged && !airborne && !state.isShooting;
+    const effectivelySubmerged = state.isOnFriendlyPaint && !airborne && !state.isShooting;
 
     if (effectivelySubmerged) {
       this.submersionTimer += dt;
@@ -181,7 +179,8 @@ export class LocalPlayer {
     this.outlineMesh.visible = effectivelySubmerged;
     this.mesh.scale.set(1, 1, 1);
 
-    if (effectivelySubmerged && state.surfState === PlayerSurfState.SurfmingMoving) {
+    const isMoving = state.movementState === PlayerMovementState.Moving || state.surfState === PlayerSurfState.SurfmingMoving;
+    if (effectivelySubmerged && isMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
       const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;

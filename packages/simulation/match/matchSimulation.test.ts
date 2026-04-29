@@ -1514,7 +1514,7 @@ describe("MatchSimulation", () => {
 
     target.vel = { x: 0, y: 0, z: 0 };
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < 10; shot++) {
       simulation.matchState.projectiles.set(`test-${shot}`, {
         id: `test-${shot}`,
         ownerId: shooter.sessionId,
@@ -1587,8 +1587,8 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
 
-    for (let shot = 0; shot < 3; shot++) {
-      simulation.matchState.projectiles.set(`kill-feed-${shot}`, {
+    for (let shot = 0; shot < 10; shot++) {
+      simulation.matchState.projectiles.set(`test-${shot}`, {
         id: `kill-feed-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,

@@ -23,6 +23,7 @@ export interface RuntimePlayerState extends PlayerPhysics {
   slimeLevel: number;
   inputSeq: number;
   respawnTimer: number;
+  isOnFriendlyPaint: boolean;
   sessionId: string;
   slimeColor: number;
   patternId: number;
@@ -65,6 +66,7 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     slimeLevel: state.slimeLevel,
     inputSeq: state.inputSeq,
     respawnTimer: state.respawnTimer,
+    isOnFriendlyPaint: state.isOnFriendlyPaint,
     slimeColor: state.slimeColor,
     patternId: state.patternId,
   };
@@ -98,6 +100,7 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     slimeLevel: snapshot.slimeLevel,
     inputSeq: snapshot.inputSeq,
     respawnTimer: snapshot.respawnTimer,
+    isOnFriendlyPaint: snapshot.isOnFriendlyPaint,
     slimeColor: snapshot.slimeColor,
     patternId: snapshot.patternId,
   };
@@ -144,6 +147,7 @@ function interpolateState(
     slimeLevel: newer.slimeLevel,
     inputSeq: newer.inputSeq,
     respawnTimer: newer.respawnTimer,
+    isOnFriendlyPaint: newer.isOnFriendlyPaint,
     slimeColor: newer.slimeColor,
     patternId: newer.patternId,
   };

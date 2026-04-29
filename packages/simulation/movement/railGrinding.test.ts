@@ -107,6 +107,7 @@ function createPlayer(): PlayerPhysics {
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
+    isOnFriendlyPaint: false,
   };
 }
 

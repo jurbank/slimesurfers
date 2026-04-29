@@ -32,6 +32,7 @@ function createPlayerSnapshot(movementState: PlayerMovementState): PlayerSnapsho
     health: 100,
     slimeLevel: 0,
     respawnTimer: 0,
+    isOnFriendlyPaint: false,
     slimeColor: 0x00ff00,
     patternId: 0,
     inputSeq: 0,

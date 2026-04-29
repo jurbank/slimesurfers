@@ -6,12 +6,11 @@ import {
   type SimPlayerState,
 } from "../match/simState.ts";
 import {
+  PLANET_POSITIONS,
   GAME_CONFIG,
   resolveBotBehaviorProfile,
   type BotBehaviorProfile,
 } from "@splat/content/config/gameConfig.ts";
-import { PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
-import { getPaintAtPoint } from "../paint/paintDetection.ts";
 import { isTerritoryCellPaintable } from "../paint/territoryGrid.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 
@@ -259,13 +258,10 @@ function isInvisibleToBots(
   simState: SimMatchState,
   nowMs: number,
 ): boolean {
-  const submerged =
-    target.surfState === PlayerSurfState.SurfmingMoving ||
-    target.surfState === PlayerSurfState.SurfmingHidden;
-  if (!submerged || isRecentlyShooting(target, nowMs)) return false;
+  if (isRecentlyShooting(target, nowMs)) return false;
+  if (target.movementState === PlayerMovementState.Airborne) return false;
 
-  const paint = getPaintAtPoint(target.pos, target.planetId, simState.planets);
-  return paint?.paintGroupId === target.paintGroupId;
+  return target.isOnFriendlyPaint;
 }
 
 export function generateBotInput(

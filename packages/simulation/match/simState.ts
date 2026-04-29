@@ -132,6 +132,7 @@ export interface SimPlayerState {
   lastGrindT: number; // arc-length parameter from the previous tick
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
+  isOnFriendlyPaint: boolean;
   inputSeq: number;
   airTrickCombo: number;
   airTrickAirTimeMs: number;

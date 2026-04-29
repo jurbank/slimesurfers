@@ -40,6 +40,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
+    isOnFriendlyPaint: false,
     inputSeq: 0,
     airTrickCombo: 0,
     airTrickAirTimeMs: 0,

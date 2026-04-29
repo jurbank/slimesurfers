@@ -322,7 +322,7 @@ export const GAME_CONFIG = {
   // -- Bots ------------------------------------------------------------------
   bot: {
     // Desired total players in the room, including humans. Missing slots are filled with bots.
-    targetPopulation: 3,
+    targetPopulation: 0,
     // Max distance at which a bot looks for enemies to track or engage.
     scanRadius: 60,
     // Max distance at which a bot is allowed to start shooting a tracked target.

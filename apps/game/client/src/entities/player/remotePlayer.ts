@@ -24,6 +24,7 @@ interface PlayerTransformState {
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  isOnFriendlyPaint: boolean;
 }
 
 /** A remote player's mesh — position updated from server snapshots. */
@@ -103,14 +104,12 @@ export class RemotePlayer {
     this.updateWeapon(state.equippedWeaponId);
 
     const airborne = state.movementState === PlayerMovementState.Airborne;
-    const submerged =
-      state.surfState === PlayerSurfState.SurfmingMoving ||
-      state.surfState === PlayerSurfState.SurfmingHidden;
-    const effectivelySubmerged = submerged && !airborne && !state.isShooting;
+    const effectivelySubmerged = state.isOnFriendlyPaint && !airborne && !state.isShooting;
 
     this.mesh.visible = !effectivelySubmerged;
 
-    if (effectivelySubmerged && state.surfState === PlayerSurfState.SurfmingMoving) {
+    const isMoving = state.movementState === PlayerMovementState.Moving || state.surfState === PlayerSurfState.SurfmingMoving;
+    if (effectivelySubmerged && isMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
       const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;

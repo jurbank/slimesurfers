@@ -99,6 +99,7 @@ function createPlayer(): PlayerPhysics {
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
+    isOnFriendlyPaint: false,
   };
 }
 
@@ -436,7 +437,21 @@ describe("stepPlayer", () => {
 
   it("applies the friendly paint speed multiplier from config", () => {
     const player = createPlayer();
+    // Add a stamp at the player's position to ensure onFriendlyPaint is true
     const paint = createPaintMap(player.paintGroupId);
+    const planet = paint.get("planet-0")!;
+    planet.stamps.push({
+      paintGroupId: player.paintGroupId,
+      color: 0xff0000,
+      patternId: 0,
+      nx: 0,
+      ny: 1,
+      nz: 0,
+      radius: 10,
+      seq: 1,
+    });
+    // Rebuild buckets or just rely on the fallback to stamps since we only have one
+    planet.stampBuckets = [[planet.stamps[0]!]];
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     for (let i = 0; i < 10; i++) {
@@ -446,7 +461,10 @@ describe("stepPlayer", () => {
     const speed = Math.hypot(player.vel.x, player.vel.y, player.vel.z);
     expect(speed).toBeGreaterThan(0);
     expect(speed).toBeLessThanOrEqual(
-      TEST_CONFIG.movement.moveSpeed * TEST_CONFIG.movement.surfSpeedMultiplier * 1.05,
+      TEST_CONFIG.movement.moveSpeed *
+        TEST_CONFIG.movement.surfSpeedMultiplier *
+        TEST_CONFIG.movement.friendlyPaintSpeedMultiplier *
+        1.05,
     );
   });
 

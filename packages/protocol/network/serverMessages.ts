@@ -31,6 +31,8 @@ export interface PlayerSnapshot {
   health: number;
   slimeLevel: number;
   respawnTimer: number;
+  /** True if the player is currently standing on or submerged in their own team's paint */
+  isOnFriendlyPaint: boolean;
   /** Visual identity */
   slimeColor: number;
   patternId: number;

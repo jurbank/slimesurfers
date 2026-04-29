@@ -1106,8 +1106,9 @@ export class MatchScene {
       }
 
       if (keyBits & InputKey.Fire) {
-        const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
-        this.sound.playSfx(getLocalFireSoundKey(localState.equippedWeaponId), {
+        const { fireCooldownMs, slimeCost } = getWeaponDefinition(localState.equippedWeaponId);
+        const isDry = slimeCost > 0 && localState.slimeLevel < slimeCost;
+        this.sound.playSfx(isDry ? "gunDry" : getLocalFireSoundKey(localState.equippedWeaponId), {
           cooldownMs: fireCooldownMs,
         });
       }
