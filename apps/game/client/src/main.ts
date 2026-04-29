@@ -118,7 +118,7 @@ if (!skipJoinScreen && overlay) {
       scene.requestPointerCapture();
       scene.setEmoteToggleVisible(true);
       if (window.innerWidth > 768) {
-        scene.showHint("Press E to surf");
+        scene.showHint("Press E to toggle walk/surf mode");
         setTimeout(() => scene.showHint("Surf on your slime to go faster"), 7000);
       }
     }
