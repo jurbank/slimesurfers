@@ -351,6 +351,8 @@ function stepOnSurface(
   let speedMultiplier = 1.0;
   if (onWater && skiActive) {
     speedMultiplier = cfg.movement.waterSkiSpeedMultiplier;
+  } else if (skiActive && onFriendlyPaint) {
+    speedMultiplier = cfg.movement.surfSpeedMultiplier * cfg.movement.friendlyPaintSpeedMultiplier;
   } else if (skiActive) {
     speedMultiplier = cfg.movement.surfSpeedMultiplier;
   } else if (onEnemyPaint) {
