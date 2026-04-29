@@ -159,6 +159,9 @@ export class MatchScene {
   // Bazooka homing acquisition state
   private fireHoldStartMs: number | null = null;
   private prevFireDown = false;
+  private gaugeActivityPulseSeq = 0;
+  private dryFireGaugePulseSeq = 0;
+  private nextGaugeActivityPulseMs = 0;
   private acquisitionLockedTargetId: string | null = null;
   private acquisitionIsGuaranteed = false;
   private readonly acquisitionTestVec = new THREE.Vector3();
@@ -1109,6 +1112,11 @@ export class MatchScene {
       if (keyBits & InputKey.Fire) {
         const { fireCooldownMs, slimeCost } = getWeaponDefinition(localState.equippedWeaponId);
         const isDry = slimeCost > 0 && localState.slimeLevel < slimeCost;
+        if (now >= this.nextGaugeActivityPulseMs) {
+          this.gaugeActivityPulseSeq++;
+          if (isDry) this.dryFireGaugePulseSeq++;
+          this.nextGaugeActivityPulseMs = now + fireCooldownMs;
+        }
         this.sound.playSfx(isDry ? "gunDry" : getLocalFireSoundKey(localState.equippedWeaponId), {
           cooldownMs: fireCooldownMs,
         });
@@ -1159,6 +1167,8 @@ export class MatchScene {
           dt,
           visualRotation,
           new THREE.Vector3(aimDir.x, aimDir.y, aimDir.z),
+          this.dryFireGaugePulseSeq,
+          this.gaugeActivityPulseSeq,
         );
         if (this.localTrail) {
           this.localTrail.update(predictedLocalState, planetCenter, predictedLocalState.slimeColor);

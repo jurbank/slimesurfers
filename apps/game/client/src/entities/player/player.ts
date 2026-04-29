@@ -104,6 +104,8 @@ export class LocalPlayer {
     dt: number,
     visualRotation?: THREE.Quaternion,
     aimDir?: THREE.Vector3,
+    dryFirePulseSeq = 0,
+    gaugeActivityPulseSeq = 0,
   ): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     if (visualRotation) {
@@ -141,7 +143,7 @@ export class LocalPlayer {
       this.currentOpacity = 1;
       this.submersionTimer = 0;
       this.setOpacity(1);
-      this.slimeRechargeGauge.update(state, dt);
+      this.slimeRechargeGauge.update(state, dt, dryFirePulseSeq, gaugeActivityPulseSeq);
       this.wasDead = true;
       return;
     }
@@ -200,7 +202,7 @@ export class LocalPlayer {
       this.disturbanceMesh.visible = false;
     }
 
-    this.slimeRechargeGauge.update(state, dt);
+    this.slimeRechargeGauge.update(state, dt, dryFirePulseSeq, gaugeActivityPulseSeq);
   }
 
   triggerSkiLaunch(): void {

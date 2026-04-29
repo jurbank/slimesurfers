@@ -18,6 +18,8 @@ const SPRITE_HEIGHT = 1.88;
 const FILL_EPSILON = 0.02;
 const FADE_SPEED = 12;
 const COMPACT_AMMO_THRESHOLD = 12;
+const DRY_FIRE_FLASH_DURATION = 0.34;
+const ACTIVITY_VISIBLE_DURATION = 2;
 
 export class SlimeRechargeGauge {
   readonly sprite: THREE.Sprite;
@@ -33,8 +35,13 @@ export class SlimeRechargeGauge {
   private lastDrawnFill = -1;
   private lastDrawnAlpha = -1;
   private lastDrawnPulse = -1;
+  private lastDrawnDryFirePulse = -1;
   private lastDrawnShotsRemaining = -1;
   private lastDrawnShotsTotal = -1;
+  private lastDryFirePulseSeq = 0;
+  private lastActivityPulseSeq = 0;
+  private dryFireFlashTimer = 0;
+  private activityVisibleTimer = 0;
 
   constructor(slimeColor: number) {
     this.fillColor.setHex(slimeColor);
@@ -67,10 +74,15 @@ export class SlimeRechargeGauge {
     this.sprite.renderOrder = 1200;
     this.sprite.frustumCulled = false;
     this.sprite.visible = false;
-    this.draw(1, 0, 0);
+    this.draw(1, 0, 0, 0);
   }
 
-  update(state: SlimeRechargeGaugeState, dt: number): void {
+  update(
+    state: SlimeRechargeGaugeState,
+    dt: number,
+    dryFirePulseSeq = 0,
+    activityPulseSeq = 0,
+  ): void {
     const maxSlime = GAME_CONFIG.slime.maxLevel;
     const targetFill = maxSlime <= 0 ? 0 : THREE.MathUtils.clamp(state.slimeLevel / maxSlime, 0, 1);
     this.visualFill += (targetFill - this.visualFill) * Math.min(1, dt * 14);
@@ -81,10 +93,33 @@ export class SlimeRechargeGauge {
       state.surfState === PlayerSurfState.SurfmingHidden;
     const filling = state.slimeLevel > this.previousSlimeLevel + FILL_EPSILON;
     this.previousSlimeLevel = state.slimeLevel;
-    const disposableShotsTotal = getWeaponDefinition(state.equippedWeaponId).disposableShots ?? 0;
+    const weapon = getWeaponDefinition(state.equippedWeaponId);
+    const disposableShotsTotal = weapon.disposableShots ?? 0;
+
+    if (dryFirePulseSeq !== this.lastDryFirePulseSeq) {
+      this.lastDryFirePulseSeq = dryFirePulseSeq;
+      this.dryFireFlashTimer = DRY_FIRE_FLASH_DURATION;
+    } else {
+      this.dryFireFlashTimer = Math.max(0, this.dryFireFlashTimer - Math.max(0, dt));
+    }
+    if (activityPulseSeq !== this.lastActivityPulseSeq) {
+      this.lastActivityPulseSeq = activityPulseSeq;
+      this.activityVisibleTimer = ACTIVITY_VISIBLE_DURATION;
+    } else {
+      this.activityVisibleTimer = Math.max(0, this.activityVisibleTimer - Math.max(0, dt));
+    }
 
     const hasDisposableAmmo = disposableShotsTotal > 0;
-    const targetVisible = alive && ((surfing && targetFill < 0.999) || hasDisposableAmmo) ? 1 : 0;
+    const dryFireFlashActive = this.dryFireFlashTimer > 0;
+    const activityVisibleActive = this.activityVisibleTimer > 0;
+    const targetVisible =
+      alive &&
+      ((surfing && targetFill < 0.999) ||
+        hasDisposableAmmo ||
+        dryFireFlashActive ||
+        activityVisibleActive)
+        ? 1
+        : 0;
     this.visibleAmount +=
       (targetVisible - this.visibleAmount) * Math.min(1, Math.max(0, dt) * FADE_SPEED);
     if (this.visibleAmount < 0.01) this.visibleAmount = 0;
@@ -95,10 +130,15 @@ export class SlimeRechargeGauge {
     if (!this.sprite.visible) return;
 
     const pulse = filling ? Math.sin(performance.now() * 0.018) * 0.5 + 0.5 : 0;
+    const dryFirePulse =
+      this.dryFireFlashTimer > 0
+        ? Math.sin((1 - this.dryFireFlashTimer / DRY_FIRE_FLASH_DURATION) * Math.PI)
+        : 0;
     if (
       Math.abs(this.visualFill - this.lastDrawnFill) > 0.004 ||
       Math.abs(this.visibleAmount - this.lastDrawnAlpha) > 0.02 ||
       Math.abs(pulse - this.lastDrawnPulse) > 0.08 ||
+      Math.abs(dryFirePulse - this.lastDrawnDryFirePulse) > 0.06 ||
       state.disposableShotsRemaining !== this.lastDrawnShotsRemaining ||
       disposableShotsTotal !== this.lastDrawnShotsTotal ||
       !this.previousFillColor.equals(this.fillColor)
@@ -107,6 +147,7 @@ export class SlimeRechargeGauge {
         this.visualFill,
         this.visibleAmount,
         pulse,
+        dryFirePulse,
         state.disposableShotsRemaining,
         disposableShotsTotal,
       );
@@ -122,12 +163,14 @@ export class SlimeRechargeGauge {
     fill: number,
     alpha: number,
     pulse: number,
+    dryFirePulse: number,
     disposableShotsRemaining = 0,
     disposableShotsTotal = 0,
   ): void {
     this.lastDrawnFill = fill;
     this.lastDrawnAlpha = alpha;
     this.lastDrawnPulse = pulse;
+    this.lastDrawnDryFirePulse = dryFirePulse;
     this.lastDrawnShotsRemaining = disposableShotsRemaining;
     this.lastDrawnShotsTotal = disposableShotsTotal;
     this.previousFillColor.copy(this.fillColor);
@@ -142,7 +185,7 @@ export class SlimeRechargeGauge {
     const height = 98;
     const radius = width / 2;
     const clampedFill = THREE.MathUtils.clamp(fill, 0, 1);
-    const fillHeight = clampedFill <= 0 ? 0 : Math.max(width, height * clampedFill);
+    const fillHeight = height * clampedFill;
     const color = `#${this.fillColor.getHexString()}`;
 
     ctx.save();
@@ -185,12 +228,26 @@ export class SlimeRechargeGauge {
     this.roundRect(ctx, x, y, width, height, radius);
     ctx.stroke();
 
+    if (dryFirePulse > 0) {
+      ctx.globalAlpha = alpha * dryFirePulse;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "rgba(255, 86, 64, 0.92)";
+      this.roundRect(ctx, x - 5, y - 5, width + 10, height + 10, radius + 5);
+      ctx.stroke();
+
+      ctx.globalAlpha = alpha * dryFirePulse * 0.45;
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "rgba(255, 226, 124, 0.74)";
+      this.roundRect(ctx, x - 9, y - 9, width + 18, height + 18, radius + 9);
+      ctx.stroke();
+    }
+
     ctx.lineWidth = 2;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.36)";
     this.roundRect(ctx, x + 4, y + 4, width - 8, height - 8, radius - 4);
     ctx.stroke();
 
-    if (clampedFill > 0) {
+    if (fillHeight > 6) {
       const knobY = y + height - 3 - (height - 6) * clampedFill;
       ctx.globalAlpha = alpha * (0.7 + pulse * 0.3);
       ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
