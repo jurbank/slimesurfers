@@ -949,6 +949,7 @@ export class MatchScene {
         mat.uniforms.time.value = now / 1000;
       }
       this.clouds.update(dt);
+      this.paint.update(now);
 
       // Always update debug lines if enabled
       this.updateDebugLines();
