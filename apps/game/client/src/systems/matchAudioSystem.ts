@@ -18,6 +18,11 @@ const HMG_IMPACT_WINDOW_MS = 200;
 const TRICK_LAND_SOUND_WINDOW_MS = 4000;
 const TRICK_LAND_SOUND_COOLDOWN_MS = 120;
 const PLAYER_KILL_SOUND_COOLDOWN_MS = 120;
+const PROJECTILE_IMPACT_SOUND_KEYS = ["splat1", "splat2", "splat3"] as const;
+
+function getProjectileFireSoundKey(weaponId: WeaponId): string {
+  return weaponId === WeaponId.Bazooka ? "bazookaPow" : "pow";
+}
 
 function isTrickMovementState(movementState: number): boolean {
   return (
@@ -27,8 +32,10 @@ function isTrickMovementState(movementState: number): boolean {
 
 export class MatchAudioSystem {
   private heavyImpactEligibleUntilMs = 0;
+  private projectileImpactSoundIndex = 0;
   private readonly recentTrickSoundEligibleUntilMs = new Map<string, number>();
   private readonly lastSnapshotMovementStates = new Map<string, number>();
+  private readonly lastSnapshotShootingStates = new Map<string, boolean>();
 
   constructor(
     private readonly sound: SoundSystem,
@@ -39,14 +46,19 @@ export class MatchAudioSystem {
   handleProjectileSync(projectile: ProjectileSnapshot, isNew: boolean): void {
     if (!isNew || projectile.ownerId === this.getLocalSessionId()) return;
     this.sound.playSfxAt(
-      "pow",
+      getProjectileFireSoundKey(projectile.weaponId),
       new THREE.Vector3(projectile.pos.x, projectile.pos.y, projectile.pos.z),
     );
   }
 
   handleRemovedProjectiles(removedProjectiles: RemovedProjectile[]): void {
     for (const removed of removedProjectiles) {
-      const impactKey = removed.weaponId === WeaponId.Bazooka ? "splat2" : "splat1";
+      const impactKey =
+        removed.weaponId === WeaponId.Bazooka
+          ? "bigSplat"
+          : PROJECTILE_IMPACT_SOUND_KEYS[
+              this.projectileImpactSoundIndex++ % PROJECTILE_IMPACT_SOUND_KEYS.length
+            ];
       this.sound.playSfxAt(impactKey, removed.position, {
         volume: removed.weaponId === WeaponId.Bazooka ? 0.95 : 0.75,
         refDistance: removed.weaponId === WeaponId.Bazooka ? 18 : 12,
@@ -113,7 +125,20 @@ export class MatchAudioSystem {
 
     for (const player of players) {
       const prevMovementState = this.lastSnapshotMovementStates.get(player.sessionId);
+      const prevShooting = this.lastSnapshotShootingStates.get(player.sessionId) ?? false;
       const eligibleUntil = this.recentTrickSoundEligibleUntilMs.get(player.sessionId) ?? 0;
+      if (
+        player.sessionId !== this.getLocalSessionId() &&
+        !prevShooting &&
+        player.isShooting &&
+        player.equippedWeaponId === WeaponId.Sniper
+      ) {
+        const mesh = this.getPlayerMesh(player.sessionId);
+        this.sound.playSfxAt(
+          "riflePow",
+          mesh?.position ?? new THREE.Vector3(player.pos.x, player.pos.y, player.pos.z),
+        );
+      }
       if (
         prevMovementState !== undefined &&
         isTrickMovementState(prevMovementState) &&
@@ -122,7 +147,7 @@ export class MatchAudioSystem {
         nowMs <= eligibleUntil
       ) {
         this.sound.playSfxAt(
-          "trickLandSplat",
+          "bigSplat",
           new THREE.Vector3(player.pos.x, player.pos.y, player.pos.z),
           {
             volume: 0.8,
@@ -133,17 +158,21 @@ export class MatchAudioSystem {
         this.recentTrickSoundEligibleUntilMs.delete(player.sessionId);
       }
       this.lastSnapshotMovementStates.set(player.sessionId, player.movementState);
+      this.lastSnapshotShootingStates.set(player.sessionId, player.isShooting);
     }
   }
 
   removePlayer(sessionId: string): void {
     this.recentTrickSoundEligibleUntilMs.delete(sessionId);
     this.lastSnapshotMovementStates.delete(sessionId);
+    this.lastSnapshotShootingStates.delete(sessionId);
   }
 
   clear(): void {
     this.heavyImpactEligibleUntilMs = 0;
+    this.projectileImpactSoundIndex = 0;
     this.recentTrickSoundEligibleUntilMs.clear();
     this.lastSnapshotMovementStates.clear();
+    this.lastSnapshotShootingStates.clear();
   }
 }

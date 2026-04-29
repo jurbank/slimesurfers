@@ -19,6 +19,10 @@ interface PickupVisualState {
   createdAtMs: number;
 }
 
+export interface RemovedPickup {
+  position: THREE.Vector3;
+}
+
 export class PickupSystem {
   private readonly scene: THREE.Scene;
   private readonly pickups = new Map<string, PickupVisualState>();
@@ -87,9 +91,11 @@ export class PickupSystem {
     }
   }
 
-  removeMissing(activeIds: Set<string>): void {
+  removeMissing(activeIds: Set<string>): RemovedPickup[] {
+    const removed: RemovedPickup[] = [];
     for (const [id, state] of this.pickups) {
       if (activeIds.has(id)) continue;
+      removed.push({ position: state.root.position.clone() });
       this.scene.remove(state.root);
       state.mesh.geometry.dispose();
       state.ring.geometry.dispose();
@@ -97,6 +103,7 @@ export class PickupSystem {
       (state.ring.material as THREE.Material).dispose();
       this.pickups.delete(id);
     }
+    return removed;
   }
 
   clear(): void {

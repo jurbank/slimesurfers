@@ -80,6 +80,13 @@ const ACQUISITION_FOV_SCALE = 0.72;
 const SNIPER_HOLD_THRESHOLD_MS = 200;
 const SNIPER_CHARGE_MS = 1500;
 const SNIPER_FOV_SCALE = 0.4;
+
+function getLocalFireSoundKey(weaponId: WeaponId): string {
+  if (weaponId === WeaponId.Bazooka) return "bazookaPow";
+  if (weaponId === WeaponId.Sniper) return "riflePow";
+  return "pow";
+}
+
 function nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
   let nearest = PLANET_CENTERS[0];
   let minDist = Infinity;
@@ -715,7 +722,11 @@ export class MatchScene {
       livePickupIds.add(pickup.id);
       this.pickups.syncPickup(pickup, receivedAtMs);
     }
-    this.pickups.removeMissing(livePickupIds);
+    for (const removed of this.pickups.removeMissing(livePickupIds)) {
+      this.sound.playSfxAt("weaponPickup", removed.position, {
+        refDistance: 14,
+      });
+    }
   }
 
   private getPlayerMesh(sessionId: string): THREE.Object3D | null {
@@ -1095,7 +1106,9 @@ export class MatchScene {
 
       if (keyBits & InputKey.Fire) {
         const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
-        this.sound.playSfx("pow", { cooldownMs: fireCooldownMs });
+        this.sound.playSfx(getLocalFireSoundKey(localState.equippedWeaponId), {
+          cooldownMs: fireCooldownMs,
+        });
       }
 
       const input = {
