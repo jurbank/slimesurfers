@@ -14,11 +14,16 @@ import {
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
+import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../../assets/weaponModels.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
 const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
 const OPACITY_FADE_IN_SPEED = 6; // ~0.35s to fully reveal
 const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
+const HELD_WEAPON_MODEL_SIZE = 0.95;
+const HELD_WEAPON_MODEL_ROTATION_X = -Math.PI / 2;
+const HELD_WEAPON_MODEL_ROTATION_Y = Math.PI;
+const HEAVY_MACHINE_GUN_WEAPON_ID: WeaponId = "heavyMachineGun";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
@@ -41,7 +46,8 @@ export class LocalPlayer {
   private readonly deadMesh: THREE.Group;
   private readonly deathParticles: PlayerDeathParticles;
   private readonly poseRig: PlayerPoseRig;
-  private readonly weaponMesh: THREE.Mesh;
+  private readonly weaponMesh: THREE.Group;
+  private readonly weaponFallbackMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly outlineMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
@@ -49,6 +55,7 @@ export class LocalPlayer {
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly slimeRechargeGauge: SlimeRechargeGauge;
   private readonly materials: THREE.Material[] = [];
+  private readonly weaponModelMaterials: THREE.Material[] = [];
   private readonly inverseMeshQuat = new THREE.Quaternion();
   private readonly localAimDir = new THREE.Vector3();
   private readonly weaponForward = new THREE.Vector3(0, 0, 1);
@@ -64,6 +71,9 @@ export class LocalPlayer {
   private submersionTimer = 0;
   private wasDead = false;
   private deathAge = 0;
+  private currentWeaponModelPath = "";
+  private weaponModelRoot?: THREE.Object3D;
+  private disposed = false;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
@@ -73,6 +83,7 @@ export class LocalPlayer {
     this.deathParticles = rig.deathParticles;
     this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
+    this.weaponFallbackMesh = rig.weaponFallbackMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.outlineMesh = rig.outlineMesh;
     this.jsrOutline = rig.jsrOutline;
@@ -84,11 +95,7 @@ export class LocalPlayer {
     );
     this.slimeRechargeGauge = new SlimeRechargeGauge(slimeColor);
     this.mesh.add(this.slimeRechargeGauge.sprite);
-    this.liveMesh.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      if (Array.isArray(child.material)) this.materials.push(...child.material);
-      else this.materials.push(child.material);
-    });
+    this.registerMaterials(this.liveMesh);
     scene.add(this.mesh);
   }
 
@@ -179,7 +186,9 @@ export class LocalPlayer {
     this.outlineMesh.visible = effectivelySubmerged;
     this.mesh.scale.set(1, 1, 1);
 
-    const isMoving = state.movementState === PlayerMovementState.Moving || state.surfState === PlayerSurfState.SurfmingMoving;
+    const isMoving =
+      state.movementState === PlayerMovementState.Moving ||
+      state.surfState === PlayerSurfState.SurfmingMoving;
     if (effectivelySubmerged && isMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
@@ -204,6 +213,11 @@ export class LocalPlayer {
   }
 
   dispose(scene: THREE.Scene): void {
+    this.disposed = true;
+    if (this.weaponModelRoot) {
+      this.unregisterWeaponModelMaterials();
+      disposeWeaponModel(this.weaponModelRoot);
+    }
     scene.remove(this.mesh);
     this.slimeRechargeGauge.dispose();
   }
@@ -228,12 +242,15 @@ export class LocalPlayer {
   private updateWeapon(weaponId: WeaponId, aimDir?: THREE.Vector3): void {
     const visible = weaponId !== DEFAULT_WEAPON_ID;
     this.weaponMesh.visible = visible;
-    const material = this.weaponMesh.material;
-    if (!visible || !(material instanceof THREE.MeshLambertMaterial)) return;
+    if (!visible) return;
 
     const weapon = getWeaponDefinition(weaponId);
-    material.color.setHex(weapon.pickupColor);
-    material.emissive.setHex(weapon.pickupColor);
+    this.syncWeaponModel(weaponId, weapon.pickupModelPath);
+    const material = this.weaponFallbackMesh.material;
+    if (material instanceof THREE.MeshLambertMaterial) {
+      material.color.setHex(weapon.pickupColor);
+      material.emissive.setHex(weapon.pickupColor);
+    }
 
     if (!aimDir || aimDir.lengthSq() < 1e-6) {
       this.weaponMesh.quaternion.copy(this.weaponBaseQuat);
@@ -244,5 +261,65 @@ export class LocalPlayer {
     this.localAimDir.copy(aimDir).normalize().applyQuaternion(this.inverseMeshQuat).normalize();
     this.aimQuat.setFromUnitVectors(this.weaponForward, this.localAimDir);
     this.weaponMesh.quaternion.copy(this.aimQuat).multiply(this.weaponBaseQuat);
+  }
+
+  private syncWeaponModel(weaponId: WeaponId, modelPath: string): void {
+    if (this.currentWeaponModelPath === modelPath) return;
+    this.currentWeaponModelPath = modelPath;
+    this.weaponFallbackMesh.visible = true;
+    if (this.weaponModelRoot) {
+      this.weaponMesh.remove(this.weaponModelRoot);
+      this.unregisterWeaponModelMaterials();
+      disposeWeaponModel(this.weaponModelRoot);
+      this.weaponModelRoot = undefined;
+    }
+    if (typeof window === "undefined") return;
+
+    void cloneNormalizedWeaponModel(modelPath, HELD_WEAPON_MODEL_SIZE)
+      .then((model) => {
+        if (this.disposed) {
+          disposeWeaponModel(model);
+          return;
+        }
+        if (this.currentWeaponModelPath !== modelPath) {
+          disposeWeaponModel(model);
+          return;
+        }
+        this.weaponFallbackMesh.visible = false;
+        model.rotation.x = HELD_WEAPON_MODEL_ROTATION_X;
+        model.rotation.y =
+          weaponId === HEAVY_MACHINE_GUN_WEAPON_ID ? 0 : HELD_WEAPON_MODEL_ROTATION_Y;
+        this.weaponModelRoot = model;
+        this.weaponMesh.add(model);
+        this.weaponModelMaterials.push(...this.registerMaterials(model));
+        this.setOpacity(this.currentOpacity);
+      })
+      .catch(() => {
+        if (this.disposed) return;
+        if (this.currentWeaponModelPath === modelPath) this.weaponFallbackMesh.visible = true;
+      });
+  }
+
+  private registerMaterials(root: THREE.Object3D): THREE.Material[] {
+    const registered: THREE.Material[] = [];
+    root.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (Array.isArray(child.material)) {
+        this.materials.push(...child.material);
+        registered.push(...child.material);
+      } else {
+        this.materials.push(child.material);
+        registered.push(child.material);
+      }
+    });
+    return registered;
+  }
+
+  private unregisterWeaponModelMaterials(): void {
+    for (const material of this.weaponModelMaterials) {
+      const index = this.materials.indexOf(material);
+      if (index >= 0) this.materials.splice(index, 1);
+    }
+    this.weaponModelMaterials.length = 0;
   }
 }

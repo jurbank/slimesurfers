@@ -203,9 +203,8 @@ export function buildComputedRail(
 
 /**
  * Sample the rail at a given arc-length (clamped to [0, totalLength]).
- * Position is linearly interpolated between pre-sampled points.
- * Tangent is evaluated analytically from the Catmull-Rom curve to avoid
- * the piecewise-linear jitter that lerping stored tangents produces on curves.
+ * Position and tangent are evaluated analytically from the Catmull-Rom curve
+ * to avoid piecewise-linear jitter on curves.
  */
 export function sampleRailAt(
   rail: ComputedRail,
@@ -233,35 +232,24 @@ export function sampleRailAt(
 
   const t = (clamped - a.arcLength) / span;
 
-  const pos: Vec3Data = {
-    x: a.pos.x + (b.pos.x - a.pos.x) * t,
-    y: a.pos.y + (b.pos.y - a.pos.y) * t,
-    z: a.pos.z + (b.pos.z - a.pos.z) * t,
-  };
-
-  // Analytical tangent: interpolate localT within the segment and evaluate the
-  // Catmull-Rom derivative directly. Falls back to lerp at segment boundaries.
-  let tangent: Vec3Data;
-  if (a.segmentIndex === b.segmentIndex) {
-    const seg = a.segmentIndex;
-    const localT = a.localT + (b.localT - a.localT) * t;
-    const rawTangent = catmullRomTangent(
-      pts[seg]!,
-      pts[seg + 1]!,
-      pts[seg + 2]!,
-      pts[seg + 3]!,
-      localT,
-    );
-    tangent = normalize(
-      rawTangent.x === 0 && rawTangent.y === 0 && rawTangent.z === 0
-        ? { x: 0, y: 0, z: 1 }
-        : rawTangent,
-    );
-  } else {
-    // Segment boundary: use the chord direction between the two flanking sample
-    // positions — always continuous and accurate at any sample density.
-    tangent = normalize(sub(b.pos, a.pos));
-  }
+  const seg = a.segmentIndex;
+  const localT =
+    a.segmentIndex === b.segmentIndex
+      ? a.localT + (b.localT - a.localT) * t
+      : a.localT + (1 - a.localT) * t;
+  const pos = catmullRomPoint(pts[seg]!, pts[seg + 1]!, pts[seg + 2]!, pts[seg + 3]!, localT);
+  const rawTangent = catmullRomTangent(
+    pts[seg]!,
+    pts[seg + 1]!,
+    pts[seg + 2]!,
+    pts[seg + 3]!,
+    localT,
+  );
+  const tangent = normalize(
+    rawTangent.x === 0 && rawTangent.y === 0 && rawTangent.z === 0
+      ? { x: 0, y: 0, z: 1 }
+      : rawTangent,
+  );
 
   return { pos, tangent };
 }

@@ -25,6 +25,11 @@ export interface PlayerSnapshot {
   surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
+  grindRailId: number;
+  grindT: number;
+  lastGrindT: number;
+  grindSpeed: number;
+  grindCooldownMs: number;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;

@@ -6,6 +6,7 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
+import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../../assets/weaponModels.ts";
 import { createPlayerMesh, type PlayerPoseRig } from "./playerMesh.ts";
 import {
   resetPlayerDeathParticles,
@@ -14,6 +15,11 @@ import {
 } from "./playerDeath.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
+
+const HELD_WEAPON_MODEL_SIZE = 1.95;
+const HELD_WEAPON_MODEL_ROTATION_X = -Math.PI / 2;
+const HELD_WEAPON_MODEL_ROTATION_Y = Math.PI;
+const HEAVY_MACHINE_GUN_WEAPON_ID: WeaponId = "heavyMachineGun";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
@@ -34,7 +40,8 @@ export class RemotePlayer {
   private readonly deadMesh: THREE.Group;
   private readonly deathParticles: PlayerDeathParticles;
   private readonly poseRig: PlayerPoseRig;
-  private readonly weaponMesh: THREE.Mesh;
+  private readonly weaponMesh: THREE.Group;
+  private readonly weaponFallbackMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
@@ -42,6 +49,9 @@ export class RemotePlayer {
   private readonly trickAnimator = new PlayerTrickAnimator();
   private wasDead = false;
   private deathAge = 0;
+  private currentWeaponModelPath = "";
+  private weaponModelRoot?: THREE.Object3D;
+  private disposed = false;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
@@ -51,6 +61,7 @@ export class RemotePlayer {
     this.deathParticles = rig.deathParticles;
     this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
+    this.weaponFallbackMesh = rig.weaponFallbackMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
@@ -108,7 +119,9 @@ export class RemotePlayer {
 
     this.mesh.visible = !effectivelySubmerged;
 
-    const isMoving = state.movementState === PlayerMovementState.Moving || state.surfState === PlayerSurfState.SurfmingMoving;
+    const isMoving =
+      state.movementState === PlayerMovementState.Moving ||
+      state.surfState === PlayerSurfState.SurfmingMoving;
     if (effectivelySubmerged && isMoving) {
       const t = performance.now() * 0.001;
       const pulse = Math.sin(t * 3) * 0.5 + 0.5;
@@ -124,6 +137,10 @@ export class RemotePlayer {
   }
 
   dispose(scene: THREE.Scene): void {
+    this.disposed = true;
+    if (this.weaponModelRoot) {
+      disposeWeaponModel(this.weaponModelRoot);
+    }
     scene.remove(this.mesh);
     scene.remove(this.disturbanceMesh);
   }
@@ -161,11 +178,47 @@ export class RemotePlayer {
   private updateWeapon(weaponId: WeaponId): void {
     const visible = weaponId !== DEFAULT_WEAPON_ID;
     this.weaponMesh.visible = visible;
-    const material = this.weaponMesh.material;
-    if (!visible || !(material instanceof THREE.MeshLambertMaterial)) return;
+    if (!visible) return;
 
     const weapon = getWeaponDefinition(weaponId);
+    this.syncWeaponModel(weaponId, weapon.pickupModelPath);
+    const material = this.weaponFallbackMesh.material;
+    if (!(material instanceof THREE.MeshLambertMaterial)) return;
     material.color.setHex(weapon.pickupColor);
     material.emissive.setHex(weapon.pickupColor);
+  }
+
+  private syncWeaponModel(weaponId: WeaponId, modelPath: string): void {
+    if (this.currentWeaponModelPath === modelPath) return;
+    this.currentWeaponModelPath = modelPath;
+    this.weaponFallbackMesh.visible = true;
+    if (this.weaponModelRoot) {
+      this.weaponMesh.remove(this.weaponModelRoot);
+      disposeWeaponModel(this.weaponModelRoot);
+      this.weaponModelRoot = undefined;
+    }
+    if (typeof window === "undefined") return;
+
+    void cloneNormalizedWeaponModel(modelPath, HELD_WEAPON_MODEL_SIZE)
+      .then((model) => {
+        if (this.disposed) {
+          disposeWeaponModel(model);
+          return;
+        }
+        if (this.currentWeaponModelPath !== modelPath) {
+          disposeWeaponModel(model);
+          return;
+        }
+        this.weaponFallbackMesh.visible = false;
+        model.rotation.x = HELD_WEAPON_MODEL_ROTATION_X;
+        model.rotation.y =
+          weaponId === HEAVY_MACHINE_GUN_WEAPON_ID ? 0 : HELD_WEAPON_MODEL_ROTATION_Y;
+        this.weaponModelRoot = model;
+        this.weaponMesh.add(model);
+      })
+      .catch(() => {
+        if (this.disposed) return;
+        if (this.currentWeaponModelPath === modelPath) this.weaponFallbackMesh.visible = true;
+      });
   }
 }

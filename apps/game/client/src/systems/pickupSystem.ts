@@ -1,6 +1,8 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
+import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../assets/weaponModels.ts";
+
+const PICKUP_MODEL_SIZE = 4.7;
 
 interface PickupSnapshot {
   id: string;
@@ -30,9 +32,6 @@ export interface RemovedPickup {
 }
 
 export class PickupSystem {
-  private static readonly loader = new GLTFLoader();
-  private static readonly modelCache = new Map<string, Promise<THREE.Object3D>>();
-
   private readonly scene: THREE.Scene;
   private readonly pickups = new Map<string, PickupVisualState>();
 
@@ -141,13 +140,11 @@ export class PickupSystem {
   private applyPickupModel(state: PickupVisualState, modelPath: string): void {
     if (typeof window === "undefined") return;
 
-    void PickupSystem.loadModel(modelPath)
-      .then((prototype) => {
+    void cloneNormalizedWeaponModel(modelPath, PICKUP_MODEL_SIZE)
+      .then((model) => {
         if (state.disposed) return;
         if (state.modelPath !== modelPath) return;
 
-        const model = prototype.clone(true);
-        this.normalizeModel(model);
         state.fallbackMesh.visible = false;
         if (state.modelRoot) {
           state.modelPivot.remove(state.modelRoot);
@@ -161,39 +158,14 @@ export class PickupSystem {
       });
   }
 
-  private static loadModel(modelPath: string): Promise<THREE.Object3D> {
-    const cached = PickupSystem.modelCache.get(modelPath);
-    if (cached) return cached;
-
-    const modelPromise = PickupSystem.loader.loadAsync(modelPath).then((gltf) => gltf.scene);
-    PickupSystem.modelCache.set(modelPath, modelPromise);
-    return modelPromise;
-  }
-
-  private normalizeModel(model: THREE.Object3D): void {
-    const bounds = new THREE.Box3().setFromObject(model);
-    const size = bounds.getSize(new THREE.Vector3());
-    const largestAxis = Math.max(size.x, size.y, size.z);
-    if (largestAxis > 1e-5) {
-      model.scale.setScalar(4.7 / largestAxis);
-    }
-
-    const scaledBounds = new THREE.Box3().setFromObject(model);
-    const center = scaledBounds.getCenter(new THREE.Vector3());
-    model.position.sub(center);
-
-    model.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      child.castShadow = true;
-      child.receiveShadow = true;
-    });
-  }
-
   private disposePickupState(state: PickupVisualState): void {
     state.disposed = true;
     state.fallbackMesh.geometry.dispose();
     state.ring.geometry.dispose();
     (state.fallbackMesh.material as THREE.Material).dispose();
     (state.ring.material as THREE.Material).dispose();
+    if (state.modelRoot) {
+      disposeWeaponModel(state.modelRoot);
+    }
   }
 }

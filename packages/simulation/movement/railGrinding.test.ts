@@ -82,6 +82,10 @@ const TEST_RAIL_DEF = {
 
 const TEST_RAIL = buildComputedRail(TEST_RAIL_DEF, TEST_PLANETS[0]!.center, TEST_CONFIG);
 
+function distance(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
 function createInput(keys = 0): InputMessage {
   return {
     seq: 1,
@@ -112,6 +116,20 @@ function createPlayer(): PlayerPhysics {
 }
 
 describe("Rail Grinding", () => {
+  it("samples curved rails analytically instead of snapping between chord points", () => {
+    const sampleIndex = Math.floor(TEST_RAIL.samples.length / 2);
+    const a = TEST_RAIL.samples[sampleIndex]!;
+    const b = TEST_RAIL.samples[sampleIndex + 1]!;
+    const mid = sampleRailAt(TEST_RAIL, (a.arcLength + b.arcLength) * 0.5).pos;
+    const chordMid = {
+      x: (a.pos.x + b.pos.x) * 0.5,
+      y: (a.pos.y + b.pos.y) * 0.5,
+      z: (a.pos.z + b.pos.z) * 0.5,
+    };
+
+    expect(distance(mid, chordMid)).toBeGreaterThan(1e-7);
+  });
+
   it("allows player to snap to rail and offsets them above it", () => {
     const player = createPlayer();
     // Position player near the rail start

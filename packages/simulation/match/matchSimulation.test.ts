@@ -816,6 +816,22 @@ describe("MatchSimulation", () => {
     expect(player.airTrickCombo).toBe(0);
   });
 
+  it("includes rail grinding state in snapshots for client reconciliation", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const player = simulation.addPlayer("session-1", "Alpha");
+    makeGrindingSkier(player);
+
+    const snapshot = simulation.buildSnapshotMessage();
+    const playerSnapshot = snapshot.players.find((entry) => entry.sessionId === player.sessionId);
+
+    expect(playerSnapshot?.movementState).toBe(PlayerMovementState.Grinding);
+    expect(playerSnapshot?.grindRailId).toBe(player.grindRailId);
+    expect(playerSnapshot?.grindT).toBe(player.grindT);
+    expect(playerSnapshot?.lastGrindT).toBe(player.lastGrindT);
+    expect(playerSnapshot?.grindSpeed).toBe(player.grindSpeed);
+    expect(playerSnapshot?.grindCooldownMs).toBe(player.grindCooldownMs);
+  });
+
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
