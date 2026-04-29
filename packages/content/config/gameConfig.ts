@@ -3,6 +3,7 @@ import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
 const DEFAULT_PLANET_RADIUS = 50;
 const DEFAULT_TERRITORY_ROWS = 12;
 const DEFAULT_IMPACT_STAMP_RADIUS = 0.03;
+const PLAYER_SIZE_SCALE = 2;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -71,7 +72,8 @@ export const GAME_CONFIG = {
 
   // -- Player ----------------------------------------------------------------
   player: {
-    projectileMuzzleHeight: 1.5,
+    visualScale: PLAYER_SIZE_SCALE,
+    projectileMuzzleHeight: 1.5 * PLAYER_SIZE_SCALE,
     maxHealth: 100,
     projectileDamage: 34,
     shootingRevealDurationMs: 220,
@@ -192,10 +194,10 @@ export const GAME_CONFIG = {
     boostAcceleration: 15,
     airBoostAcceleration: 10,
     anchorGravityMultiplier: 2.6,
-    collisionRadius: 0.5,
+    collisionRadius: 0.5 * PLAYER_SIZE_SCALE,
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
-    standingHeight: 1.0,
+    standingHeight: 1.0 * PLAYER_SIZE_SCALE,
     friendlyPaintSpeedMultiplier: 1.8,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 0.5,

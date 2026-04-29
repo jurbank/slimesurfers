@@ -26,6 +26,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type DepartedEntry = LeaderboardEntry & { playerUuid?: string; isBot?: boolean };
 
+interface MatchRoomCreateOptions {
+  devClusterSpawns?: unknown;
+}
+
+interface MatchRoomMetadata {
+  devClusterSpawns: boolean;
+  takenColorIndices?: number[];
+}
+
 function isEnvFlagEnabled(value: string | undefined): boolean {
   return value === "true";
 }
@@ -34,22 +43,32 @@ function resolveWeaponPickupLayout(): "map" | "cluster" {
   return isEnvFlagEnabled(process.env.CLUSTER_WEAPON_PICKUPS) ? "cluster" : "map";
 }
 
-export class MatchRoom extends Room<{ state: GameState }> {
+function resolveMatchMode(options: MatchRoomCreateOptions): string | undefined {
+  if (process.env.NODE_ENV !== "production" && options.devClusterSpawns === true) return "dev";
+  if (process.env.MATCH_MODE) return process.env.MATCH_MODE;
+  return undefined;
+}
+
+export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetadata }> {
   private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
   private emoteSeq = 0;
   private nextBotId = 0;
+  private devClusterSpawns = false;
   private readonly lastEmotePostMs = new Map<string, number>();
   private readonly db = new SupabaseService();
   private readonly playerUuids = new Map<string, string>();
   private readonly departedPlayers = new Map<string, DepartedEntry>();
 
-  onCreate() {
-    this.simulation = new MatchSimulation(resolveGameMode(process.env.MATCH_MODE), {
+  onCreate(options: MatchRoomCreateOptions = {}) {
+    this.devClusterSpawns =
+      process.env.NODE_ENV !== "production" && options.devClusterSpawns === true;
+    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), {
       lobbyEnabled: true,
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
       weaponPickupLayout: resolveWeaponPickupLayout(),
     });
     this.setState(createRoomState(this.simulation.matchState));
+    void this.updateRoomMetadata();
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;
 
     this.onMessage(MessageType.Input, (client: Client, msg: InputMessage) => {
@@ -71,7 +90,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     const simPlayer = this.simulation.addPlayer(client.sessionId, options.name, options.colorIndex);
     addSimPlayerToRoomState(this.state, simPlayer);
     this.evaluateBotPopulation();
-    void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+    void this.updateRoomMetadata();
 
     if (typeof options.playerUuid === "string" && UUID_RE.test(options.playerUuid)) {
       this.playerUuids.set(client.sessionId, options.playerUuid);
@@ -109,7 +128,7 @@ export class MatchRoom extends Room<{ state: GameState }> {
     this.lastEmotePostMs.delete(client.sessionId);
     this.playerUuids.delete(client.sessionId);
     this.evaluateBotPopulation();
-    void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+    void this.updateRoomMetadata();
   }
 
   onDispose() {
@@ -155,6 +174,13 @@ export class MatchRoom extends Room<{ state: GameState }> {
 
   private createBotSessionId(): string {
     return `bot-${this.roomId || "room"}-${this.nextBotId++}`;
+  }
+
+  private updateRoomMetadata(): Promise<void> {
+    return this.setMetadata({
+      devClusterSpawns: this.devClusterSpawns,
+      takenColorIndices: this.simulation.takenColorIndices(),
+    });
   }
 
   private evaluateBotPopulation(): void {

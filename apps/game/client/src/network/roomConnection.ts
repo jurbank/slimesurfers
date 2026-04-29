@@ -79,9 +79,11 @@ export class RoomConnection {
     playerUuid: string | null,
     callbacks: RoomCallbacks,
   ): Promise<void> {
+    const devClusterSpawns =
+      import.meta.env.DEV && import.meta.env.VITE_CLUSTER_PLAYER_SPAWNS === "true";
     this.room = await colyseusClient.joinOrCreate(
       "match",
-      { name, colorIndex, playerUuid },
+      { name, colorIndex, playerUuid, devClusterSpawns },
       GameState,
     );
 

@@ -922,7 +922,7 @@ describe("MatchSimulation", () => {
     expect(backEvents.some((event) => event.trickId === "backflip")).toBe(true);
   });
 
-  it("pops a submerged player out when they are hit", () => {
+  it("keeps a submerged player in surf mode when they survive a hit", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
@@ -946,7 +946,39 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(target.surfState).toBe(PlayerSurfState.None);
+    expect(target.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
+  });
+
+  it.each([
+    PlayerSurfState.SurfmingHidden,
+    PlayerSurfState.SurfmingMoving,
+    PlayerSurfState.SkiVisible,
+    PlayerSurfState.SkiWater,
+  ])("preserves surf mode %s when the player survives a hit", (surfState) => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const target = simulation.addPlayer("session-2", "Bravo");
+
+    target.surfState = surfState;
+    target.isCarving = true;
+    target.skiJumpCharge = 0.75;
+
+    simulation.matchState.projectiles.set("hit-surfer", {
+      id: "hit-surfer",
+      ownerId: shooter.sessionId,
+      weaponId: WeaponId.MachineGun,
+      paintGroupId: shooter.paintGroupId,
+      slimeColor: shooter.slimeColor,
+      patternId: 0,
+      pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
+      vel: { x: 0, y: 0, z: 0 },
+      planetId: target.planetId,
+      lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+    });
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(target.surfState).toBe(surfState);
     expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
   });
 

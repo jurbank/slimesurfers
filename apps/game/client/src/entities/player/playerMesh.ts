@@ -3,6 +3,7 @@ import { getWeaponDefinition, WeaponId } from "@splat/content/combat/weaponDefs.
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
 import { createOutlineMaterial } from "../../materials/outlineMaterial.ts";
+import { createPlayerDeathParticles, type PlayerDeathParticles } from "./playerDeath.ts";
 
 function buildSnowboardGeom(
   halfW: number,
@@ -83,6 +84,7 @@ export interface PlayerMeshRig {
   group: THREE.Group;
   liveMesh: THREE.Group;
   deadMesh: THREE.Group;
+  deathParticles: PlayerDeathParticles;
   poseRig: PlayerPoseRig;
   weaponMesh: THREE.Mesh;
   snowboardMesh: THREE.Group;
@@ -111,18 +113,22 @@ type AppendageKey = keyof PlayerPoseRig;
 export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
   const group = new THREE.Group();
   const liveMesh = new THREE.Group();
+  const liveVisualMesh = new THREE.Group();
   const deadMesh = new THREE.Group();
   const slimeMaterials: THREE.ShaderMaterial[] = [];
+  liveVisualMesh.scale.setScalar(GAME_CONFIG.player.visualScale);
+  liveMesh.add(liveVisualMesh);
+  deadMesh.scale.setScalar(GAME_CONFIG.player.visualScale);
   group.add(liveMesh);
   group.add(deadMesh);
 
   // 1. Body (the blob)
-  const bodyRadius = GAME_CONFIG.movement.collisionRadius;
+  const bodyRadius = GAME_CONFIG.movement.collisionRadius / GAME_CONFIG.player.visualScale;
   const bodyGeom = new THREE.SphereGeometry(bodyRadius, 32, 24);
   const bodyMat = createSlimeMaterial(slimeColor, patternId);
   slimeMaterials.push(bodyMat);
   const body = new THREE.Mesh(bodyGeom, bodyMat);
-  liveMesh.add(body);
+  liveVisualMesh.add(body);
 
   // 2. Bunny Ears
   const earGeom = new THREE.CapsuleGeometry(0.08, 0.3, 4, 8);
@@ -132,12 +138,12 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const leftEar = new THREE.Mesh(earGeom, earMat);
   leftEar.position.set(-0.2, 0.4, 0);
   leftEar.rotation.z = Math.PI / 10;
-  liveMesh.add(leftEar);
+  liveVisualMesh.add(leftEar);
 
   const rightEar = new THREE.Mesh(earGeom, earMat);
   rightEar.position.set(0.2, 0.4, 0);
   rightEar.rotation.z = -Math.PI / 10;
-  liveMesh.add(rightEar);
+  liveVisualMesh.add(rightEar);
 
   // 3. Arms and Feet
   const appendageRadius = bodyRadius * 0.28;
@@ -163,7 +169,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     const appendage = new THREE.Mesh(appendageGeom, appendageMat);
     appendage.position.set(pos.x, pos.y, pos.z);
     appendages[pos.key] = { mesh: appendage };
-    liveMesh.add(appendage);
+    liveVisualMesh.add(appendage);
   }
 
   // 4. 4 Alien Eyes
@@ -180,7 +186,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   for (const pos of eyePositions) {
     const eye = new THREE.Mesh(eyeGeom, eyeMat);
     eye.position.set(pos.x, pos.y, pos.z);
-    liveMesh.add(eye);
+    liveVisualMesh.add(eye);
   }
 
   // 5. Tiny Mouth
@@ -188,7 +194,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const mouthMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const mouth = new THREE.Mesh(mouthGeom, mouthMat);
   mouth.position.set(0, -0.2, 0.45);
-  liveMesh.add(mouth);
+  liveVisualMesh.add(mouth);
 
   const snowboardMesh = new THREE.Group();
 
@@ -237,7 +243,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
 
   snowboardMesh.position.set(0, -0.58, 0);
   snowboardMesh.visible = false;
-  liveMesh.add(snowboardMesh);
+  liveVisualMesh.add(snowboardMesh);
 
   // 6. Debug Collider
   if (GAME_CONFIG.debug.showColliders) {
@@ -252,31 +258,8 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     liveMesh.add(colliderMesh);
   }
 
-  const deadMat = new THREE.MeshLambertMaterial({
-    color: slimeColor,
-    emissive: slimeColor,
-    emissiveIntensity: 0.25,
-    transparent: true,
-    opacity: 0.65,
-  });
-  const chunkGeom = new THREE.IcosahedronGeometry(0.14, 0);
-  const chunkPositions = [
-    { x: 0, y: -0.22, z: 0 },
-    { x: 0.28, y: -0.26, z: 0.08 },
-    { x: -0.3, y: -0.24, z: -0.04 },
-    { x: 0.12, y: -0.18, z: 0.3 },
-    { x: -0.08, y: -0.28, z: -0.31 },
-    { x: 0.42, y: -0.3, z: -0.22 },
-    { x: -0.38, y: -0.2, z: 0.24 },
-  ];
-  chunkPositions.forEach((pos, index) => {
-    const chunk = new THREE.Mesh(chunkGeom, deadMat);
-    chunk.position.set(pos.x, pos.y, pos.z);
-    const scale = index === 0 ? 1.25 : 0.75 + (index % 3) * 0.15;
-    chunk.scale.set(scale * 1.25, scale * 0.35, scale * 1.25);
-    chunk.rotation.set(index * 0.9, index * 0.45, index * 0.7);
-    deadMesh.add(chunk);
-  });
+  const deathParticles = createPlayerDeathParticles(slimeColor, bodyRadius);
+  deadMesh.add(deathParticles.root);
   deadMesh.visible = false;
 
   const weaponGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.95, 12);
@@ -290,7 +273,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   weaponMesh.rotation.x = Math.PI / 2;
   weaponMesh.rotation.y = Math.PI / 18;
   weaponMesh.visible = false;
-  liveMesh.add(weaponMesh);
+  liveVisualMesh.add(weaponMesh);
 
   // Inverted-hull outline
   const outlineMat = new THREE.MeshBasicMaterial({
@@ -301,6 +284,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     depthWrite: false,
   });
   const outlineMesh = new THREE.Group();
+  outlineMesh.scale.setScalar(GAME_CONFIG.player.visualScale);
   outlineMesh.visible = false;
 
   const bodyOutline = new THREE.Mesh(bodyGeom, outlineMat);
@@ -353,7 +337,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     jsrOutline.add(appendageJsr);
   }
 
-  liveMesh.add(jsrOutline);
+  liveVisualMesh.add(jsrOutline);
 
   const poseRig: PlayerPoseRig = {
     leftArm: {
@@ -435,12 +419,13 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   verticalRing.rotation.y = Math.PI / 2;
   trickChargeAura.add(verticalRing);
 
-  liveMesh.add(trickChargeAura);
+  liveVisualMesh.add(trickChargeAura);
 
   return {
     group,
     liveMesh,
     deadMesh,
+    deathParticles,
     poseRig,
     weaponMesh,
     snowboardMesh,
