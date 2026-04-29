@@ -153,7 +153,7 @@ export class LeaderboardOverlay {
     });
 
     this.progressLabel = document.createElement("div");
-    this.progressLabel.textContent = "Paintable surface covered in slime";
+    this.progressLabel.textContent = "Slime Coverage";
     Object.assign(this.progressLabel.style, {
       fontSize: "0.7rem",
       textTransform: "uppercase",
@@ -203,11 +203,10 @@ export class LeaderboardOverlay {
       "Waste your enemies",
     ]);
     const tipsSection = this.buildInfoSection("Tips", [
-
       "You move faster on your own slime",
       "Carve (Space) to accelerate downhill",
       "(E) to toggle surf/walk mode",
-      "Mash the arrow keys in the air to do tricks"
+      "Mash the arrow keys in the air to do tricks",
     ]);
 
     this.root.append(

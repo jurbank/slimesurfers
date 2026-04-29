@@ -484,11 +484,10 @@ function applyDamage(
 ): boolean {
   if (damage <= 0 || player.movementState === PlayerMovementState.Dead) return false;
 
-  player.surfState = PlayerSurfState.None;
-  player.isCarving = false;
   player.health = Math.max(0, player.health - damage);
   if (player.health > 0) return false;
 
+  clearSurfMode(player);
   player.movementState = PlayerMovementState.Dead;
   player.respawnTimer = cfg.respawn.durationSeconds;
   player.deathCount++;
@@ -508,6 +507,12 @@ function applyDamage(
     isSelfKill: owner?.sessionId === player.sessionId,
   });
   return true;
+}
+
+function clearSurfMode(player: SimPlayerState): void {
+  player.surfState = PlayerSurfState.None;
+  player.isCarving = false;
+  player.skiJumpCharge = 0;
 }
 
 function applySplashDamage(
@@ -588,8 +593,6 @@ function applyBlastImpulse(
     assign(player.vel, add(player.vel, scale(blastDir, blastImpulse * falloff)));
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.surfState = PlayerSurfState.None;
-    player.isCarving = false;
   });
 }
 

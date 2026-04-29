@@ -3,6 +3,7 @@ import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
 const DEFAULT_PLANET_RADIUS = 50;
 const DEFAULT_TERRITORY_ROWS = 12;
 const DEFAULT_IMPACT_STAMP_RADIUS = 0.03;
+const PLAYER_SIZE_SCALE = 2;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -71,7 +72,8 @@ export const GAME_CONFIG = {
 
   // -- Player ----------------------------------------------------------------
   player: {
-    projectileMuzzleHeight: 1.5,
+    visualScale: PLAYER_SIZE_SCALE,
+    projectileMuzzleHeight: 1.5 * PLAYER_SIZE_SCALE,
     maxHealth: 100,
     projectileDamage: 34,
     shootingRevealDurationMs: 220,
@@ -114,6 +116,17 @@ export const GAME_CONFIG = {
     brushSoftness: 0.1,
     edgeNoiseScale: 20.0,
     edgeNoiseStrength: 0.1,
+    splatBloomFrames: 8,
+    splatBloomOvershootScale: 1.1,
+    splatBloomStartScale: 0.2,
+    secondaryDropletMinCount: 8,
+    secondaryDropletMaxCount: 15,
+    secondaryDropletSpreadRadiusMultiplier: 2,
+    secondaryDropletMinRadiusMultiplier: 0.05,
+    secondaryDropletMaxRadiusMultiplier: 0.2,
+    secondaryDropletMaxDelayFrames: 4,
+    secondaryDropletMaxAnimatedPerStamp: 4,
+    maxActiveAnimatedSplats: 24,
     normalPerturbationStrength: 0.5,
     paintBlendStrength: 1.0,
     slimeFlowSpeed: 0.16,
@@ -172,22 +185,22 @@ export const GAME_CONFIG = {
 
   // -- Movement --------------------------------------------------------------
   movement: {
-    gravityAcceleration: 20,
+    gravityAcceleration: 25,
     surfaceSnapDistance: 0.6,
     arenaReturnDistance: 90,
     arenaReturnAcceleration: 15,
     moveSpeed: 10,
     jumpImpulse: 18,
-    boostAcceleration: 14,
+    boostAcceleration: 15,
     airBoostAcceleration: 10,
     anchorGravityMultiplier: 2.6,
-    collisionRadius: 0.5,
+    collisionRadius: 0.5 * PLAYER_SIZE_SCALE,
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
-    standingHeight: 1.0,
-    friendlyPaintSpeedMultiplier: 3.0,
+    standingHeight: 1.0 * PLAYER_SIZE_SCALE,
+    friendlyPaintSpeedMultiplier: 1.8,
     enemySpeedMultiplier: 0.7,
-    groundedDeceleration: 1,
+    groundedDeceleration: 0.5,
     surfSpeedMultiplier: 2.2,
     surfAccelerationMultiplier: 2.0,
     surfDisturbanceMinSpeed: 1.5,
@@ -345,16 +358,16 @@ export const GAME_CONFIG = {
         prefersSurfBias: 0.2,
         prefersAttackBias: 0.35,
         prefersTerritoryBias: 1.0,
-        aggression: 3,
+        aggression: 2,
         emoteTemperament: "proud",
         emoteFrequency: 0.35,
       },
       {
         name: "N00bHunter",
         prefersSurfBias: 0.15,
-        prefersAttackBias: 1.0,
+        prefersAttackBias: 0.5,
         prefersTerritoryBias: 0.2,
-        aggression: 7,
+        aggression: 3,
         emoteTemperament: "taunting",
         emoteFrequency: 0.25,
       },

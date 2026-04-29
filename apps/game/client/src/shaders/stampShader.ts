@@ -11,9 +11,13 @@ export const stampFragmentShader = `
   uniform int patternId;
   uniform vec3 stampNormal;
   uniform float stampRadius;
+  uniform float bloomProgress;
+  uniform float bloomStartScale;
+  uniform float bloomOvershootScale;
   uniform float brushSoftness;
   uniform float edgeNoiseScale;
   uniform float edgeNoiseStrength;
+  uniform vec3 edgeNoiseOffset;
   varying vec2 vUv;
 
   float hash(vec3 p) {
@@ -62,8 +66,13 @@ export const stampFragmentShader = `
     // 2. Chord distance between pixel and impact center
     float dist = distance(pixelNormal, stampNormal);
 
-    float edgeNoise = (noise(pixelNormal * edgeNoiseScale) - 0.5) * edgeNoiseStrength;
-    float noisyRadius = stampRadius * (1.0 + edgeNoise);
+    float firstPhase = smoothstep(0.0, 0.65, bloomProgress);
+    float settlePhase = smoothstep(0.65, 1.0, bloomProgress);
+    float bloomScale = mix(bloomStartScale, bloomOvershootScale, firstPhase);
+    bloomScale = mix(bloomScale, 1.0, settlePhase);
+
+    float edgeNoise = (noise(pixelNormal * edgeNoiseScale + edgeNoiseOffset) - 0.5) * edgeNoiseStrength;
+    float noisyRadius = stampRadius * bloomScale * (1.0 + edgeNoise);
 
     // 3. Optimized discard
     if (dist > noisyRadius) discard;

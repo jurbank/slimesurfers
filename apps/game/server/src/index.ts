@@ -25,7 +25,7 @@ const gameServer = new Server({
   },
 });
 
-gameServer.define("match", MatchRoom);
+gameServer.define("match", MatchRoom).filterBy(["devClusterSpawns"]);
 
 void gameServer.listen(port).then(() => {
   console.log(`ws://localhost:${port}`);

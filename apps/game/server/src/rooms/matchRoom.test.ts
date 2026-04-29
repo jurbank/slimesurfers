@@ -30,7 +30,7 @@ function createFakeClient(sessionId: string) {
   };
 }
 
-function createRoomHarness() {
+function createRoomHarness(options?: Parameters<MatchRoom["onCreate"]>[0]) {
   const room = new MatchRoom();
   const broadcasts: FakeBroadcast[] = [];
   const messageHandlers = new Map<string, (client: unknown, payload: unknown) => void>();
@@ -64,7 +64,7 @@ function createRoomHarness() {
     return Promise.resolve();
   };
 
-  room.onCreate();
+  room.onCreate(options);
 
   return {
     room,
@@ -90,6 +90,32 @@ describe("MatchRoom", () => {
         delete process.env.MATCH_MODE;
       } else {
         process.env.MATCH_MODE = previousMode;
+      }
+    }
+  });
+
+  it("uses dev cluster spawns when requested by a dev client", () => {
+    const previousMode = process.env.MATCH_MODE;
+    const previousNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.MATCH_MODE = "ffa";
+      process.env.NODE_ENV = "development";
+
+      const harness = createRoomHarness({ devClusterSpawns: true });
+
+      expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+        "dev",
+      );
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.MATCH_MODE;
+      } else {
+        process.env.MATCH_MODE = previousMode;
+      }
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
       }
     }
   });

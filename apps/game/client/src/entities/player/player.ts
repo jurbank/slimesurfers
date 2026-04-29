@@ -5,9 +5,15 @@ import {
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
-import { createPlayerMesh } from "./playerMesh.ts";
+import { createPlayerMesh, type PlayerPoseRig } from "./playerMesh.ts";
+import {
+  resetPlayerDeathParticles,
+  updatePlayerDeathParticles,
+  type PlayerDeathParticles,
+} from "./playerDeath.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
+import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
 const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
@@ -16,12 +22,15 @@ const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
+  vel?: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
   surfState: number;
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
+  slimeLevel: number;
 }
 
 /** The local player's mesh — driven by server state, camera follows this. */
@@ -29,12 +38,15 @@ export class LocalPlayer {
   readonly mesh: THREE.Group;
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
+  private readonly deathParticles: PlayerDeathParticles;
+  private readonly poseRig: PlayerPoseRig;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly outlineMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
   private readonly disturbanceMesh: THREE.Mesh;
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
+  private readonly slimeRechargeGauge: SlimeRechargeGauge;
   private readonly materials: THREE.Material[] = [];
   private readonly inverseMeshQuat = new THREE.Quaternion();
   private readonly localAimDir = new THREE.Vector3();
@@ -49,12 +61,16 @@ export class LocalPlayer {
   private skiLaunchTimer = 0;
   private currentOpacity = 1;
   private submersionTimer = 0;
+  private wasDead = false;
+  private deathAge = 0;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
     const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
+    this.deathParticles = rig.deathParticles;
+    this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.outlineMesh = rig.outlineMesh;
@@ -65,6 +81,8 @@ export class LocalPlayer {
       rig.slimeMaterials,
       slimeColor,
     );
+    this.slimeRechargeGauge = new SlimeRechargeGauge(slimeColor);
+    this.mesh.add(this.slimeRechargeGauge.sprite);
     this.liveMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       if (Array.isArray(child.material)) this.materials.push(...child.material);
@@ -95,7 +113,15 @@ export class LocalPlayer {
       this.mesh.quaternion.copy(this.skiVisualRotation);
     }
 
-    if (state.movementState === PlayerMovementState.Dead) {
+    const isDead = state.movementState === PlayerMovementState.Dead;
+    if (isDead) {
+      if (!this.wasDead) {
+        this.deathAge = 0;
+        resetPlayerDeathParticles(this.deathParticles);
+      } else {
+        this.deathAge += dt;
+      }
+      updatePlayerDeathParticles(this.deathParticles, this.deathAge);
       this.liveMesh.visible = false;
       this.deadMesh.visible = true;
       this.weaponMesh.visible = false;
@@ -107,15 +133,19 @@ export class LocalPlayer {
       this.currentOpacity = 1;
       this.submersionTimer = 0;
       this.setOpacity(1);
+      this.slimeRechargeGauge.update(state, dt);
+      this.wasDead = true;
       return;
     }
 
+    this.wasDead = false;
+    this.deathAge = 0;
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
     this.jsrOutline.visible = true;
     this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
-    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
+    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
     this.trickChargeEffect.update(state, dt);
     this.updateWeapon(state.equippedWeaponId, aimDir);
 
@@ -161,6 +191,8 @@ export class LocalPlayer {
     } else {
       this.disturbanceMesh.visible = false;
     }
+
+    this.slimeRechargeGauge.update(state, dt);
   }
 
   triggerSkiLaunch(): void {
@@ -174,6 +206,7 @@ export class LocalPlayer {
 
   dispose(scene: THREE.Scene): void {
     scene.remove(this.mesh);
+    this.slimeRechargeGauge.dispose();
   }
 
   private setOpacity(opacity: number): void {
