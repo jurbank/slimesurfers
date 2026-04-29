@@ -60,15 +60,18 @@ export function App() {
   const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
+  const [previewActive, setPreviewActive] = useState(false);
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
   const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
+  const previewActiveRef = useRef(false);
   const sceneRef = useRef<EditorScene | null>(null);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
+    scene.setPreviewActive(previewActiveRef.current);
     const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
     if (activeTrack) {
       scene.setTrackToolState({
@@ -103,6 +106,13 @@ export function App() {
   const handleTrackPointSelectionChange = useCallback((pointId: string | null) => {
     selectedTrackPointIdRef.current = pointId;
     setSelectedTrackPointId(pointId);
+  }, []);
+
+  const togglePreview = useCallback(() => {
+    const next = !previewActiveRef.current;
+    previewActiveRef.current = next;
+    setPreviewActive(next);
+    sceneRef.current?.setPreviewActive(next);
   }, []);
 
   const setActiveTrack = useCallback((trackId: string) => {
@@ -235,6 +245,47 @@ export function App() {
           onPerformanceStats={setPerformanceStats}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
+          <button
+            onClick={togglePreview}
+            title={previewActive ? "Stop preview" : "Play preview"}
+            className={`min-w-24 px-3 py-2 flex items-center justify-center gap-1.5 border rounded font-semibold text-xs transition-colors ${
+              previewActive
+                ? "bg-amber-400 hover:bg-amber-300 border-amber-300 text-black"
+                : "bg-emerald-500/90 hover:bg-emerald-400 border-emerald-400 text-black"
+            }`}
+          >
+            {previewActive ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="6" y="5" width="4" height="14" />
+                <rect x="14" y="5" width="4" height="14" />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
+            )}
+            {previewActive ? "Stop" : "Play"}
+          </button>
           <button
             onClick={handleSaveLocal}
             title="Save to this browser"

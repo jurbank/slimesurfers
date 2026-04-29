@@ -55,7 +55,7 @@ export function PlanetPreview({
 
   return (
     <div ref={containerRef} className="w-full h-full">
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas ref={canvasRef} tabIndex={0} className="block w-full h-full" />
     </div>
   );
 }

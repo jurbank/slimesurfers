@@ -12,6 +12,7 @@ import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
 import { TrackTool } from "../tools/tracks/TrackTool.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
 import type { BrushState, EditorConfig, PerformanceStats, PropBrushState } from "../types.ts";
+import { PlayerPreviewController } from "./PlayerPreviewController.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -41,7 +42,10 @@ export class EditorScene {
   private readonly brushTool: BrushTool;
   private readonly propPaintTool: PropPaintTool;
   private readonly trackTool: TrackTool;
+  private readonly playerPreview: PlayerPreviewController;
   private isSpaceHeld = false;
+  private isPreviewActive = false;
+  private lastFrameTime = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -81,6 +85,7 @@ export class EditorScene {
     this.brushTool = new BrushTool(config);
     this.propPaintTool = new PropPaintTool();
     this.trackTool = new TrackTool();
+    this.playerPreview = new PlayerPreviewController(canvas, this.scene, this.camera, config);
 
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
@@ -125,21 +130,21 @@ export class EditorScene {
       scene: this.scene,
       planetMeshes: this.planetMeshes,
       onStrokeEnd: () => this.rebuildPlanetMeshes(),
-      shouldOrbit: () => this.isSpaceHeld,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
     });
     this.propPaintTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
       planetMesh: terrainMesh,
-      shouldOrbit: () => this.isSpaceHeld,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
     });
     this.trackTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
       planetMesh: terrainMesh,
-      shouldOrbit: () => this.isSpaceHeld,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
       onTrackChange,
       onPointSelectionChange: onTrackPointSelectionChange,
       onGizmoDragChange: (dragging) => {
@@ -152,20 +157,34 @@ export class EditorScene {
   }
 
   setBrushState(state: BrushState | null): void {
+    if (this.isPreviewActive && state) return;
     this.brushTool.setBrushState(state);
   }
 
   setPropBrushState(state: PropBrushState | null): void {
+    if (this.isPreviewActive && state) return;
     this.propPaintTool.setBrushState(state);
   }
 
   setTrackToolState(state: TrackToolState | null): void {
+    if (this.isPreviewActive) return;
     this.trackTool.setTrackToolState(state);
+  }
+
+  setPreviewActive(active: boolean): void {
+    if (this.isPreviewActive === active) return;
+    this.isPreviewActive = active;
+    this.controls.enabled = !active;
+    this.brushTool.setBrushState(null);
+    this.propPaintTool.setBrushState(null);
+    if (active) this.trackTool.setTrackToolState(null);
+    this.playerPreview.setActive(active);
   }
 
   rebuildPlanet(config: EditorConfig): void {
     this.currentConfig = config;
     this.brushTool.syncDetail(config);
+    this.playerPreview.setConfig(config);
     this.rebuildPlanetMeshes();
     this.rebuildWater(config);
     this.updateUniforms(config);
@@ -181,6 +200,7 @@ export class EditorScene {
 
   updateUniforms(config: EditorConfig): void {
     this.currentConfig = config;
+    this.playerPreview.setConfig(config);
     const u = this.planetMaterial.uniforms;
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
 
@@ -288,6 +308,7 @@ export class EditorScene {
     this.brushTool.dispose();
     this.propPaintTool.dispose();
     this.trackTool.dispose();
+    this.playerPreview.dispose();
     this.disposeEditorSceneResources();
     this.renderer.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
@@ -375,9 +396,16 @@ export class EditorScene {
     const tick = (): void => {
       this.animFrameId = requestAnimationFrame(tick);
       const t = performance.now() / 1000;
+      const now = performance.now();
+      const dt = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 1 / 60;
+      this.lastFrameTime = now;
       this.planetMaterial.uniforms.time.value = t;
       if (this.waterMaterial) this.waterMaterial.uniforms.time.value = t;
-      this.controls.update();
+      if (this.isPreviewActive) {
+        this.playerPreview.update(dt);
+      } else {
+        this.controls.update();
+      }
       this.renderer.render(this.scene, this.camera);
       this.emitPerformanceStats();
     };
