@@ -6,10 +6,7 @@ export class CombatHud {
   private readonly root: HTMLDivElement;
   private readonly weaponLabel: HTMLDivElement;
   private readonly healthFill: HTMLDivElement;
-  private readonly slimeFill: HTMLDivElement;
   private readonly healthLabel: HTMLDivElement;
-  private readonly slimeLabel: HTMLDivElement;
-  private readonly disposablePips: HTMLDivElement;
   private readonly flash: HTMLDivElement;
   private readonly crosshair: HTMLDivElement;
   private readonly acquisitionRoot: HTMLDivElement;
@@ -55,15 +52,6 @@ export class CombatHud {
       marginBottom: "8px",
     });
 
-    const slimeTrack = document.createElement("div");
-    Object.assign(slimeTrack.style, {
-      height: "12px",
-      borderRadius: "999px",
-      background: "rgba(255, 255, 255, 0.08)",
-      overflow: "hidden",
-      marginBottom: "8px",
-    });
-
     this.healthFill = document.createElement("div");
     Object.assign(this.healthFill.style, {
       height: "100%",
@@ -74,16 +62,6 @@ export class CombatHud {
     });
     track.appendChild(this.healthFill);
 
-    this.slimeFill = document.createElement("div");
-    Object.assign(this.slimeFill.style, {
-      height: "100%",
-      width: "100%",
-      borderRadius: "999px",
-      background: "linear-gradient(90deg, #2bd3ff, #27ffb3)",
-      transition: "width 120ms linear",
-    });
-    slimeTrack.appendChild(this.slimeFill);
-
     this.healthLabel = document.createElement("div");
     Object.assign(this.healthLabel.style, {
       fontSize: "0.95rem",
@@ -91,29 +69,7 @@ export class CombatHud {
       marginBottom: "4px",
     });
 
-    this.slimeLabel = document.createElement("div");
-    Object.assign(this.slimeLabel.style, {
-      fontSize: "0.95rem",
-      fontWeight: "bold",
-      marginBottom: "4px",
-    });
-
-    this.disposablePips = document.createElement("div");
-    Object.assign(this.disposablePips.style, {
-      display: "none",
-      flexDirection: "row",
-      gap: "5px",
-      marginBottom: "6px",
-    });
-
-    this.root.append(
-      this.weaponLabel,
-      track,
-      this.healthLabel,
-      slimeTrack,
-      this.slimeLabel,
-      this.disposablePips,
-    );
+    this.root.append(this.weaponLabel, track, this.healthLabel);
     document.body.appendChild(this.root);
 
     this.flash = document.createElement("div");
@@ -242,49 +198,13 @@ export class CombatHud {
     document.body.appendChild(this.sniperScopeRoot);
   }
 
-  update(
-    weaponLabel: string,
-    health: number,
-    maxHealth: number,
-    slimeLevel: number,
-    maxSlimeLevel: number,
-    respawnTimer: number,
-    disposableShotsRemaining: number,
-    disposableShotsTotal: number,
-  ): void {
+  update(weaponLabel: string, health: number, maxHealth: number): void {
     this.root.style.display = "block";
     this.crosshair.style.display = "block";
     this.weaponLabel.textContent = weaponLabel;
     const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, Math.min(1, health / maxHealth));
-    const slimeRatio =
-      maxSlimeLevel <= 0 ? 0 : Math.max(0, Math.min(1, slimeLevel / maxSlimeLevel));
     this.healthFill.style.width = `${healthRatio * 100}%`;
-    this.slimeFill.style.width = `${slimeRatio * 100}%`;
     this.healthLabel.textContent = `Health ${Math.round(health)} / ${maxHealth}`;
-    this.slimeLabel.textContent = `Slime ${Math.round(slimeLevel)} / ${maxSlimeLevel}`;
-
-    if (disposableShotsTotal > 0) {
-      this.disposablePips.style.display = "flex";
-      while (this.disposablePips.children.length < disposableShotsTotal) {
-        const pip = document.createElement("div");
-        Object.assign(pip.style, {
-          width: "14px",
-          height: "14px",
-          borderRadius: "3px",
-          background: "rgba(255, 255, 255, 0.9)",
-          transition: "opacity 120ms",
-        });
-        this.disposablePips.appendChild(pip);
-      }
-      while (this.disposablePips.children.length > disposableShotsTotal) {
-        this.disposablePips.removeChild(this.disposablePips.lastChild!);
-      }
-      Array.from(this.disposablePips.children).forEach((pip, i) => {
-        (pip as HTMLElement).style.opacity = i < disposableShotsRemaining ? "1" : "0.2";
-      });
-    } else {
-      this.disposablePips.style.display = "none";
-    }
   }
 
   showAcquisitionOverlay(holdProgress: number, isLocked: boolean, isGuaranteed: boolean): void {

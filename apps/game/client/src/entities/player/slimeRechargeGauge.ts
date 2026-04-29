@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getWeaponDefinition, type WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 
@@ -6,14 +7,17 @@ interface SlimeRechargeGaugeState {
   movementState: number;
   surfState: number;
   slimeLevel: number;
+  equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
 }
 
-const CANVAS_WIDTH = 100;
+const CANVAS_WIDTH = 136;
 const CANVAS_HEIGHT = 130;
-const SPRITE_WIDTH = 1.15;
-const SPRITE_HEIGHT = 1.75;
+const SPRITE_WIDTH = 1.65;
+const SPRITE_HEIGHT = 1.88;
 const FILL_EPSILON = 0.02;
 const FADE_SPEED = 12;
+const COMPACT_AMMO_THRESHOLD = 12;
 
 export class SlimeRechargeGauge {
   readonly sprite: THREE.Sprite;
@@ -29,6 +33,8 @@ export class SlimeRechargeGauge {
   private lastDrawnFill = -1;
   private lastDrawnAlpha = -1;
   private lastDrawnPulse = -1;
+  private lastDrawnShotsRemaining = -1;
+  private lastDrawnShotsTotal = -1;
 
   constructor(slimeColor: number) {
     this.fillColor.setHex(slimeColor);
@@ -75,8 +81,10 @@ export class SlimeRechargeGauge {
       state.surfState === PlayerSurfState.SurfmingHidden;
     const filling = state.slimeLevel > this.previousSlimeLevel + FILL_EPSILON;
     this.previousSlimeLevel = state.slimeLevel;
+    const disposableShotsTotal = getWeaponDefinition(state.equippedWeaponId).disposableShots ?? 0;
 
-    const targetVisible = alive && surfing && targetFill < 0.999 ? 1 : 0;
+    const hasDisposableAmmo = disposableShotsTotal > 0;
+    const targetVisible = alive && ((surfing && targetFill < 0.999) || hasDisposableAmmo) ? 1 : 0;
     this.visibleAmount +=
       (targetVisible - this.visibleAmount) * Math.min(1, Math.max(0, dt) * FADE_SPEED);
     if (this.visibleAmount < 0.01) this.visibleAmount = 0;
@@ -91,9 +99,17 @@ export class SlimeRechargeGauge {
       Math.abs(this.visualFill - this.lastDrawnFill) > 0.004 ||
       Math.abs(this.visibleAmount - this.lastDrawnAlpha) > 0.02 ||
       Math.abs(pulse - this.lastDrawnPulse) > 0.08 ||
+      state.disposableShotsRemaining !== this.lastDrawnShotsRemaining ||
+      disposableShotsTotal !== this.lastDrawnShotsTotal ||
       !this.previousFillColor.equals(this.fillColor)
     ) {
-      this.draw(this.visualFill, this.visibleAmount, pulse);
+      this.draw(
+        this.visualFill,
+        this.visibleAmount,
+        pulse,
+        state.disposableShotsRemaining,
+        disposableShotsTotal,
+      );
     }
   }
 
@@ -102,10 +118,18 @@ export class SlimeRechargeGauge {
     this.material.dispose();
   }
 
-  private draw(fill: number, alpha: number, pulse: number): void {
+  private draw(
+    fill: number,
+    alpha: number,
+    pulse: number,
+    disposableShotsRemaining = 0,
+    disposableShotsTotal = 0,
+  ): void {
     this.lastDrawnFill = fill;
     this.lastDrawnAlpha = alpha;
     this.lastDrawnPulse = pulse;
+    this.lastDrawnShotsRemaining = disposableShotsRemaining;
+    this.lastDrawnShotsTotal = disposableShotsTotal;
     this.previousFillColor.copy(this.fillColor);
 
     const ctx = this.ctx;
@@ -175,8 +199,73 @@ export class SlimeRechargeGauge {
       ctx.fill();
     }
 
+    this.drawAmmoPips(disposableShotsRemaining, disposableShotsTotal, alpha);
+
     ctx.globalAlpha = 1;
     this.texture.needsUpdate = true;
+  }
+
+  private drawAmmoPips(remaining: number, total: number, alpha: number): void {
+    if (total <= 0) return;
+    if (total > COMPACT_AMMO_THRESHOLD) {
+      this.drawCompactAmmoStack(remaining, total, alpha);
+      return;
+    }
+
+    const ctx = this.ctx;
+    const pipRadius = 6;
+    const gap = 7;
+    const x = 90;
+    const blockHeight = total * pipRadius * 2 + (total - 1) * gap;
+    const startY = (CANVAS_HEIGHT - blockHeight) / 2 + pipRadius;
+
+    for (let i = 0; i < total; i++) {
+      const filled = i >= total - remaining;
+      const y = startY + i * (pipRadius * 2 + gap);
+
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(x, y, pipRadius + 4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(5, 8, 14, 0.78)";
+      ctx.fill();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = filled ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 255, 255, 0.38)";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x, y, pipRadius, 0, Math.PI * 2);
+      ctx.fillStyle = filled ? "#ffffff" : "rgba(255, 255, 255, 0.16)";
+      ctx.fill();
+    }
+  }
+
+  private drawCompactAmmoStack(remaining: number, total: number, alpha: number): void {
+    const ctx = this.ctx;
+    const x = 82;
+    const y = 16;
+    const width = 18;
+    const height = 98;
+    const gap = 1;
+    const segmentHeight = Math.max(1, (height - gap * (total - 1)) / total);
+    const clampedRemaining = Math.max(0, Math.min(total, remaining));
+
+    ctx.globalAlpha = alpha;
+    this.roundRect(ctx, x - 4, y - 4, width + 8, height + 8, 8);
+    ctx.fillStyle = "rgba(5, 8, 14, 0.78)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+    ctx.stroke();
+
+    for (let i = 0; i < total; i++) {
+      const filled = i >= total - clampedRemaining;
+      const segmentY = y + i * (segmentHeight + gap);
+      ctx.globalAlpha = alpha * (filled ? 0.96 : 0.18);
+      ctx.fillStyle = filled ? "#ffffff" : "rgba(255, 255, 255, 0.8)";
+      this.roundRect(ctx, x, segmentY, width, Math.max(1, segmentHeight), 2);
+      ctx.fill();
+    }
   }
 
   private roundRect(

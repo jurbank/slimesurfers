@@ -23,6 +23,7 @@ interface PlayerTransformState {
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
+  disposableShotsRemaining: number;
   slimeLevel: number;
 }
 

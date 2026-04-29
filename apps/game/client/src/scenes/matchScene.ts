@@ -1187,11 +1187,6 @@ export class MatchScene {
           weaponLabel,
           predictedLocalState.health,
           GAME_CONFIG.player.maxHealth,
-          predictedLocalState.slimeLevel,
-          GAME_CONFIG.slime.maxLevel,
-          predictedLocalState.respawnTimer,
-          predictedLocalState.disposableShotsRemaining,
-          disposableTotal,
         );
       } else {
         this.lastLocalHealth = null;
