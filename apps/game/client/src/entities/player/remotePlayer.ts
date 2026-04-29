@@ -15,6 +15,7 @@ import {
 } from "./playerDeath.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
+import { HealthBar } from "./healthBar.ts";
 
 const HELD_WEAPON_MODEL_SIZE = 1.95;
 const HELD_WEAPON_MODEL_ROTATION_X = -Math.PI / 2;
@@ -31,6 +32,7 @@ interface PlayerTransformState {
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   isOnFriendlyPaint: boolean;
+  health: number;
 }
 
 /** A remote player's mesh — position updated from server snapshots. */
@@ -47,6 +49,7 @@ export class RemotePlayer {
   private readonly disturbanceMesh: THREE.Mesh;
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly trickAnimator = new PlayerTrickAnimator();
+  private readonly healthBar: HealthBar;
   private wasDead = false;
   private deathAge = 0;
   private currentWeaponModelPath = "";
@@ -70,6 +73,8 @@ export class RemotePlayer {
       rig.slimeMaterials,
       slimeColor,
     );
+    this.healthBar = new HealthBar(GAME_CONFIG.player.maxHealth);
+    this.mesh.add(this.healthBar.sprite);
     // Detach disturbance from group so it stays visible when the player mesh is hidden.
     this.mesh.remove(this.disturbanceMesh);
     scene.add(this.disturbanceMesh);
@@ -96,6 +101,7 @@ export class RemotePlayer {
       this.snowboardMesh.visible = false;
       this.jsrOutline.visible = false;
       this.disturbanceMesh.visible = false;
+      this.healthBar.update(state, dt, GAME_CONFIG.player.maxHealth);
       this.wasDead = true;
       return;
     }
@@ -134,6 +140,8 @@ export class RemotePlayer {
     } else {
       this.disturbanceMesh.visible = false;
     }
+
+    this.healthBar.update(state, dt, GAME_CONFIG.player.maxHealth);
   }
 
   dispose(scene: THREE.Scene): void {
@@ -141,6 +149,7 @@ export class RemotePlayer {
     if (this.weaponModelRoot) {
       disposeWeaponModel(this.weaponModelRoot);
     }
+    this.healthBar.dispose();
     scene.remove(this.mesh);
     scene.remove(this.disturbanceMesh);
   }
