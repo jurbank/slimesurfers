@@ -153,7 +153,7 @@ export class LeaderboardOverlay {
     });
 
     this.progressLabel = document.createElement("div");
-    this.progressLabel.textContent = "Paintable surface covered in slime";
+    this.progressLabel.textContent = "Slime Coverage";
     Object.assign(this.progressLabel.style, {
       fontSize: "0.7rem",
       textTransform: "uppercase",

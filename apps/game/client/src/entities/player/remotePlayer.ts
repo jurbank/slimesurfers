@@ -6,12 +6,13 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
-import { createPlayerMesh } from "./playerMesh.ts";
+import { createPlayerMesh, type PlayerPoseRig } from "./playerMesh.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
+  vel?: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
   surfState: number;
@@ -25,6 +26,7 @@ export class RemotePlayer {
   readonly mesh: THREE.Group;
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
+  private readonly poseRig: PlayerPoseRig;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly jsrOutline: THREE.Group;
@@ -37,6 +39,7 @@ export class RemotePlayer {
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
+    this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.jsrOutline = rig.jsrOutline;
@@ -72,7 +75,7 @@ export class RemotePlayer {
     this.jsrOutline.visible = true;
     this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
-    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
+    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
     this.trickChargeEffect.update(state, dt);
     if (state.isCarving) {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);

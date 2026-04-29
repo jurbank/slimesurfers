@@ -5,7 +5,7 @@ import {
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
-import { createPlayerMesh } from "./playerMesh.ts";
+import { createPlayerMesh, type PlayerPoseRig } from "./playerMesh.ts";
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
@@ -17,6 +17,7 @@ const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
 
 interface PlayerTransformState {
   pos: { x: number; y: number; z: number };
+  vel?: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number; w: number };
   movementState: number;
   surfState: number;
@@ -32,6 +33,7 @@ export class LocalPlayer {
   readonly mesh: THREE.Group;
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
+  private readonly poseRig: PlayerPoseRig;
   private readonly weaponMesh: THREE.Mesh;
   private readonly snowboardMesh: THREE.Group;
   private readonly outlineMesh: THREE.Group;
@@ -59,6 +61,7 @@ export class LocalPlayer {
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
+    this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
     this.snowboardMesh = rig.snowboardMesh;
     this.outlineMesh = rig.outlineMesh;
@@ -122,7 +125,7 @@ export class LocalPlayer {
     this.jsrOutline.visible = true;
     this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
-    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, dt);
+    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
     this.trickChargeEffect.update(state, dt);
     this.updateWeapon(state.equippedWeaponId, aimDir);
 

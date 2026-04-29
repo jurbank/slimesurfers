@@ -83,6 +83,7 @@ export interface PlayerMeshRig {
   group: THREE.Group;
   liveMesh: THREE.Group;
   deadMesh: THREE.Group;
+  poseRig: PlayerPoseRig;
   weaponMesh: THREE.Mesh;
   snowboardMesh: THREE.Group;
   outlineMesh: THREE.Group;
@@ -91,6 +92,21 @@ export interface PlayerMeshRig {
   trickChargeAura: THREE.Group;
   slimeMaterials: THREE.ShaderMaterial[];
 }
+
+export interface PlayerPosePart {
+  mesh: THREE.Mesh;
+  outline: THREE.Mesh;
+  jsrOutline: THREE.Mesh;
+}
+
+export interface PlayerPoseRig {
+  leftArm: PlayerPosePart;
+  rightArm: PlayerPosePart;
+  frontFoot: PlayerPosePart;
+  rearFoot: PlayerPosePart;
+}
+
+type AppendageKey = keyof PlayerPoseRig;
 
 export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
   const group = new THREE.Group();
@@ -123,7 +139,34 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   rightEar.rotation.z = -Math.PI / 10;
   liveMesh.add(rightEar);
 
-  // 3. 4 Alien Eyes
+  // 3. Arms and Feet
+  const appendageRadius = bodyRadius * 0.28;
+  const appendageGeom = new THREE.SphereGeometry(appendageRadius, 16, 12);
+  const appendageMat = createSlimeMaterial(slimeColor, patternId);
+  slimeMaterials.push(appendageMat);
+
+  const appendagePositions: Array<{ key: AppendageKey; x: number; y: number; z: number }> = [
+    { key: "leftArm", x: -bodyRadius * 0.92, y: -bodyRadius * 0.04, z: bodyRadius * 0.04 },
+    { key: "rightArm", x: bodyRadius * 0.92, y: -bodyRadius * 0.04, z: bodyRadius * 0.04 },
+    { key: "frontFoot", x: -bodyRadius * 0.38, y: -bodyRadius * 0.9, z: bodyRadius * 0.2 },
+    { key: "rearFoot", x: bodyRadius * 0.38, y: -bodyRadius * 0.9, z: bodyRadius * 0.2 },
+  ];
+  const appendages: Record<
+    AppendageKey,
+    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh }
+  > = {} as Record<
+    AppendageKey,
+    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh }
+  >;
+
+  for (const pos of appendagePositions) {
+    const appendage = new THREE.Mesh(appendageGeom, appendageMat);
+    appendage.position.set(pos.x, pos.y, pos.z);
+    appendages[pos.key] = { mesh: appendage };
+    liveMesh.add(appendage);
+  }
+
+  // 4. 4 Alien Eyes
   const eyeGeom = new THREE.SphereGeometry(0.05, 8, 8);
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
@@ -140,7 +183,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     liveMesh.add(eye);
   }
 
-  // 4. Tiny Mouth
+  // 5. Tiny Mouth
   const mouthGeom = new THREE.SphereGeometry(0.03, 8, 8);
   const mouthMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const mouth = new THREE.Mesh(mouthGeom, mouthMat);
@@ -196,7 +239,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   snowboardMesh.visible = false;
   liveMesh.add(snowboardMesh);
 
-  // 5. Debug Collider
+  // 6. Debug Collider
   if (GAME_CONFIG.debug.showColliders) {
     const colliderGeom = new THREE.SphereGeometry(GAME_CONFIG.movement.collisionRadius, 16, 16);
     const colliderMat = new THREE.MeshBasicMaterial({
@@ -276,6 +319,14 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   rightEarOutline.scale.setScalar(1.18);
   outlineMesh.add(rightEarOutline);
 
+  for (const appendage of Object.values(appendages)) {
+    const appendageOutline = new THREE.Mesh(appendageGeom, outlineMat);
+    appendageOutline.position.copy(appendage.mesh.position);
+    appendageOutline.scale.setScalar(1.18);
+    appendage.outline = appendageOutline;
+    outlineMesh.add(appendageOutline);
+  }
+
   group.add(outlineMesh);
 
   // 6. JSR Style Permanent Outline
@@ -295,7 +346,37 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   rightEarJsr.rotation.copy(rightEar.rotation);
   jsrOutline.add(rightEarJsr);
 
+  for (const appendage of Object.values(appendages)) {
+    const appendageJsr = new THREE.Mesh(appendageGeom, jsrOutlineMat);
+    appendageJsr.position.copy(appendage.mesh.position);
+    appendage.jsrOutline = appendageJsr;
+    jsrOutline.add(appendageJsr);
+  }
+
   liveMesh.add(jsrOutline);
+
+  const poseRig: PlayerPoseRig = {
+    leftArm: {
+      mesh: appendages.leftArm.mesh,
+      outline: appendages.leftArm.outline!,
+      jsrOutline: appendages.leftArm.jsrOutline!,
+    },
+    rightArm: {
+      mesh: appendages.rightArm.mesh,
+      outline: appendages.rightArm.outline!,
+      jsrOutline: appendages.rightArm.jsrOutline!,
+    },
+    frontFoot: {
+      mesh: appendages.frontFoot.mesh,
+      outline: appendages.frontFoot.outline!,
+      jsrOutline: appendages.frontFoot.jsrOutline!,
+    },
+    rearFoot: {
+      mesh: appendages.rearFoot.mesh,
+      outline: appendages.rearFoot.outline!,
+      jsrOutline: appendages.rearFoot.jsrOutline!,
+    },
+  };
 
   const disturbanceMat = new THREE.MeshBasicMaterial({
     color: slimeColor,
@@ -360,6 +441,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     group,
     liveMesh,
     deadMesh,
+    poseRig,
     weaponMesh,
     snowboardMesh,
     outlineMesh,
