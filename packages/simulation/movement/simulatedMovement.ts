@@ -10,7 +10,11 @@ import {
   type SimPlanetPaintState,
 } from "../match/simState.ts";
 import { getPaintAtPoint } from "../paint/paintDetection.ts";
-import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
+import {
+  getTerrainHeight,
+  getTerrainRadius,
+  type TerrainSurfaceProvider,
+} from "../terrain/planetTerrain.ts";
 import { type ComputedRail } from "./railSpline.ts";
 import { tryEnterGrind, stepGrinding } from "./simulatedRailGrinding.ts";
 
@@ -217,9 +221,15 @@ interface TerrainContact {
   centerRadius: number;
 }
 
-function getSurfaceCenter(planet: PlanetData, radialNormal: Vec3Data, cfg: StepConfig): Vec3Data {
+function getSurfaceCenter(
+  planet: PlanetData,
+  radialNormal: Vec3Data,
+  cfg: StepConfig,
+  terrainProvider?: TerrainSurfaceProvider,
+): Vec3Data {
   const radius =
-    getTerrainRadius(radialNormal.x, radialNormal.y, radialNormal.z, cfg) +
+    (terrainProvider?.getRadius(radialNormal.x, radialNormal.y, radialNormal.z, cfg, planet.id) ??
+      getTerrainRadius(radialNormal.x, radialNormal.y, radialNormal.z, cfg)) +
     cfg.movement.standingHeight;
   return add(planet.center, scale(radialNormal, radius));
 }
@@ -228,18 +238,21 @@ function getTerrainContact(
   planet: PlanetData,
   radialNormal: Vec3Data,
   cfg: StepConfig,
+  terrainProvider?: TerrainSurfaceProvider,
 ): TerrainContact {
   const n = normalize(radialNormal);
   const tangentSeed = Math.abs(n.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
   const tangentA = normalize(cross(tangentSeed, n));
   const tangentB = normalize(cross(n, tangentA));
   const sampleAngle = 0.006;
-  const centerRadius = getTerrainRadius(n.x, n.y, n.z, cfg) + cfg.movement.standingHeight;
+  const centerRadius =
+    (terrainProvider?.getRadius(n.x, n.y, n.z, cfg, planet.id) ??
+      getTerrainRadius(n.x, n.y, n.z, cfg)) + cfg.movement.standingHeight;
   const centerPos = add(planet.center, scale(n, centerRadius));
   const sampleA = normalize(add(n, scale(tangentA, sampleAngle)));
   const sampleB = normalize(add(n, scale(tangentB, sampleAngle)));
-  const posA = getSurfaceCenter(planet, sampleA, cfg);
-  const posB = getSurfaceCenter(planet, sampleB, cfg);
+  const posA = getSurfaceCenter(planet, sampleA, cfg, terrainProvider);
+  const posB = getSurfaceCenter(planet, sampleB, cfg, terrainProvider);
   let surfaceNormal = normalize(cross(sub(posA, centerPos), sub(posB, centerPos)));
   if (dot(surfaceNormal, n) < 0) {
     surfaceNormal = scale(surfaceNormal, -1);
@@ -302,6 +315,7 @@ function stepOnSurface(
   planets: PlanetData[],
   cfg: StepConfig,
   planetPaint: Map<string, SimPlanetPaintState>,
+  terrainProvider?: TerrainSurfaceProvider,
 ): void {
   const planet = planets.find((p) => p.id === state.planetId);
   if (!planet) {
@@ -315,7 +329,9 @@ function stepOnSurface(
   const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
   const onEnemyPaint = paint !== null && !onFriendlyPaint;
   const onNeutralSurface = paint === null;
-  const terrainHeight = getTerrainHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg);
+  const terrainHeight =
+    terrainProvider?.getHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg, state.planetId) ??
+    getTerrainHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg);
   const terrainBelowWater = terrainHeight < cfg.terrain.waterLevel;
   // Keep all players on the water surface whenever terrain falls below sea level.
   // This preserves a clean separation between land concealment and any future
@@ -333,7 +349,7 @@ function stepOnSurface(
   const oldContact =
     onWater && skiActive
       ? getWaterContact(planet, oldNormal, cfg)
-      : getTerrainContact(planet, oldNormal, cfg);
+      : getTerrainContact(planet, oldNormal, cfg, terrainProvider);
 
   const { forward, right, aimTangent, aimLen } = getTangentBasis(
     state,
@@ -539,7 +555,7 @@ function stepOnSurface(
   const newContact =
     onWater && skiActive
       ? getWaterContact(planet, newRadialNormal, cfg)
-      : getTerrainContact(planet, newRadialNormal, cfg);
+      : getTerrainContact(planet, newRadialNormal, cfg, terrainProvider);
   const penetration = dot(sub(newContact.centerPos, nextPos), newContact.surfaceNormal);
   const movingAwayFromSurface = dot(state.vel, newContact.surfaceNormal) > 0;
 
@@ -594,6 +610,7 @@ function stepAirborne(
   dt: number,
   planets: PlanetData[],
   cfg: StepConfig,
+  terrainProvider?: TerrainSurfaceProvider,
 ): void {
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
@@ -649,7 +666,9 @@ function stepAirborne(
     if (dist < 0.01) return; // degenerate: inside planet centre
     const gravDir = scale(toPlanet, 1 / dist);
     const upDir = scale(gravDir, -1);
-    const rawLandingRadius = getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
+    const rawLandingRadius =
+      terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, cfg, nearest.id) ??
+      getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
     const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
     const landingRadius = Math.max(rawLandingRadius, waterRadius);
     if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
@@ -683,6 +702,7 @@ export function stepPlayer(
   cfg: StepConfig,
   planetPaint: Map<string, SimPlanetPaintState>,
   rails: ComputedRail[] = [],
+  terrainProvider?: TerrainSurfaceProvider,
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
     state.surfState = PlayerSurfState.None;
@@ -694,9 +714,9 @@ export function stepPlayer(
     return;
   }
   if (state.planetId !== "") {
-    stepOnSurface(state, input, dt, planets, cfg, planetPaint);
+    stepOnSurface(state, input, dt, planets, cfg, planetPaint, terrainProvider);
   } else {
-    stepAirborne(state, input, dt, planets, cfg);
+    stepAirborne(state, input, dt, planets, cfg, terrainProvider);
     // After airborne integration, check if the player is close enough to a rail to snap.
     if (
       state.movementState === PlayerMovementState.Airborne &&

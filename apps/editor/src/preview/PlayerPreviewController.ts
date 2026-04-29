@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { CameraSystem } from "@splat/client-runtime/systems/cameraSystem.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
@@ -8,7 +9,7 @@ import {
   type PlayerPhysics,
   type StepConfig,
 } from "@splat/simulation/movement/simulatedMovement.ts";
-import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
+import type { TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
 import type { EditorConfig } from "../types.ts";
 
@@ -22,10 +23,6 @@ const PLANETS: PlanetData[] = [
 
 const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
 const MAX_DT = 1 / 30;
-const PLAYER_EYE_HEIGHT = 2.1;
-const CAMERA_BACK = 15;
-const CAMERA_UP = 5;
-const LOOK_AHEAD = 8;
 const MOUSE_SENSITIVITY = 0.0025;
 const MIN_PITCH = -0.75;
 const MAX_PITCH = 0.65;
@@ -34,20 +31,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-}
-
-function cloneConfig(config: EditorConfig): EditorConfig {
-  return {
-    ...config,
-    planet: { ...config.planet },
-    terrain: { ...config.terrain },
-    colors: { ...config.colors },
-    shaders: {
-      cel: { ...config.shaders.cel },
-      atmosphere: { ...config.shaders.atmosphere },
-      lighting: { ...config.shaders.lighting },
-    },
-  };
 }
 
 function createStepConfig(config: EditorConfig): StepConfig {
@@ -68,7 +51,6 @@ function applyQuat(
 }
 
 export class PlayerPreviewController {
-  private config: EditorConfig;
   private stepConfig: StepConfig;
   private active = false;
   private seq = 0;
@@ -90,25 +72,25 @@ export class PlayerPreviewController {
     color: 0xfacc15,
     roughness: 0.65,
   });
+  private readonly cameraSystem: CameraSystem;
   private player: PlayerPhysics;
-  private readonly cameraPosition = new THREE.Vector3();
   private readonly aimForward = new THREE.Vector3(0, 0, 1);
+  private readonly lastAimDir = new THREE.Vector3(0, 0, 1);
+  private readonly planetCenter = new THREE.Vector3(0, 0, 0);
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly forward = new THREE.Vector3(0, 0, 1);
-  private readonly aimDir = new THREE.Vector3(0, 0, 1);
   private readonly playerPos = new THREE.Vector3();
-  private readonly cameraTarget = new THREE.Vector3();
-  private readonly desiredCameraPosition = new THREE.Vector3();
   private readonly tempQuat = new THREE.Quaternion();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly scene: THREE.Scene,
-    private readonly camera: THREE.PerspectiveCamera,
+    camera: THREE.PerspectiveCamera,
     config: EditorConfig,
+    private readonly terrainProvider: TerrainSurfaceProvider,
   ) {
-    this.config = cloneConfig(config);
     this.stepConfig = createStepConfig(config);
+    this.cameraSystem = new CameraSystem({ camera, manageWindowResize: false });
     this.player = this.createPlayerState();
     this.createPlayerMesh();
     this.playerGroup.visible = false;
@@ -122,7 +104,6 @@ export class PlayerPreviewController {
   }
 
   setConfig(config: EditorConfig): void {
-    this.config = cloneConfig(config);
     this.stepConfig = createStepConfig(config);
     PLANETS[0] = {
       id: "planet-0",
@@ -142,9 +123,8 @@ export class PlayerPreviewController {
 
     if (active) {
       this.player = this.createPlayerState();
-      this.cameraPosition.copy(this.camera.position);
       this.updateMesh();
-      this.updateCamera(true);
+      this.updateCamera(1 / 60);
       this.canvas.focus();
       return;
     }
@@ -158,6 +138,7 @@ export class PlayerPreviewController {
     if (!this.active) return;
 
     this.updateAimBasis();
+    this.updateInputAimFromCamera();
     stepPlayer(
       this.player,
       this.createInput(Math.min(dt, MAX_DT)),
@@ -165,9 +146,11 @@ export class PlayerPreviewController {
       PLANETS,
       this.stepConfig,
       EMPTY_PAINT,
+      [],
+      this.terrainProvider,
     );
     this.updateMesh();
-    this.updateCamera(false);
+    this.updateCamera(dt);
   }
 
   dispose(): void {
@@ -202,7 +185,13 @@ export class PlayerPreviewController {
 
   private createPlayerState(): PlayerPhysics {
     const normal = new THREE.Vector3(0, 1, 0);
-    const radius = getTerrainRadius(normal.x, normal.y, normal.z, this.config);
+    const radius = this.terrainProvider.getRadius(
+      normal.x,
+      normal.y,
+      normal.z,
+      this.stepConfig,
+      "planet-0",
+    );
     return {
       pos: {
         x: normal.x * (radius + GAME_CONFIG.movement.standingHeight),
@@ -229,7 +218,13 @@ export class PlayerPreviewController {
     const normal = new THREE.Vector3(this.player.pos.x, this.player.pos.y, this.player.pos.z);
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
-    const radius = getTerrainRadius(normal.x, normal.y, normal.z, this.config);
+    const radius = this.terrainProvider.getRadius(
+      normal.x,
+      normal.y,
+      normal.z,
+      this.stepConfig,
+      "planet-0",
+    );
     this.player.pos.x = normal.x * (radius + GAME_CONFIG.movement.standingHeight);
     this.player.pos.y = normal.y * (radius + GAME_CONFIG.movement.standingHeight);
     this.player.pos.z = normal.z * (radius + GAME_CONFIG.movement.standingHeight);
@@ -270,40 +265,36 @@ export class PlayerPreviewController {
     const pressedKeys = this.submergePressed ? InputKey.Submerge : 0;
     this.submergePressed = false;
 
-    this.aimDir
-      .copy(this.aimForward)
-      .multiplyScalar(Math.cos(this.pitch))
-      .addScaledVector(this.up, Math.sin(this.pitch))
-      .normalize();
-
     return {
       seq: ++this.seq,
       keys,
       pressedKeys,
-      aimDir: { x: this.aimDir.x, y: this.aimDir.y, z: this.aimDir.z },
+      aimDir: { x: this.lastAimDir.x, y: this.lastAimDir.y, z: this.lastAimDir.z },
       dt,
     };
   }
 
-  private updateCamera(immediate: boolean): void {
-    this.playerPos.set(this.player.pos.x, this.player.pos.y, this.player.pos.z);
-    this.up.copy(this.playerPos).normalize();
-    this.cameraTarget
-      .copy(this.playerPos)
-      .addScaledVector(this.up, PLAYER_EYE_HEIGHT)
-      .addScaledVector(this.aimForward, LOOK_AHEAD);
-    this.desiredCameraPosition
-      .copy(this.playerPos)
-      .addScaledVector(this.up, CAMERA_UP)
-      .addScaledVector(this.aimForward, -CAMERA_BACK);
+  private updateInputAimFromCamera(): void {
+    if (this.lastAimDir.lengthSq() > 1e-8) return;
+    this.lastAimDir
+      .copy(this.aimForward)
+      .multiplyScalar(Math.cos(this.pitch))
+      .addScaledVector(this.up, Math.sin(this.pitch))
+      .normalize();
+  }
 
-    if (immediate) {
-      this.cameraPosition.copy(this.desiredCameraPosition);
-    } else {
-      this.cameraPosition.lerp(this.desiredCameraPosition, 0.18);
-    }
-    this.camera.position.copy(this.cameraPosition);
-    this.camera.lookAt(this.cameraTarget);
+  private updateCamera(dt: number): void {
+    this.playerPos.set(this.player.pos.x, this.player.pos.y, this.player.pos.z);
+    const aim = this.cameraSystem.update(
+      this.player.pos,
+      this.player.vel,
+      { x: this.aimForward.x, y: this.aimForward.y, z: this.aimForward.z },
+      this.pitch,
+      this.planetCenter,
+      this.player.movementState === PlayerMovementState.Airborne,
+      dt,
+    );
+    this.lastAimDir.set(aim.x, aim.y, aim.z);
   }
 
   private readonly onPointerDown = (): void => {

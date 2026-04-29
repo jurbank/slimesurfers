@@ -90,6 +90,31 @@ export class BrushTool {
     return this.sculptDisplacements;
   }
 
+  getDisplacementAtNormal(nx: number, ny: number, nz: number): number {
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len < 1e-8 || this.sculptDisplacements.length === 0) return 0;
+
+    const x = nx / len;
+    const y = ny / len;
+    const z = nz / len;
+    const count = this.sculptBaseNormals.length / 3;
+    let bestDot = -Infinity;
+    let bestIndex = 0;
+
+    for (let i = 0; i < count; i++) {
+      const dot =
+        this.sculptBaseNormals[i * 3] * x +
+        this.sculptBaseNormals[i * 3 + 1] * y +
+        this.sculptBaseNormals[i * 3 + 2] * z;
+      if (dot > bestDot) {
+        bestDot = dot;
+        bestIndex = i;
+      }
+    }
+
+    return this.sculptDisplacements[bestIndex] ?? 0;
+  }
+
   dispose(): void {
     if (this.canvas) {
       this.canvas.removeEventListener("pointermove", this.onPointerMove);

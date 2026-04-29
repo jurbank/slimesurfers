@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import {
+  getTerrainHeight,
+  getTerrainRadius,
+  type TerrainSurfaceProvider,
+} from "@splat/simulation/terrain/planetTerrain.ts";
 import { createAtmosphereMaterial } from "../rendering/atmosphereMaterial.ts";
 import { createOutlineMaterial } from "../rendering/outlineMaterial.ts";
 import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeometry.ts";
@@ -42,6 +47,7 @@ export class EditorScene {
   private readonly brushTool: BrushTool;
   private readonly propPaintTool: PropPaintTool;
   private readonly trackTool: TrackTool;
+  private readonly previewTerrainProvider: TerrainSurfaceProvider;
   private readonly playerPreview: PlayerPreviewController;
   private isSpaceHeld = false;
   private isPreviewActive = false;
@@ -85,7 +91,19 @@ export class EditorScene {
     this.brushTool = new BrushTool(config);
     this.propPaintTool = new PropPaintTool();
     this.trackTool = new TrackTool();
-    this.playerPreview = new PlayerPreviewController(canvas, this.scene, this.camera, config);
+    this.previewTerrainProvider = {
+      getHeight: (nx, ny, nz, cfg) =>
+        getTerrainHeight(nx, ny, nz, cfg) + this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+      getRadius: (nx, ny, nz, cfg) =>
+        getTerrainRadius(nx, ny, nz, cfg) + this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+    };
+    this.playerPreview = new PlayerPreviewController(
+      canvas,
+      this.scene,
+      this.camera,
+      config,
+      this.previewTerrainProvider,
+    );
 
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;

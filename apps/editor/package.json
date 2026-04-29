@@ -6,6 +6,7 @@
     "dev": "vp dev"
   },
   "dependencies": {
+    "@splat/client-runtime": "workspace:*",
     "@splat/content": "workspace:*",
     "@splat/protocol": "workspace:*",
     "@splat/simulation": "workspace:*",

@@ -46,6 +46,11 @@ export interface TerrainConfig {
   };
 }
 
+export interface TerrainSurfaceProvider {
+  getHeight(nx: number, ny: number, nz: number, cfg: TerrainConfig, planetId: string): number;
+  getRadius(nx: number, ny: number, nz: number, cfg: TerrainConfig, planetId: string): number;
+}
+
 // -- Noise (ported from planetShader.ts GLSL) --------------------------------
 
 function fract(x: number): number {
@@ -206,6 +211,15 @@ export function getTerrainHeight(nx: number, ny: number, nz: number, cfg: Terrai
 export function getTerrainRadius(nx: number, ny: number, nz: number, cfg: TerrainConfig): number {
   return cfg.planet.radius + getTerrainHeight(nx, ny, nz, cfg);
 }
+
+export const PROCEDURAL_TERRAIN_PROVIDER: TerrainSurfaceProvider = {
+  getHeight(nx, ny, nz, cfg) {
+    return getTerrainHeight(nx, ny, nz, cfg);
+  },
+  getRadius(nx, ny, nz, cfg) {
+    return getTerrainRadius(nx, ny, nz, cfg);
+  },
+};
 
 /**
  * Computes the true surface normal at a point on the sphere using

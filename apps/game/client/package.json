@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "catalog:",
+    "@splat/client-runtime": "workspace:*",
     "@splat/content": "workspace:*",
     "@splat/protocol": "workspace:*",
     "@splat/simulation": "workspace:*",

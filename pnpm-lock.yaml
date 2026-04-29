@@ -50,7 +50,7 @@ catalogs:
       version: 5.9.3
     vite-plus:
       specifier: latest
-      version: 0.1.16
+      version: 0.1.19
 
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
@@ -66,6 +66,9 @@ importers:
 
   apps/editor:
     dependencies:
+      '@splat/client-runtime':
+        specifier: workspace:*
+        version: link:../../packages/client-runtime
       '@splat/content':
         specifier: workspace:*
         version: link:../../packages/content
@@ -115,6 +118,9 @@ importers:
       '@colyseus/sdk':
         specifier: 'catalog:'
         version: 0.17.39(@colyseus/core@0.17.41)(typescript@6.0.2)
+      '@splat/client-runtime':
+        specifier: workspace:*
+        version: link:../../../packages/client-runtime
       '@splat/content':
         specifier: workspace:*
         version: link:../../../packages/content
@@ -173,6 +179,15 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.21.0
+
+  packages/client-runtime:
+    dependencies:
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.183.1
+      three:
+        specifier: 'catalog:'
+        version: 0.183.2
 
   packages/content:
     dependencies:

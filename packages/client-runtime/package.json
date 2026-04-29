@@ -1,0 +1,12 @@
+{
+  "name": "@splat/client-runtime",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./systems/cameraSystem.ts": "./systems/cameraSystem.ts"
+  },
+  "dependencies": {
+    "@types/three": "catalog:",
+    "three": "catalog:"
+  }
+}

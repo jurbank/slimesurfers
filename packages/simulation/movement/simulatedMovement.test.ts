@@ -8,7 +8,11 @@ import {
   type SimPlanetPaintState,
 } from "@splat/simulation/match/simState.ts";
 import { createStampBuckets } from "@splat/simulation/paint/paintDetection.ts";
-import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
+import {
+  getTerrainHeight,
+  getTerrainRadius,
+  type TerrainSurfaceProvider,
+} from "../terrain/planetTerrain.ts";
 
 const TEST_PLANETS: PlanetData[] = [
   {
@@ -187,6 +191,41 @@ describe("stepPlayer", () => {
     expect(player.movementState).toBe(PlayerMovementState.Moving);
     expect(dist).toBeCloseTo(expectedRadius, 3);
     expect(player.pos.z).toBeGreaterThan(0);
+  });
+
+  it("uses an injected terrain provider for grounded surface contact", () => {
+    const player = createPlayer();
+    const raisedTerrain: TerrainSurfaceProvider = {
+      getHeight(nx, ny, nz, cfg) {
+        return getTerrainHeight(nx, ny, nz, cfg) + 5;
+      },
+      getRadius(nx, ny, nz, cfg) {
+        return getTerrainRadius(nx, ny, nz, cfg) + 5;
+      },
+    };
+
+    stepPlayer(
+      player,
+      createInput(0),
+      0.1,
+      TEST_PLANETS,
+      TEST_CONFIG,
+      EMPTY_PAINT,
+      [],
+      raisedTerrain,
+    );
+
+    const dx = player.pos.x - TEST_PLANETS[0]!.center.x;
+    const dy = player.pos.y - TEST_PLANETS[0]!.center.y;
+    const dz = player.pos.z - TEST_PLANETS[0]!.center.z;
+    const dist = Math.hypot(dx, dy, dz);
+    const norm = { x: dx / dist, y: dy / dist, z: dz / dist };
+    const expectedRadius =
+      getTerrainRadius(norm.x, norm.y, norm.z, TEST_CONFIG) +
+      5 +
+      TEST_CONFIG.movement.standingHeight;
+
+    expect(dist).toBeCloseTo(expectedRadius, 3);
   });
 
   it("jumps with space outside ski mode", () => {
