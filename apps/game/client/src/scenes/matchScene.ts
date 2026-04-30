@@ -370,6 +370,21 @@ export class MatchScene {
     this.countdown.hide();
   }
 
+  private syncLeaderboard(message: LeaderboardMessage): void {
+    const timer =
+      this.currentPhase === MatchPhase.Active || this.currentPhase === MatchPhase.Countdown
+        ? this.connection.matchTimer
+        : 0;
+    const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
+    this.leaderboard.update(
+      message,
+      this.connection.sessionId,
+      timer,
+      teamColors,
+      this.currentPhase,
+    );
+  }
+
   constructor() {
     this.render = new RenderSystem();
     this.camera = new CameraSystem();
@@ -998,12 +1013,11 @@ export class MatchScene {
         },
         onLeaderboard: (message) => {
           this.lastLeaderboard = message;
-          const timer = this.currentPhase === MatchPhase.Active ? this.connection.matchTimer : 0;
-          const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
-          this.leaderboard.update(message, this.connection.sessionId, timer, teamColors);
+          this.syncLeaderboard(message);
         },
         onMatchPhase: (phase, _timer, winningTeamId) => {
           this.currentPhase = phase;
+          if (this.lastLeaderboard) this.syncLeaderboard(this.lastLeaderboard);
           if (phase === MatchPhase.Countdown) {
             this.syncCenterCountdown(0);
           } else if (phase === MatchPhase.Active) {

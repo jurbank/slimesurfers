@@ -64,7 +64,7 @@ export class JoinOverlay {
   private readonly video: HTMLVideoElement;
   private readonly leaderboardCache = new Map<GlobalLeaderboardWindow, GlobalLeaderboardEntry[]>();
   private selectedIndex = 0;
-  private selectedMode: MatchModeId = "ffa";
+  private selectedMode: MatchModeId = "teams";
   private selectedTeamId = 0;
   private hasManualTeamSelection = false;
   private lobbySummary: LobbySummary | null = null;
@@ -377,7 +377,7 @@ export class JoinOverlay {
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
-    this.selectMode("ffa");
+    this.selectMode("teams");
     void this.loadGlobalLeaderboard();
     this.focusNameInput();
     JoinOverlay.maybeShowDesktopHint();
@@ -856,7 +856,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => { });
+    void this.video.play().catch(() => {});
   }
 
   hide(): void {

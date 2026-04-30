@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
   KillEventMessage,
   LeaderboardEntry,
@@ -14,6 +15,7 @@ const KILL_FEED_LIFETIME_MS = 4000;
 const KILL_FEED_ENTER_MS = 180;
 const KILL_FEED_FADE_MS = 900;
 const JOIN_PILL_LIFETIME_MS = 5000;
+const COUNTDOWN_PROGRESS_COLOR = 0xffd166;
 
 interface ActiveKillFeedItem {
   createdAtMs: number;
@@ -224,6 +226,7 @@ export class LeaderboardOverlay {
     localSessionId: string | null,
     matchTimerSeconds = 0,
     teamColors: readonly number[] = [],
+    matchPhase: MatchPhase = MatchPhase.Active,
   ): void {
     this.timerEl.textContent =
       matchTimerSeconds > 0 ? LeaderboardOverlay.formatTimer(matchTimerSeconds) : "";
@@ -269,7 +272,12 @@ export class LeaderboardOverlay {
     }
     this.lastIsTeamMode = isTeamMode;
     this.isLeaderboardVisible = true;
-    this.progressLabel.textContent = isTeamMode ? "Team Coverage" : "Slime Coverage";
+    const isCountdown = matchPhase === MatchPhase.Countdown;
+    this.progressLabel.textContent = isCountdown
+      ? "GET READY"
+      : isTeamMode
+        ? "Team Coverage"
+        : "Slime Coverage";
 
     if (isTeamMode) {
       this.renderTeamSummary(message, localSessionId, teamColors);
@@ -302,9 +310,15 @@ export class LeaderboardOverlay {
 
     if (isTeamMode) {
       this.renderTeamGroups(message, localSessionId, teamColors);
-      this.renderTeamProgressBar(message, teamColors);
     } else {
       this.renderFFAEntries(message, localSessionId);
+    }
+
+    if (isCountdown) {
+      this.renderCountdownProgressBar(matchTimerSeconds);
+    } else if (isTeamMode) {
+      this.renderTeamProgressBar(message, teamColors);
+    } else {
       this.renderFFAProgressBar(message);
     }
 
@@ -686,6 +700,29 @@ export class LeaderboardOverlay {
       segment.title = `${entry.name} ${Math.round(entry.paintScore)}`;
       this.progressBar.appendChild(segment);
     });
+  }
+
+  private renderCountdownProgressBar(matchTimerSeconds: number): void {
+    const totalSeconds = GAME_CONFIG.match.countdownSeconds;
+    const width =
+      totalSeconds > 0
+        ? (Math.max(0, Math.min(matchTimerSeconds, totalSeconds)) / totalSeconds) * 100
+        : 100;
+    const segment = this.createSolidProgressSegment(COUNTDOWN_PROGRESS_COLOR, width);
+    segment.title =
+      matchTimerSeconds > 0 ? `Match starts in ${Math.ceil(matchTimerSeconds)}` : "Match starting";
+    this.progressBar.appendChild(segment);
+  }
+
+  private createSolidProgressSegment(color: number, width: number): HTMLDivElement {
+    const segment = document.createElement("div");
+    Object.assign(segment.style, {
+      height: "100%",
+      width: `${width}%`,
+      background: `#${color.toString(16).padStart(6, "0")}`,
+      transition: "width 300ms ease-out",
+    });
+    return segment;
   }
 
   private createProgressSegment(color: number, patternId: number, width: number): HTMLDivElement {

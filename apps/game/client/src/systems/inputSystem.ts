@@ -87,7 +87,7 @@ class MobileControls {
       this.anchorDown = down;
     });
 
-    const fireButton = this.createButton("FIRE");
+    const fireButton = this.createButton("SPLAT");
     this.bindHoldButton(fireButton, (down) => {
       this.fireDown = down;
     });
