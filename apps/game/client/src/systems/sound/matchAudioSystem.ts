@@ -41,7 +41,7 @@ export class MatchAudioSystem {
     private readonly sound: SoundSystem,
     private readonly getPlayerMesh: (sessionId: string) => THREE.Object3D | null,
     private readonly getLocalSessionId: () => string | null,
-  ) { }
+  ) {}
 
   handleProjectileSync(projectile: ProjectileSnapshot, isNew: boolean): void {
     if (!isNew || projectile.ownerId === this.getLocalSessionId()) return;
@@ -57,8 +57,8 @@ export class MatchAudioSystem {
         removed.weaponId === WeaponId.Bazooka
           ? "bigSplat"
           : PROJECTILE_IMPACT_SOUND_KEYS[
-          this.projectileImpactSoundIndex++ % PROJECTILE_IMPACT_SOUND_KEYS.length
-          ];
+              this.projectileImpactSoundIndex++ % PROJECTILE_IMPACT_SOUND_KEYS.length
+            ];
       this.sound.playSfxAt(impactKey, removed.position, {
         volume: removed.weaponId === WeaponId.Bazooka ? 0.95 : 0.75,
         refDistance: removed.weaponId === WeaponId.Bazooka ? 18 : 12,

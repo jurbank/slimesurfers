@@ -9,6 +9,7 @@ interface SlimeRechargeGaugeState {
   slimeLevel: number;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
+  isOnFriendlyPaint: boolean;
 }
 
 const CANVAS_WIDTH = 136;
@@ -20,6 +21,7 @@ const FADE_SPEED = 12;
 const COMPACT_AMMO_THRESHOLD = 12;
 const DRY_FIRE_FLASH_DURATION = 0.34;
 const ACTIVITY_VISIBLE_DURATION = 2;
+const GOLD_COLOR = new THREE.Color(0xffd24d);
 
 export class SlimeRechargeGauge {
   readonly sprite: THREE.Sprite;
@@ -35,6 +37,7 @@ export class SlimeRechargeGauge {
   private lastDrawnFill = -1;
   private lastDrawnAlpha = -1;
   private lastDrawnPulse = -1;
+  private lastDrawnGoldPulse = -1;
   private lastDrawnDryFirePulse = -1;
   private lastDrawnShotsRemaining = -1;
   private lastDrawnShotsTotal = -1;
@@ -74,7 +77,7 @@ export class SlimeRechargeGauge {
     this.sprite.renderOrder = 1200;
     this.sprite.frustumCulled = false;
     this.sprite.visible = false;
-    this.draw(1, 0, 0, 0);
+    this.draw(1, 0, 0, 0, 0);
   }
 
   update(
@@ -112,9 +115,12 @@ export class SlimeRechargeGauge {
     const hasDisposableAmmo = disposableShotsTotal > 0;
     const dryFireFlashActive = this.dryFireFlashTimer > 0;
     const activityVisibleActive = this.activityVisibleTimer > 0;
+    const isGoldRecharging = state.isOnFriendlyPaint && targetFill < 0.999;
+
     const targetVisible =
       alive &&
       ((surfing && targetFill < 0.999) ||
+        isGoldRecharging ||
         hasDisposableAmmo ||
         dryFireFlashActive ||
         activityVisibleActive)
@@ -129,7 +135,10 @@ export class SlimeRechargeGauge {
     this.sprite.visible = this.visibleAmount > 0;
     if (!this.sprite.visible) return;
 
-    const pulse = filling ? Math.sin(performance.now() * 0.018) * 0.5 + 0.5 : 0;
+    const time = performance.now();
+    const pulse = filling ? Math.sin(time * 0.018) * 0.5 + 0.5 : 0;
+    const goldPulse = isGoldRecharging ? Math.sin(time * 0.012) * 0.5 + 0.5 : 0;
+
     const dryFirePulse =
       this.dryFireFlashTimer > 0
         ? Math.sin((1 - this.dryFireFlashTimer / DRY_FIRE_FLASH_DURATION) * Math.PI)
@@ -138,6 +147,7 @@ export class SlimeRechargeGauge {
       Math.abs(this.visualFill - this.lastDrawnFill) > 0.004 ||
       Math.abs(this.visibleAmount - this.lastDrawnAlpha) > 0.02 ||
       Math.abs(pulse - this.lastDrawnPulse) > 0.08 ||
+      Math.abs(goldPulse - this.lastDrawnGoldPulse) > 0.06 ||
       Math.abs(dryFirePulse - this.lastDrawnDryFirePulse) > 0.06 ||
       state.disposableShotsRemaining !== this.lastDrawnShotsRemaining ||
       disposableShotsTotal !== this.lastDrawnShotsTotal ||
@@ -147,6 +157,7 @@ export class SlimeRechargeGauge {
         this.visualFill,
         this.visibleAmount,
         pulse,
+        goldPulse,
         dryFirePulse,
         state.disposableShotsRemaining,
         disposableShotsTotal,
@@ -163,6 +174,7 @@ export class SlimeRechargeGauge {
     fill: number,
     alpha: number,
     pulse: number,
+    goldPulse: number,
     dryFirePulse: number,
     disposableShotsRemaining = 0,
     disposableShotsTotal = 0,
@@ -170,6 +182,7 @@ export class SlimeRechargeGauge {
     this.lastDrawnFill = fill;
     this.lastDrawnAlpha = alpha;
     this.lastDrawnPulse = pulse;
+    this.lastDrawnGoldPulse = goldPulse;
     this.lastDrawnDryFirePulse = dryFirePulse;
     this.lastDrawnShotsRemaining = disposableShotsRemaining;
     this.lastDrawnShotsTotal = disposableShotsTotal;
@@ -186,7 +199,12 @@ export class SlimeRechargeGauge {
     const radius = width / 2;
     const clampedFill = THREE.MathUtils.clamp(fill, 0, 1);
     const fillHeight = height * clampedFill;
-    const color = `#${this.fillColor.getHexString()}`;
+
+    const renderColor = new THREE.Color().copy(this.fillColor);
+    if (goldPulse > 0) {
+      renderColor.lerp(GOLD_COLOR, goldPulse * 0.85);
+    }
+    const color = `#${renderColor.getHexString()}`;
 
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
@@ -203,7 +221,7 @@ export class SlimeRechargeGauge {
     const gradient = ctx.createLinearGradient(x, y + height, x, y);
     gradient.addColorStop(0, color);
     gradient.addColorStop(0.6, color);
-    gradient.addColorStop(1, "rgba(255, 255, 255, 0.95)");
+    gradient.addColorStop(1, goldPulse > 0 ? "#ffffff" : "rgba(255, 255, 255, 0.95)");
     ctx.fillStyle = gradient;
     ctx.globalAlpha = alpha * (0.78 + pulse * 0.22);
     if (fillHeight > 0) {
@@ -215,7 +233,7 @@ export class SlimeRechargeGauge {
       );
     }
 
-    ctx.globalAlpha = alpha * (0.25 + pulse * 0.28);
+    ctx.globalAlpha = alpha * (0.25 + pulse * 0.28 + goldPulse * 0.15);
     ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
     if (fillHeight > 18) {
       ctx.fillRect(x + 7, y + height - fillHeight + 7, 4, fillHeight - 18);
@@ -224,7 +242,8 @@ export class SlimeRechargeGauge {
 
     ctx.globalAlpha = alpha;
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeStyle =
+      goldPulse > 0 ? `rgba(255, 235, 120, ${0.7 + goldPulse * 0.3})` : "rgba(255, 255, 255, 0.9)";
     this.roundRect(ctx, x, y, width, height, radius);
     ctx.stroke();
 
@@ -249,10 +268,10 @@ export class SlimeRechargeGauge {
 
     if (fillHeight > 6) {
       const knobY = y + height - 3 - (height - 6) * clampedFill;
-      ctx.globalAlpha = alpha * (0.7 + pulse * 0.3);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+      ctx.globalAlpha = alpha * (0.7 + pulse * 0.3 + goldPulse * 0.2);
+      ctx.fillStyle = goldPulse > 0 ? "#ffffff" : "rgba(255, 255, 255, 0.94)";
       ctx.beginPath();
-      ctx.arc(x + width / 2, knobY, 5 + pulse * 1.5, 0, Math.PI * 2);
+      ctx.arc(x + width / 2, knobY, 5 + pulse * 1.5 + goldPulse * 1.0, 0, Math.PI * 2);
       ctx.fill();
     }
 

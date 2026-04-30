@@ -47,7 +47,7 @@ function createPlayerSnapshot(movementState: PlayerMovementState): PlayerSnapsho
 it("alternates projectile impact splat sounds", () => {
   const playedKeys: string[] = [];
   const sound = {
-    playSfx: () => { },
+    playSfx: () => {},
     playSfxAt: (key: string) => {
       playedKeys.push(key);
     },
@@ -91,7 +91,7 @@ it("resets projectile impact splat alternation when cleared", () => {
 it("plays the big splat sound when a trick lands", () => {
   const playedKeys: string[] = [];
   const sound = {
-    playSfx: () => { },
+    playSfx: () => {},
     playSfxAt: (key: string) => {
       playedKeys.push(key);
     },

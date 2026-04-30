@@ -789,7 +789,7 @@ export class MatchScene {
   }
 
   requestPointerCapture(): void {
-    void this.render.renderer.domElement.requestPointerLock().catch(() => { });
+    void this.render.renderer.domElement.requestPointerLock().catch(() => {});
   }
 
   private reconnect(): void {
