@@ -10,6 +10,12 @@ import {
   createRoomState,
   syncRoomStateFromSimulation,
 } from "./matchRoomReplication.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+
+const MACHINE_GUN_KILL_SHOTS = Math.ceil(
+  GAME_CONFIG.player.maxHealth / getWeaponDefinition(WeaponId.MachineGun).directDamage,
+);
 
 describe("matchRoomReplication", () => {
   const { rows } = getPaintTerritoryDimensions();
@@ -70,7 +76,7 @@ describe("matchRoomReplication", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
       simulation.matchState.projectiles.set(`replication-kill-${shot}`, {
         id: `replication-kill-${shot}`,
         ownerId: shooter.sessionId,

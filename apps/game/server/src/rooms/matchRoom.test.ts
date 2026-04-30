@@ -2,8 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { MatchRoom } from "./matchRoom.ts";
+
+const MACHINE_GUN_KILL_SHOTS = Math.ceil(
+  GAME_CONFIG.player.maxHealth / getWeaponDefinition(WeaponId.MachineGun).directDamage,
+);
 
 interface FakeClientMessage {
   type: string;
@@ -168,8 +173,10 @@ describe("MatchRoom", () => {
 
   it("wires room lifecycle setup on create", () => {
     const harness = createRoomHarness();
+    const configuredBotCount =
+      GAME_CONFIG.bot.namedBots.length + GAME_CONFIG.bot.generatedBots.count;
 
-    expect(harness.room.state.players.size).toBe(4); // Bots fill the room
+    expect(harness.room.state.players.size).toBe(configuredBotCount);
     expect(harness.messageHandlers.has(MessageType.Input)).toBe(true);
     expect(harness.scheduledIntervalMs).toBeGreaterThan(0);
   });
@@ -221,7 +228,7 @@ describe("MatchRoom", () => {
     advanceTick(); // Lobby → Countdown
     advanceTick(); // Countdown → Active (resets match state; no projectiles placed yet)
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
       simulation.matchState.projectiles.set(`room-kill-${shot}`, {
         id: `room-kill-${shot}`,
         ownerId: shooter.sessionId,

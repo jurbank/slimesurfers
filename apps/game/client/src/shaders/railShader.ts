@@ -1,5 +1,3 @@
-import * as THREE from "three";
-
 export const railVertexShader = `
   varying vec2 vUv;
   varying float vArcLength;
