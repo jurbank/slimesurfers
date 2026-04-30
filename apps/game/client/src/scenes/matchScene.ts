@@ -438,9 +438,24 @@ export class MatchScene {
     }
   }
 
+  private playMatchMusic(): void {
+    const key = "surfMusic";
+    if (this.sound.isLoaded(key)) {
+      this.sound.playMusic(key);
+    } else {
+      void this.preloadMatchAssets().then(() => {
+        if (this.currentPhase === MatchPhase.Active) {
+          this.sound.playMusic(key);
+        }
+      });
+    }
+  }
+
   async preload(onProgress?: (progress: number) => void): Promise<void> {
-    const audioEntries = Object.entries(AUDIO);
-    const totalSteps = audioEntries.length + 2; // audio + sky + planets
+    const initialAudioEntries = Object.entries(AUDIO).filter(
+      ([, asset]) => !asset.context || asset.context === "initial",
+    );
+    const totalSteps = initialAudioEntries.length + 2; // audio + sky + planets
     let completedSteps = 0;
 
     const increment = (): void => {
@@ -448,22 +463,33 @@ export class MatchScene {
       onProgress?.(Math.floor((completedSteps / totalSteps) * 100));
     };
 
-    // 1. Audio
+    // 1. Initial Audio
     await Promise.all(
-      audioEntries.map(async ([key, { url, category, volume }]) => {
+      initialAudioEntries.map(async ([key, { url, category, volume }]) => {
         await this.sound.preload(key, url, category, volume);
         increment();
       }),
     );
 
-    // 2. Sky (fast but good to separate)
+    // 2. Sky
     this.buildSkyReference();
     increment();
 
-    // 3. Planets (heavy geometry)
+    // 3. Planets
     this.buildPlanets();
     if (PORTAL_ENABLED) this.portal = new PortalSystem(this.render.scene, performance.now());
     increment();
+  }
+
+  private async preloadMatchAssets(): Promise<void> {
+    const matchAudioEntries = Object.entries(AUDIO).filter(
+      ([, asset]) => asset.context === "match",
+    );
+    await Promise.all(
+      matchAudioEntries.map(([key, { url, category, volume }]) =>
+        this.sound.preload(key, url, category, volume),
+      ),
+    );
   }
 
   private buildSkyReference(): void {
@@ -907,6 +933,9 @@ export class MatchScene {
           patternId: number,
           paintGroupId: number,
         ) => {
+          // Join successful, start preloading match assets
+          this.playMatchMusic();
+
           const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
           this.playerColors.set(sessionId, visual.slimeColor);
           this.playerPatterns.set(sessionId, visual.patternId);
@@ -1025,6 +1054,7 @@ export class MatchScene {
             this.clearPlanetPaint();
             this.projectiles.clear();
             this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
+            this.playMatchMusic();
           } else if (phase === MatchPhase.Ended) {
             this.countdown.hide();
             const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
@@ -1035,6 +1065,7 @@ export class MatchScene {
               teamColors,
             );
             this.input.setEnabled(false);
+            this.sound.stopMusic();
           }
         },
         onDisconnect: () => {
@@ -1052,6 +1083,7 @@ export class MatchScene {
           this.emoteBubbles.clear();
           this.leaderboard.clear();
           this.matchAudio.clear();
+          this.sound.stopMusic();
           this.countdown.hide();
           this.matchEnd.hide();
           this.lastLeaderboard = null;
