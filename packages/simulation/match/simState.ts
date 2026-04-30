@@ -75,6 +75,16 @@ export interface SimWeaponPickupState {
   active: boolean;
 }
 
+export interface SimHealthPickupState {
+  id: string;
+  planetId: string;
+  normal: SimVec3;
+  pos: SimVec3;
+  respawnTimer: number;
+  respawnDurationSeconds: number;
+  active: boolean;
+}
+
 // -- Enums and constants (moved from packages/protocol/schemas/playerState.ts) --
 
 export const PlayerMovementState = {
@@ -168,6 +178,7 @@ export interface SimMatchState {
   railStates: Map<number, SimRailPaintState>;
   projectiles: Map<string, SimProjectileState>;
   pickups: Map<string, SimWeaponPickupState>;
+  healthPickups: Map<string, SimHealthPickupState>;
   matchPhase: MatchPhase;
   matchTimer: number;
   paintSeq: number;

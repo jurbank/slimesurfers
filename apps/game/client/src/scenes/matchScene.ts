@@ -27,6 +27,7 @@ import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
 import { PickupSystem } from "../systems/pickupSystem.ts";
+import { HealthPickupSystem } from "../systems/healthPickupSystem.ts";
 import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
@@ -109,6 +110,7 @@ export class MatchScene {
   private readonly clouds: CloudSystem;
   private readonly props: PropSystem;
   private readonly pickups: PickupSystem;
+  private readonly healthPickups: HealthPickupSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly trickText: TrickTextSystem;
   private readonly emoteBubbles: EmoteBubbleSystem;
@@ -371,6 +373,7 @@ export class MatchScene {
     this.clouds = new CloudSystem(this.render.scene);
     this.props = new PropSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
+    this.healthPickups = new HealthPickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.trickText = new TrickTextSystem();
     this.emoteBubbles = new EmoteBubbleSystem();
@@ -731,6 +734,17 @@ export class MatchScene {
         refDistance: 14,
       });
     }
+
+    const liveHealthPickupIds = new Set<string>();
+    for (const pickup of snapshot.healthPickups ?? []) {
+      liveHealthPickupIds.add(pickup.id);
+      this.healthPickups.syncPickup(pickup, receivedAtMs);
+    }
+    for (const removed of this.healthPickups.removeMissing(liveHealthPickupIds)) {
+      this.sound.playSfxAt("weaponPickup", removed.position, {
+        refDistance: 14,
+      });
+    }
   }
 
   private getPlayerMesh(sessionId: string): THREE.Object3D | null {
@@ -908,6 +922,7 @@ export class MatchScene {
         this.clouds.dispose();
         this.props.dispose();
         this.pickups.clear();
+        this.healthPickups.clear();
         this.projectiles.clear();
         this.rails.dispose(this.render.scene);
         this.trickText.clear();
@@ -1252,6 +1267,7 @@ export class MatchScene {
       }
 
       this.pickups.update(now);
+      this.healthPickups.update(now);
       this.portal?.update(now, playerPos);
       this.projectiles.update(now);
       this.rails.update(this.connection.roomState);

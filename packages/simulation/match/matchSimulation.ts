@@ -35,6 +35,11 @@ import {
   createWeaponPickups,
   tickWeaponPickups,
 } from "../combat/weaponPickups.ts";
+import {
+  collectHealthPickup,
+  createHealthPickups,
+  tickHealthPickups,
+} from "../combat/healthPickups.ts";
 import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
@@ -265,6 +270,7 @@ function createSimMatchState(
     ),
     projectiles: new Map(),
     pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout),
+    healthPickups: createHealthPickups(GAME_CONFIG),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
     matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
@@ -675,6 +681,7 @@ export class MatchSimulation {
     }
 
     tickWeaponPickups(this.simState, serverDtSec);
+    tickHealthPickups(this.simState, serverDtSec);
 
     this.simState.players.forEach((player, sessionId) => {
       const queue = player.isBot
@@ -703,6 +710,7 @@ export class MatchSimulation {
             }
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
+          collectHealthPickup(this.simState, player, GAME_CONFIG);
           rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, GAME_CONFIG);
           if (
             this.simState.matchPhase === MatchPhase.Active ||
@@ -765,6 +773,7 @@ export class MatchSimulation {
           }
         }
         collectWeaponPickup(this.simState, player, GAME_CONFIG);
+        collectHealthPickup(this.simState, player, GAME_CONFIG);
         rechargePlayerSlime(
           this.simState,
           player,
@@ -866,7 +875,16 @@ export class MatchSimulation {
       });
     });
 
-    return { tick: this.tickCount, players, projectiles, pickups };
+    const healthPickups: SnapshotMessage["healthPickups"] = [];
+    this.simState.healthPickups.forEach((pickup) => {
+      if (!pickup.active) return;
+      healthPickups.push({
+        id: pickup.id,
+        pos: { x: pickup.pos.x, y: pickup.pos.y, z: pickup.pos.z },
+      });
+    });
+
+    return { tick: this.tickCount, players, projectiles, pickups, healthPickups };
   }
 
   buildLeaderboardMessage(): LeaderboardMessage {

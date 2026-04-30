@@ -56,6 +56,7 @@ export interface SnapshotMessage {
   players: PlayerSnapshot[];
   projectiles: ProjectileSnapshot[];
   pickups: PickupSnapshot[];
+  healthPickups: HealthPickupSnapshot[];
 }
 
 export interface ProjectileSnapshot {
@@ -77,6 +78,11 @@ export interface PickupSnapshot {
   id: string;
   weaponId: WeaponId;
   planetId: string;
+  pos: Vec3Data;
+}
+
+export interface HealthPickupSnapshot {
+  id: string;
   pos: Vec3Data;
 }
 

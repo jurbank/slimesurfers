@@ -26,6 +26,7 @@ function createSimState(): SimMatchState {
     scores: new Map(),
     elapsedMs: 0,
     nextProjectileId: 0,
+    healthPickups: new Map(),
   };
 }
 
