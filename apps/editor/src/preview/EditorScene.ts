@@ -47,6 +47,7 @@ export class EditorScene {
   private readonly brushTool: BrushTool;
   private readonly propPaintTool: PropPaintTool;
   private readonly trackTool: TrackTool;
+  private readonly baseTerrainProvider: TerrainSurfaceProvider;
   private readonly previewTerrainProvider: TerrainSurfaceProvider;
   private readonly playerPreview: PlayerPreviewController;
   private isSpaceHeld = false;
@@ -91,6 +92,10 @@ export class EditorScene {
     this.brushTool = new BrushTool(config);
     this.propPaintTool = new PropPaintTool();
     this.trackTool = new TrackTool();
+    this.baseTerrainProvider = {
+      getHeight: (nx, ny, nz, cfg) => getTerrainHeight(nx, ny, nz, cfg),
+      getRadius: (nx, ny, nz, cfg) => getTerrainRadius(nx, ny, nz, cfg),
+    };
     this.previewTerrainProvider = {
       getHeight: (nx, ny, nz, cfg) =>
         getTerrainHeight(nx, ny, nz, cfg) + this.brushTool.getDisplacementAtNormal(nx, ny, nz),
@@ -168,6 +173,8 @@ export class EditorScene {
       onGizmoDragChange: (dragging) => {
         this.controls.enabled = !dragging;
       },
+      config,
+      terrainProvider: this.baseTerrainProvider,
     });
 
     this.updateUniforms(config);

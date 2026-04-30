@@ -37,9 +37,7 @@ export function GridSelector({ items, selectedId, onSelect, columns = 2 }: GridS
             {label}
           </span>
           {preview && (
-            <div className="w-full flex justify-center bg-black/20 rounded-sm py-1">
-              {preview}
-            </div>
+            <div className="w-full flex justify-center bg-black/20 rounded-sm py-1">{preview}</div>
           )}
         </button>
       ))}
