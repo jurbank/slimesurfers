@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 const CAMERA_BACK = 15;
-const CAMERA_UP = 5;
+const CAMERA_UP = 12;
 const CAMERA_SIDE = 3;
 const AIM_DISTANCE = 500;
 const COLLISION_RADIUS = 1;

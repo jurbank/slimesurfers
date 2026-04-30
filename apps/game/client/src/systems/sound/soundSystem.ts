@@ -69,12 +69,18 @@ export class SoundSystem {
     if (this.pending.has(key)) return this.pending.get(key)!;
 
     const promise = (async () => {
-      const ctx = this.ensureContext();
-      const res = await fetch(url);
-      const arrayBuffer = await res.arrayBuffer();
-      const buffer = await ctx.decodeAudioData(arrayBuffer);
-      this.loaded.set(key, { buffer, category, volume });
-      this.pending.delete(key);
+      try {
+        const ctx = this.ensureContext();
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.statusText}`);
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        this.loaded.set(key, { buffer, category, volume });
+      } catch (err) {
+        console.error(`[SoundSystem] Failed to preload "${key}" (${url}):`, err);
+      } finally {
+        this.pending.delete(key);
+      }
     })();
 
     this.pending.set(key, promise);
@@ -92,10 +98,14 @@ export class SoundSystem {
       this.sfxLastPlayedMs.set(key, performance.now());
     }
     const sound = this.loaded.get(key);
-    if (!sound || sound.category !== "sfx") return;
+    if (!sound) {
+      console.warn(`[SoundSystem] Cannot play SFX "${key}": not loaded.`);
+      return;
+    }
+    if (sound.category !== "sfx") return;
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
-    gain.gain.value = options.volume ?? sound.volume;
+    gain.gain.value = (options.volume ?? 1.0) * sound.volume;
     gain.connect(this.masterGain.sfx!);
     const source = ctx.createBufferSource();
     source.buffer = sound.buffer;
@@ -116,11 +126,16 @@ export class SoundSystem {
       this.sfxLastPlayedMs.set(key, performance.now());
     }
     const sound = this.loaded.get(key);
-    if (!sound || sound.category !== "sfx") return;
+    if (!sound) {
+      console.warn(`[SoundSystem] Cannot play SFX at "${key}": not loaded.`);
+      return;
+    }
+    if (sound.category !== "sfx") return;
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
-    gain.gain.value = options.volume ?? sound.volume;
+    gain.gain.value = (options.volume ?? 1.0) * sound.volume;
     const panner = ctx.createPanner();
+
     panner.panningModel = "HRTF";
     panner.distanceModel = "inverse";
     panner.refDistance = options.refDistance ?? 10;
@@ -137,17 +152,27 @@ export class SoundSystem {
 
   // Crossfade to a new music track. Pass null to stop music.
   playMusic(key: string | null, options: { loop?: boolean; fadeDuration?: number } = {}): void {
+    if (this.activeMusic?.key === key && key !== null) return;
+
     const fade = options.fadeDuration ?? FADE_DURATION;
     this.fadeOutCurrentMusic(fade);
 
     if (!key) return;
     const sound = this.loaded.get(key);
-    if (!sound || sound.category !== "music") return;
+    if (!sound) {
+      console.warn(`[SoundSystem] Cannot play music "${key}": not loaded.`);
+      return;
+    }
+    if (sound.category !== "music") {
+      console.warn(`[SoundSystem] Cannot play music "${key}": wrong category "${sound.category}".`);
+      return;
+    }
 
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
+    const initialVolume = sound.volume;
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(1, ctx.currentTime + fade);
+    gain.gain.linearRampToValueAtTime(initialVolume, ctx.currentTime + fade);
     gain.connect(this.masterGain.music!);
 
     const source = ctx.createBufferSource();

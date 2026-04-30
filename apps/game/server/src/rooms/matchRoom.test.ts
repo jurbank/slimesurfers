@@ -80,30 +80,25 @@ function createRoomHarness(options?: Parameters<MatchRoom["onCreate"]>[0]) {
 }
 
 describe("MatchRoom", () => {
-  it("uses the configured server match mode", () => {
-    const previousMode = process.env.MATCH_MODE;
-    try {
-      process.env.MATCH_MODE = "dev";
+  it("uses the requested room match mode", () => {
+    const harness = createRoomHarness({ matchMode: "teams" });
 
-      const harness = createRoomHarness();
+    expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+      "teams",
+    );
+  });
 
-      expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
-        "dev",
-      );
-    } finally {
-      if (previousMode === undefined) {
-        delete process.env.MATCH_MODE;
-      } else {
-        process.env.MATCH_MODE = previousMode;
-      }
-    }
+  it("falls back to ffa for unknown requested match modes", () => {
+    const harness = createRoomHarness({ matchMode: "bogus" });
+
+    expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+      "ffa",
+    );
   });
 
   it("uses dev cluster spawns when requested by a dev client", () => {
-    const previousMode = process.env.MATCH_MODE;
     const previousNodeEnv = process.env.NODE_ENV;
     try {
-      process.env.MATCH_MODE = "ffa";
       process.env.NODE_ENV = "development";
 
       const harness = createRoomHarness({ devClusterSpawns: true });
@@ -112,11 +107,25 @@ describe("MatchRoom", () => {
         "dev",
       );
     } finally {
-      if (previousMode === undefined) {
-        delete process.env.MATCH_MODE;
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
       } else {
-        process.env.MATCH_MODE = previousMode;
+        process.env.NODE_ENV = previousNodeEnv;
       }
+    }
+  });
+
+  it("does not let dev cluster spawns override the requested match mode", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "development";
+
+      const harness = createRoomHarness({ matchMode: "teams", devClusterSpawns: true });
+
+      expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+        "teams",
+      );
+    } finally {
       if (previousNodeEnv === undefined) {
         delete process.env.NODE_ENV;
       } else {
@@ -193,6 +202,15 @@ describe("MatchRoom", () => {
     expect(harness.broadcasts).toHaveLength(1);
     expect(harness.broadcasts[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts[0]?.options).toEqual({ except: alpha.client });
+  });
+
+  it("honors a requested team in teams mode", () => {
+    const harness = createRoomHarness({ matchMode: "teams" });
+    const alpha = createFakeClient("session-1");
+
+    harness.room.onJoin(alpha.client as never, { name: "Alpha", teamId: 1 });
+
+    expect(harness.room.state.players.get("session-1")?.teamId).toBe(1);
   });
 
   it("removes players from room state on leave", () => {

@@ -345,11 +345,69 @@ describe("MatchSimulation", () => {
     expect(bravo.paintGroupId).toBe(1);
     expect(alpha.slimeColor).toBe(TEAMS_MODE.teamColors[0]);
     expect(bravo.slimeColor).toBe(TEAMS_MODE.teamColors[1]);
+    expect(alpha.patternId).toBe(0);
+    expect(bravo.patternId).toBe(0);
+    expect(charlie.patternId).toBe(0);
+    expect(delta.patternId).toBe(0);
     expect(TEAMS_MODE.slots[alpha.paletteIndex]?.teamId).toBe(alpha.teamId);
     expect(TEAMS_MODE.slots[bravo.paletteIndex]?.teamId).toBe(bravo.teamId);
     expect(distanceBetweenPlayers(alpha, charlie)).toBeLessThan(25);
     expect(distanceBetweenPlayers(bravo, delta)).toBeLessThan(25);
     expect(distanceBetweenPlayers(alpha, bravo)).toBeGreaterThan(80);
+  });
+
+  it("ignores requested palette indices in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", 2);
+    const bravo = simulation.addPlayer("session-2", "Bravo", 0);
+
+    expect(alpha.teamId).toBe(0);
+    expect(alpha.paletteIndex).toBe(0);
+    expect(bravo.teamId).toBe(1);
+    expect(bravo.paletteIndex).toBe(1);
+  });
+
+  it("honors valid requested teams and balances invalid requested teams", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", undefined, 1);
+    const bravo = simulation.addPlayer("session-2", "Bravo", undefined, 99);
+
+    expect(alpha.teamId).toBe(1);
+    expect(alpha.paintGroupId).toBe(1);
+    expect(bravo.teamId).toBe(0);
+    expect(bravo.paintGroupId).toBe(0);
+  });
+
+  it("ignores requested teams in ffa mode", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", 0, 1);
+
+    expect(alpha.teamId).toBe(255);
+    expect(alpha.paintGroupId).toBe(0);
+  });
+
+  it("reports team scores once per paint group instead of once per teammate", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha");
+    const bravo = simulation.addPlayer("session-2", "Bravo");
+    const charlie = simulation.addPlayer("session-3", "Charlie");
+    const delta = simulation.addPlayer("session-4", "Delta");
+
+    simulation.matchState.scores.set("0", 42);
+    simulation.matchState.scores.set("1", 17);
+    alpha.paintScore = 42;
+    charlie.paintScore = 42;
+    bravo.paintScore = 17;
+    delta.paintScore = 17;
+
+    const leaderboard = simulation.buildLeaderboardMessage();
+
+    expect(leaderboard.teamScores).toEqual([42, 17]);
+    expect(simulation.computeWinningTeamId()).toBe(0);
   });
 
   it("clusters dev spawns for faster combat testing without stacking players", () => {
@@ -1649,6 +1707,124 @@ describe("MatchSimulation", () => {
     });
     expect(killEvents[0]?.seq).toBeGreaterThan(0);
     expect(simulation.drainKillEventMessages()).toHaveLength(0);
+  });
+
+  it("re-balances teams when a player joins after a departure in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const alpha = simulation.addPlayer("session-1", "Alpha"); // team 0
+    const bravo = simulation.addPlayer("session-2", "Bravo"); // team 1
+    const charlie = simulation.addPlayer("session-3", "Charlie"); // team 0 (balanced: 1-1 tie → index 0)
+
+    expect(alpha.teamId).toBe(0);
+    expect(bravo.teamId).toBe(1);
+    expect(charlie.teamId).toBe(0);
+
+    simulation.removePlayer(alpha.sessionId);
+    simulation.removePlayer(charlie.sessionId);
+
+    // Team 0 now has 0 players, team 1 has 1 — next joiner should go to team 0
+    const delta = simulation.addPlayer("session-4", "Delta");
+    expect(delta.teamId).toBe(0);
+    expect(delta.paintGroupId).toBe(0);
+  });
+
+  it("does not damage a teammate in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const shooter = simulation.addPlayer("session-1", "Alpha"); // playerIndex 0 → team 0
+    const enemy = simulation.addPlayer("session-2", "Bravo"); // playerIndex 1 → team 1
+    const teammate = simulation.addPlayer("session-3", "Charlie"); // playerIndex 2 → team 0
+
+    expect(shooter.teamId).toBe(teammate.teamId);
+    expect(shooter.teamId).not.toBe(enemy.teamId);
+
+    teammate.pos = {
+      x: shooter.pos.x + GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    teammate.vel = { x: 0, y: 0, z: 0 };
+    teammate.planetId = shooter.planetId;
+
+    simulation.matchState.projectiles.set("friendly-fire-test", {
+      id: "friendly-fire-test",
+      ownerId: shooter.sessionId,
+      ownerTeamId: shooter.teamId,
+      weaponId: WeaponId.MachineGun,
+      paintGroupId: shooter.paintGroupId,
+      slimeColor: shooter.slimeColor,
+      patternId: 0,
+      pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
+      vel: { x: 0, y: 0, z: 0 },
+      planetId: teammate.planetId,
+      lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+    });
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(teammate.health).toBe(GAME_CONFIG.player.maxHealth);
+    expect(enemy.health).toBe(GAME_CONFIG.player.maxHealth);
+  });
+
+  it("does not credit kills for team eliminations in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const shooter = simulation.addPlayer("session-1", "Alpha"); // playerIndex 0 → team 0
+    const enemy = simulation.addPlayer("session-2", "Bravo"); // playerIndex 1 → team 1
+    const teammate = simulation.addPlayer("session-3", "Charlie"); // playerIndex 2 → team 0
+
+    teammate.pos = {
+      x: shooter.pos.x + GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    teammate.vel = { x: 0, y: 0, z: 0 };
+    teammate.planetId = shooter.planetId;
+
+    enemy.pos = {
+      x: shooter.pos.x - GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    enemy.vel = { x: 0, y: 0, z: 0 };
+    enemy.planetId = shooter.planetId;
+
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
+      simulation.matchState.projectiles.set(`friendly-kill-${shot}`, {
+        id: `friendly-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        ownerTeamId: shooter.teamId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: 0,
+        pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: teammate.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(teammate.health).toBe(GAME_CONFIG.player.maxHealth);
+    expect(shooter.killCount).toBe(0);
+
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
+      simulation.matchState.projectiles.set(`enemy-kill-${shot}`, {
+        id: `enemy-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        ownerTeamId: shooter.teamId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: 0,
+        pos: { x: enemy.pos.x, y: enemy.pos.y, z: enemy.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: enemy.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(enemy.movementState).toBe(PlayerMovementState.Dead);
+    expect(shooter.killCount).toBe(1);
   });
 
   it("counts respawn time down over intermediate ticks before reviving the player", () => {

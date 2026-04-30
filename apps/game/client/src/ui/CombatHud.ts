@@ -1,3 +1,5 @@
+import { getTeamLabel } from "./teamPresentation.ts";
+
 const OUTER_MIN_HALF_PX = 20;
 const OUTER_MAX_HALF_PX = 90;
 const INNER_HALF_PX = 14;
@@ -15,6 +17,7 @@ export class CombatHud {
   private readonly sniperScopeRoot: HTMLDivElement;
   private readonly sniperRing: HTMLDivElement;
   private readonly sniperDot: HTMLDivElement;
+  private readonly teamPill: HTMLDivElement;
 
   constructor() {
     this.root = document.createElement("div");
@@ -33,6 +36,7 @@ export class CombatHud {
       zIndex: "15",
       pointerEvents: "none",
       display: "none",
+      flexDirection: "column",
     });
 
     this.weaponLabel = document.createElement("div");
@@ -69,7 +73,20 @@ export class CombatHud {
       marginBottom: "4px",
     });
 
-    this.root.append(this.weaponLabel, track, this.healthLabel);
+    this.teamPill = document.createElement("div");
+    Object.assign(this.teamPill.style, {
+      display: "none",
+      fontSize: "0.7rem",
+      fontWeight: "bold",
+      letterSpacing: "0.1em",
+      textTransform: "uppercase",
+      padding: "2px 8px",
+      borderRadius: "999px",
+      marginBottom: "8px",
+      alignSelf: "flex-start",
+    });
+
+    this.root.append(this.teamPill, this.weaponLabel, track, this.healthLabel);
     document.body.appendChild(this.root);
 
     this.flash = document.createElement("div");
@@ -198,13 +215,34 @@ export class CombatHud {
     document.body.appendChild(this.sniperScopeRoot);
   }
 
-  update(weaponLabel: string, health: number, maxHealth: number): void {
-    this.root.style.display = "block";
+  update(
+    weaponLabel: string,
+    health: number,
+    maxHealth: number,
+    teamColor?: number,
+    teamId?: number,
+  ): void {
+    this.root.style.display = "flex";
     this.crosshair.style.display = "block";
     this.weaponLabel.textContent = weaponLabel;
     const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, Math.min(1, health / maxHealth));
     this.healthFill.style.width = `${healthRatio * 100}%`;
     this.healthLabel.textContent = `Health ${Math.round(health)} / ${maxHealth}`;
+
+    if (teamColor !== undefined) {
+      const hex = `#${teamColor.toString(16).padStart(6, "0")}`;
+      const r = (teamColor >> 16) & 0xff;
+      const g = (teamColor >> 8) & 0xff;
+      const b = teamColor & 0xff;
+      this.teamPill.style.display = "block";
+      this.teamPill.style.color = hex;
+      this.teamPill.style.background = `rgba(${r}, ${g}, ${b}, 0.18)`;
+      this.teamPill.style.border = `1px solid rgba(${r}, ${g}, ${b}, 0.45)`;
+      this.teamPill.textContent =
+        teamId === undefined ? "Your Team" : getTeamLabel(teamId, teamColor).toUpperCase();
+    } else {
+      this.teamPill.style.display = "none";
+    }
   }
 
   showAcquisitionOverlay(holdProgress: number, isLocked: boolean, isGuaranteed: boolean): void {

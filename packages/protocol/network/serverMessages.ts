@@ -190,4 +190,6 @@ export interface MatchPhaseMessage {
   phase: MatchPhase;
   /** Seconds remaining in this phase (countdown timer or match timer) */
   timer: number;
+  /** Index into GameState.teamColors of the winning team. Only set when phase === Ended and isTeamBased. */
+  winningTeamId?: number;
 }

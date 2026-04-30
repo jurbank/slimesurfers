@@ -9,6 +9,7 @@ const FRONT_BINDING_Z = 0.27;
 const REAR_BINDING_Z = -0.23;
 const WALK_CYCLE_SPEED = 9;
 const OUTLINE_SCALE = 1.18;
+const TRICK_OUTLINE_SCALE = 1.25;
 
 interface PlayerAnimatorState {
   movementState: number;
@@ -47,6 +48,13 @@ function setPart(
 
   part.outline.position.copy(part.mesh.position);
   part.outline.scale.set(scaleX * OUTLINE_SCALE, scaleY * OUTLINE_SCALE, scaleZ * OUTLINE_SCALE);
+
+  part.trickOutline.position.copy(part.mesh.position);
+  part.trickOutline.scale.set(
+    scaleX * TRICK_OUTLINE_SCALE,
+    scaleY * TRICK_OUTLINE_SCALE,
+    scaleZ * TRICK_OUTLINE_SCALE,
+  );
 }
 
 function syncPoseRigOutlines(rig: PlayerPoseRig): void {
@@ -58,6 +66,12 @@ function syncPoseRigOutlines(rig: PlayerPoseRig): void {
       part.mesh.scale.x * OUTLINE_SCALE,
       part.mesh.scale.y * OUTLINE_SCALE,
       part.mesh.scale.z * OUTLINE_SCALE,
+    );
+    part.trickOutline.position.copy(part.mesh.position);
+    part.trickOutline.scale.set(
+      part.mesh.scale.x * TRICK_OUTLINE_SCALE,
+      part.mesh.scale.y * TRICK_OUTLINE_SCALE,
+      part.mesh.scale.z * TRICK_OUTLINE_SCALE,
     );
   }
 }

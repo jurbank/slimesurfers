@@ -26,13 +26,18 @@ export class PlayerTrickChargeEffect {
     slimeColor: number,
   ) {
     this.emissiveColor = new THREE.Color(slimeColor);
+    const seenMaterials = new Set<THREE.MeshBasicMaterial>();
     this.auraMesh.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       const { material } = child;
-      if (material instanceof THREE.MeshBasicMaterial) {
+      if (material instanceof THREE.MeshBasicMaterial && !seenMaterials.has(material)) {
+        seenMaterials.add(material);
         this.auraMaterials.push(material);
       }
     });
+    for (const material of slimeMaterials) {
+      material.uniforms["emissive"].value.copy(this.emissiveColor);
+    }
     this.applyVisuals(0, 0);
   }
 
@@ -70,23 +75,17 @@ export class PlayerTrickChargeEffect {
 
   private applyVisuals(charge: number, landingBurst: number): void {
     const t = performance.now() * 0.001;
-    const pulse = 0.7 + Math.sin(t * (8 + charge * 7)) * 0.3;
+    const pulse = 0.82 + Math.sin(t * (10 + charge * 6)) * 0.18;
     const auraStrength = Math.max(charge * pulse, landingBurst);
 
     this.auraMesh.visible = auraStrength > 0.02;
-    this.auraMesh.rotation.y = t * (1.5 + charge * 2.5);
-    this.auraMesh.rotation.z = Math.sin(t * 2.2) * 0.12;
-    this.auraMesh.scale.setScalar(1 + auraStrength * 0.85 + landingBurst * 0.35);
 
-    for (let index = 0; index < this.auraMaterials.length; index++) {
-      const material = this.auraMaterials[index];
-      const band = index === 0 ? 1 : index === 1 ? 0.8 : 0.65;
-      material.opacity = auraStrength * band * 0.6 + landingBurst * band * 0.35;
+    for (const material of this.auraMaterials) {
+      material.opacity = Math.min(0.95, auraStrength * 0.85 + landingBurst * 0.4);
     }
 
-    const emissiveIntensity = auraStrength <= 0.01 ? 0 : 0.22 + auraStrength * 0.95;
+    const emissiveIntensity = auraStrength <= 0.01 ? 0 : 0.25 + auraStrength * 1.15;
     for (const material of this.slimeMaterials) {
-      material.uniforms["emissive"].value.copy(this.emissiveColor);
       material.uniforms["emissiveIntensity"].value = emissiveIntensity;
     }
   }

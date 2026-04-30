@@ -1,15 +1,20 @@
 import { getStateCallbacks, type Room } from "@colyseus/sdk";
 import { colyseusClient } from "./colyseusClient.ts";
-import { GameState } from "@splat/protocol/schemas/gameState.ts";
+import { GameState, NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
-import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import type {
+  EmotePostMessage,
+  InputMessage,
+  MatchModeId,
+} from "@splat/protocol/network/clientMessages.ts";
 import type {
   EmoteEventBatchMessage,
   EmoteEventMessage,
   KillEventBatchMessage,
   KillEventMessage,
   LeaderboardMessage,
+  MatchPhaseMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
   SnapshotMessage,
@@ -21,6 +26,7 @@ import type { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 export interface RoomCallbacks {
   onPlayerInit(
     sessionId: string,
+    name: string,
     slimeColor: number,
     patternId: number,
     paintGroupId: number,
@@ -41,12 +47,21 @@ export interface RoomCallbacks {
   onKillEvents(events: KillEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
-  onMatchPhase(phase: MatchPhase, timer: number): void;
+  onMatchPhase(phase: MatchPhase, timer: number, winningTeamId?: number): void;
   onDisconnect(): void;
+}
+
+export interface MatchJoinConfig {
+  name: string;
+  colorIndex: number;
+  playerUuid: string | null;
+  matchMode: MatchModeId;
+  teamId?: number;
 }
 
 export class RoomConnection {
   private room: Room<unknown, GameState> | null = null;
+  private _winningTeamId: number | undefined = undefined;
 
   get sessionId(): string | null {
     return this.room?.sessionId ?? null;
@@ -64,6 +79,14 @@ export class RoomConnection {
     return this.room?.state.matchPhase ?? MatchPhase.Lobby;
   }
 
+  get winningTeamId(): number | undefined {
+    const schemaWinningTeamId = this.room?.state.winningTeamId;
+    if (schemaWinningTeamId !== undefined && schemaWinningTeamId !== NO_WINNING_TEAM_ID) {
+      return schemaWinningTeamId;
+    }
+    return this._winningTeamId;
+  }
+
   async fetchTakenColorIndices(): Promise<number[]> {
     try {
       const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
@@ -73,17 +96,13 @@ export class RoomConnection {
     }
   }
 
-  async join(
-    name: string,
-    colorIndex: number,
-    playerUuid: string | null,
-    callbacks: RoomCallbacks,
-  ): Promise<void> {
+  async join(options: MatchJoinConfig, callbacks: RoomCallbacks): Promise<void> {
+    this._winningTeamId = undefined;
     const devClusterSpawns =
       import.meta.env.DEV && import.meta.env.VITE_CLUSTER_PLAYER_SPAWNS === "true";
     this.room = await colyseusClient.joinOrCreate(
       "match",
-      { name, colorIndex, playerUuid, devClusterSpawns },
+      { ...options, devClusterSpawns },
       GameState,
     );
 
@@ -111,11 +130,19 @@ export class RoomConnection {
       callbacks.onKillEvents(message.events);
     });
 
+    this.room.onMessage(MessageType.MatchPhase, (message: MatchPhaseMessage) => {
+      if (message.winningTeamId !== undefined) {
+        this._winningTeamId = message.winningTeamId;
+      }
+    });
+
     let lastPhase: MatchPhase | null = null;
     this.room.onStateChange((state: GameState) => {
       if (state.matchPhase !== lastPhase) {
         lastPhase = state.matchPhase;
-        callbacks.onMatchPhase(state.matchPhase, state.matchTimer);
+        const winningTeamId =
+          state.winningTeamId === NO_WINNING_TEAM_ID ? undefined : state.winningTeamId;
+        callbacks.onMatchPhase(state.matchPhase, state.matchTimer, winningTeamId);
       }
     });
 
@@ -137,7 +164,13 @@ export class RoomConnection {
 
     const players = this.room.state.players;
     players?.forEach((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerInit(sessionId, player.slimeColor, player.patternId, player.paintGroupId);
+      callbacks.onPlayerInit(
+        sessionId,
+        player.name,
+        player.slimeColor,
+        player.patternId,
+        player.paintGroupId,
+      );
     });
 
     this.room.onLeave(() => {

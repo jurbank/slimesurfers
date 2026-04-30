@@ -51,6 +51,7 @@ export interface SimRailPaintState {
 export interface SimProjectileState {
   id: string;
   ownerId: string;
+  ownerTeamId?: number;
   weaponId: WeaponId;
   paintGroupId: number;
   slimeColor: number;

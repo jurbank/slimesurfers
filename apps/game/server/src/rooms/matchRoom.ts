@@ -6,17 +6,24 @@ import {
   type BotConfigEntry,
 } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
-import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import type {
+  EmotePostMessage,
+  InputMessage,
+  JoinOptions,
+  MatchModeId,
+} from "@splat/protocol/network/clientMessages.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
+import type { SimPlayerState } from "@splat/simulation/match/simState.ts";
 import {
   addSimPlayerToRoomState,
   buildJoinBootstrap,
   buildTickBroadcasts,
   createRoomState,
+  syncRoomWinnerFromSimulation,
   syncRoomStateFromSimulation,
 } from "./matchRoomReplication.ts";
 import type { LeaderboardEntry } from "@splat/protocol/network/serverMessages.ts";
@@ -28,11 +35,26 @@ type DepartedEntry = LeaderboardEntry & { playerUuid?: string; isBot?: boolean }
 
 interface MatchRoomCreateOptions {
   devClusterSpawns?: unknown;
+  matchMode?: unknown;
 }
 
-interface MatchRoomMetadata {
+interface LobbyPlayerMetadata {
+  name: string;
+  isBot: boolean;
+  teamId: number;
+  colorIndex: number;
+  slimeColor: number;
+  patternId: number;
+}
+
+export interface MatchRoomMetadata {
   devClusterSpawns: boolean;
+  matchMode: MatchModeId;
+  isTeamBased: boolean;
   takenColorIndices?: number[];
+  players: LobbyPlayerMetadata[];
+  teamCounts: number[];
+  suggestedTeamId?: number;
 }
 
 function isEnvFlagEnabled(value: string | undefined): boolean {
@@ -44,9 +66,13 @@ function resolveWeaponPickupLayout(): "map" | "cluster" {
 }
 
 function resolveMatchMode(options: MatchRoomCreateOptions): string | undefined {
+  if (typeof options.matchMode === "string") return options.matchMode;
   if (process.env.NODE_ENV !== "production" && options.devClusterSpawns === true) return "dev";
-  if (process.env.MATCH_MODE) return process.env.MATCH_MODE;
-  return undefined;
+  return "ffa";
+}
+
+function toPublicMatchMode(modeId: string): MatchModeId {
+  return modeId === "teams" ? "teams" : "ffa";
 }
 
 export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetadata }> {
@@ -67,7 +93,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
       weaponPickupLayout: resolveWeaponPickupLayout(),
     });
-    this.setState(createRoomState(this.simulation.matchState));
+    this.setState(createRoomState(this.simulation.matchState, this.simulation.mode));
     void this.updateRoomMetadata();
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;
 
@@ -83,11 +109,13 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     this.setSimulationInterval((dt) => this.tick(dt), this.simulation.tickIntervalMs);
   }
 
-  onJoin(
-    client: Client,
-    options: { name?: unknown; colorIndex?: unknown; playerUuid?: unknown } = {},
-  ) {
-    const simPlayer = this.simulation.addPlayer(client.sessionId, options.name, options.colorIndex);
+  onJoin(client: Client, options: JoinOptions = {}) {
+    const simPlayer = this.simulation.addPlayer(
+      client.sessionId,
+      options.name,
+      options.colorIndex,
+      options.teamId,
+    );
     addSimPlayerToRoomState(this.state, simPlayer);
     this.evaluateBotPopulation();
     void this.updateRoomMetadata();
@@ -152,7 +180,12 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       : configuredBotCount > 0
         ? configuredBotCount
         : GAME_CONFIG.bot.targetPopulation;
-    return Math.max(0, Math.min(this.simulation.maxPlayers, configured));
+    const targetPopulation =
+      this.simulation.mode.isTeamBased && this.simulation.mode.teamCount > 1
+        ? Math.ceil(Math.max(0, configured) / this.simulation.mode.teamCount) *
+          this.simulation.mode.teamCount
+        : configured;
+    return Math.max(0, Math.min(this.simulation.maxPlayers, targetPopulation));
   }
 
   private pickGeneratedBotTemplate(): BotConfigEntry {
@@ -177,10 +210,95 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   }
 
   private updateRoomMetadata(): Promise<void> {
+    const teamCounts = this.buildTeamCounts();
     return this.setMetadata({
       devClusterSpawns: this.devClusterSpawns,
+      matchMode: toPublicMatchMode(this.simulation.mode.id),
+      isTeamBased: this.simulation.mode.isTeamBased,
       takenColorIndices: this.simulation.takenColorIndices(),
+      players: Array.from(this.simulation.players.values()).map((player) => ({
+        name: player.name,
+        isBot: player.isBot,
+        teamId: player.teamId,
+        colorIndex: player.paletteIndex,
+        slimeColor: player.slimeColor,
+        patternId: player.patternId,
+      })),
+      teamCounts,
+      suggestedTeamId: this.simulation.mode.isTeamBased
+        ? this.resolveSuggestedTeamId(teamCounts)
+        : undefined,
     });
+  }
+
+  private buildTeamCounts(): number[] {
+    if (!this.simulation.mode.isTeamBased || this.simulation.mode.teamCount === 0) return [];
+    const counts = Array.from({ length: this.simulation.mode.teamCount }, () => 0);
+    for (const player of this.simulation.players.values()) {
+      if (player.teamId >= 0 && player.teamId < counts.length) {
+        counts[player.teamId] = (counts[player.teamId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  private resolveSuggestedTeamId(teamCounts: readonly number[]): number | undefined {
+    if (teamCounts.length === 0) return undefined;
+    let suggested = 0;
+    for (let teamId = 1; teamId < teamCounts.length; teamId++) {
+      if ((teamCounts[teamId] ?? 0) < (teamCounts[suggested] ?? 0)) suggested = teamId;
+    }
+    return suggested;
+  }
+
+  private selectBotsToRemove(bots: readonly SimPlayerState[], count: number): SimPlayerState[] {
+    const selected: SimPlayerState[] = [];
+    const remaining = [...bots];
+
+    for (let i = 0; i < count; i++) {
+      let bestIndex = 0;
+      let bestScore = Infinity;
+      for (let index = 0; index < remaining.length; index++) {
+        const candidate = remaining[index];
+        if (!candidate) continue;
+        const score = this.scoreBotRemoval(candidate, remaining, selected);
+        if (score < bestScore) {
+          bestIndex = index;
+          bestScore = score;
+        }
+      }
+      const [removed] = remaining.splice(bestIndex, 1);
+      if (removed) selected.push(removed);
+    }
+
+    return selected;
+  }
+
+  private scoreBotRemoval(
+    candidate: SimPlayerState,
+    remainingBots: readonly SimPlayerState[],
+    alreadySelected: readonly SimPlayerState[],
+  ): number {
+    if (!this.simulation.mode.isTeamBased || this.simulation.mode.teamCount <= 1) {
+      return candidate.botOrigin === "generated" ? 0 : 1;
+    }
+
+    const counts = this.buildTeamCounts();
+    const decrement = (teamId: number): void => {
+      if (teamId >= 0 && teamId < counts.length) {
+        counts[teamId] = Math.max(0, (counts[teamId] ?? 0) - 1);
+      }
+    };
+    for (const bot of alreadySelected) decrement(bot.teamId);
+    decrement(candidate.teamId);
+
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
+    const originPenalty = candidate.botOrigin === "generated" ? 0 : 0.01;
+    const sameTeamBotsAfterRemoval = remainingBots.filter(
+      (bot) => bot !== candidate && bot.teamId === candidate.teamId,
+    ).length;
+    return (max - min) * 100 + originPenalty - sameTeamBotsAfterRemoval * 0.001;
   }
 
   private evaluateBotPopulation(): void {
@@ -192,22 +310,32 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       this.simulation.matchState.matchPhase === MatchPhase.Ended
         ? 0
         : Math.max(0, targetPopulation - humanCount);
-    const desiredNamedCount = Math.min(GAME_CONFIG.bot.namedBots.length, targetBotCount);
-    const desiredGeneratedCount = Math.max(0, targetBotCount - desiredNamedCount);
-
     const existingNamedByIndex = new Map<number, (typeof botPlayers)[number]>();
-    const existingGenerated: typeof botPlayers = [];
     for (const bot of botPlayers) {
       if (bot.botOrigin === "named" && typeof bot.botConfigIndex === "number") {
         existingNamedByIndex.set(bot.botConfigIndex, bot);
-      } else {
-        existingGenerated.push(bot);
       }
     }
 
     let changed = false;
 
-    for (let index = 0; index < desiredNamedCount; index++) {
+    if (botPlayers.length > targetBotCount) {
+      const botsToRemove = this.selectBotsToRemove(botPlayers, botPlayers.length - targetBotCount);
+      for (const bot of botsToRemove) {
+        this.simulation.removePlayer(bot.sessionId);
+        this.state.players.delete(bot.sessionId);
+      }
+      changed = botsToRemove.length > 0;
+      if (changed) void this.updateRoomMetadata();
+      return;
+    }
+
+    let botCount = botPlayers.length;
+    for (
+      let index = 0;
+      index < GAME_CONFIG.bot.namedBots.length && botCount < targetBotCount;
+      index++
+    ) {
       if (existingNamedByIndex.has(index)) continue;
       const config = GAME_CONFIG.bot.namedBots[index] ?? {};
       const botId = this.createBotSessionId();
@@ -219,43 +347,26 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
         configIndex: index,
       });
       addSimPlayerToRoomState(this.state, simPlayer);
+      botCount++;
       changed = true;
     }
 
-    for (const [index, bot] of existingNamedByIndex) {
-      if (index < desiredNamedCount) continue;
-      this.simulation.removePlayer(bot.sessionId);
-      this.state.players.delete(bot.sessionId);
-      changed = true;
-    }
-
-    if (existingGenerated.length < desiredGeneratedCount) {
-      const botsToAdd = desiredGeneratedCount - existingGenerated.length;
-      for (let i = 0; i < botsToAdd; i++) {
-        const template = this.pickGeneratedBotTemplate();
-        const botId = this.createBotSessionId();
-        const simPlayer = this.simulation.addBot(botId, template.name, {
-          profile: resolveBotBehaviorProfile(template),
-          emoteTemperament: template.emoteTemperament,
-          emoteFrequency: template.emoteFrequency,
-          origin: "generated",
-        });
-        addSimPlayerToRoomState(this.state, simPlayer);
-      }
-      changed = true;
-    } else if (existingGenerated.length > desiredGeneratedCount) {
-      const botsToRemove = existingGenerated.length - desiredGeneratedCount;
-      for (let i = 0; i < botsToRemove; i++) {
-        const bot = existingGenerated[i];
-        if (!bot) continue;
-        this.simulation.removePlayer(bot.sessionId);
-        this.state.players.delete(bot.sessionId);
-      }
+    while (botCount < targetBotCount) {
+      const template = this.pickGeneratedBotTemplate();
+      const botId = this.createBotSessionId();
+      const simPlayer = this.simulation.addBot(botId, template.name, {
+        profile: resolveBotBehaviorProfile(template),
+        emoteTemperament: template.emoteTemperament,
+        emoteFrequency: template.emoteFrequency,
+        origin: "generated",
+      });
+      addSimPlayerToRoomState(this.state, simPlayer);
+      botCount++;
       changed = true;
     }
 
     if (changed) {
-      void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+      void this.updateRoomMetadata();
     }
   }
 
@@ -337,6 +448,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     const result = this.simulation.tick(dt);
     this.maybePostBotEmotes(dt);
     syncRoomStateFromSimulation(this.state, this.simulation.matchState);
+    syncRoomWinnerFromSimulation(this.state, this.simulation);
 
     const broadcasts = buildTickBroadcasts(result, this.simulation);
     if (broadcasts.matchPhase) {

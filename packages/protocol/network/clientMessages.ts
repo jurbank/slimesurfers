@@ -41,6 +41,16 @@ export type InputKeys = number; // bitmask — see InputKey flags above
 
 // -- Message payloads --------------------------------------------------------
 
+export type MatchModeId = "ffa" | "teams";
+
+export interface JoinOptions {
+  name?: unknown;
+  colorIndex?: unknown;
+  playerUuid?: unknown;
+  matchMode?: unknown;
+  teamId?: unknown;
+}
+
 /**
  * Sent every input tick (NETWORK_CONFIG.input.sendRateHz).
  * The server processes these in order and advances the simulation.
