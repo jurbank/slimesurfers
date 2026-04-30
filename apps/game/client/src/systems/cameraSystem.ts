@@ -3,7 +3,7 @@ import * as THREE from "three";
 // Distance behind the player the camera floats along the yaw-forward axis.
 const CAMERA_BACK = 15;
 // Height above the player's surface position. Lower = more ground-hugging feel.
-const CAMERA_UP = 5;
+const CAMERA_UP = 12;
 // Lateral offset — positive pushes to the right shoulder, negative to left.
 const CAMERA_SIDE = 3;
 // How far ahead the aim ray is cast for parallax correction.
@@ -101,8 +101,8 @@ export class CameraSystem {
     const forwardSpeed = Math.max(
       0,
       playerVel.x * this._camForward.x +
-        playerVel.y * this._camForward.y +
-        playerVel.z * this._camForward.z,
+      playerVel.y * this._camForward.y +
+      playerVel.z * this._camForward.z,
     );
 
     // Speed smoothing: accelerate fast, decelerate slowly for a trailing-off feel.
