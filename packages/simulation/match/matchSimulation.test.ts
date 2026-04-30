@@ -345,11 +345,48 @@ describe("MatchSimulation", () => {
     expect(bravo.paintGroupId).toBe(1);
     expect(alpha.slimeColor).toBe(TEAMS_MODE.teamColors[0]);
     expect(bravo.slimeColor).toBe(TEAMS_MODE.teamColors[1]);
+    expect(alpha.patternId).toBe(0);
+    expect(bravo.patternId).toBe(0);
+    expect(charlie.patternId).toBe(0);
+    expect(delta.patternId).toBe(0);
     expect(TEAMS_MODE.slots[alpha.paletteIndex]?.teamId).toBe(alpha.teamId);
     expect(TEAMS_MODE.slots[bravo.paletteIndex]?.teamId).toBe(bravo.teamId);
     expect(distanceBetweenPlayers(alpha, charlie)).toBeLessThan(25);
     expect(distanceBetweenPlayers(bravo, delta)).toBeLessThan(25);
     expect(distanceBetweenPlayers(alpha, bravo)).toBeGreaterThan(80);
+  });
+
+  it("ignores requested palette indices in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", 2);
+    const bravo = simulation.addPlayer("session-2", "Bravo", 0);
+
+    expect(alpha.teamId).toBe(0);
+    expect(alpha.paletteIndex).toBe(0);
+    expect(bravo.teamId).toBe(1);
+    expect(bravo.paletteIndex).toBe(1);
+  });
+
+  it("reports team scores once per paint group instead of once per teammate", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha");
+    const bravo = simulation.addPlayer("session-2", "Bravo");
+    const charlie = simulation.addPlayer("session-3", "Charlie");
+    const delta = simulation.addPlayer("session-4", "Delta");
+
+    simulation.matchState.scores.set("0", 42);
+    simulation.matchState.scores.set("1", 17);
+    alpha.paintScore = 42;
+    charlie.paintScore = 42;
+    bravo.paintScore = 17;
+    delta.paintScore = 17;
+
+    const leaderboard = simulation.buildLeaderboardMessage();
+
+    expect(leaderboard.teamScores).toEqual([42, 17]);
+    expect(simulation.computeWinningTeamId()).toBe(0);
   });
 
   it("clusters dev spawns for faster combat testing without stacking players", () => {

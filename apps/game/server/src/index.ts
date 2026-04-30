@@ -7,6 +7,7 @@ try {
 import { Server, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Request, Response } from "express";
+import { resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import { MatchRoom } from "./rooms/matchRoom.ts";
 
 const port = Number(process.env.PORT) || 2567;
@@ -19,7 +20,13 @@ const gameServer = new Server({
         const taken = rooms.flatMap(
           (r) => (r.metadata as { takenColorIndices?: number[] })?.takenColorIndices ?? [],
         );
-        res.json({ takenColorIndices: [...new Set(taken)] });
+        const roomIsTeamBased = rooms.some(
+          (r) => (r.metadata as { isTeamBased?: boolean })?.isTeamBased === true,
+        );
+        res.json({
+          takenColorIndices: [...new Set(taken)],
+          isTeamBased: roomIsTeamBased || resolveGameMode(process.env.MATCH_MODE).isTeamBased,
+        });
       });
     });
   },

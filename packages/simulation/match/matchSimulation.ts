@@ -59,7 +59,6 @@ import {
 import { cleanName } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
 import {
-  NO_TEAM_ID,
   PlayerMovementState,
   PlayerSurfState,
   type BotOrigin,
@@ -199,16 +198,17 @@ function createSimPlanetState(planetId: string): SimPlanetPaintState {
   };
 }
 
-function seedTestPaint(simState: SimMatchState): void {
+function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void {
   const planet = simState.planets.get("planet-0");
   if (!planet) return;
   const largeSeedSurfaceRadius = 50 * (2 * Math.asin(1.15 * 0.5));
   const mediumSeedSurfaceRadius = 50 * (2 * Math.asin(0.55 * 0.5));
+  const seedColors = mode.isTeamBased ? mode.teamColors : GAME_CONFIG.match.ffaColors;
 
   const stamps = [
     {
       paintGroupId: 0,
-      color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      color: seedColors[0] ?? 0x00e5ff,
       patternId: 0,
       nx: 0,
       ny: 1,
@@ -218,7 +218,7 @@ function seedTestPaint(simState: SimMatchState): void {
     },
     {
       paintGroupId: 1,
-      color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      color: seedColors[1] ?? 0xff6200,
       patternId: 0,
       nx: 0,
       ny: -1,
@@ -228,7 +228,7 @@ function seedTestPaint(simState: SimMatchState): void {
     },
     {
       paintGroupId: 1,
-      color: GAME_CONFIG.match.ffaColors[1] ?? 0xff6200,
+      color: seedColors[1] ?? 0xff6200,
       patternId: 0,
       nx: 0.55,
       ny: 0.55,
@@ -238,7 +238,7 @@ function seedTestPaint(simState: SimMatchState): void {
     },
     {
       paintGroupId: 0,
-      color: GAME_CONFIG.match.ffaColors[0] ?? 0x00e5ff,
+      color: seedColors[0] ?? 0x00e5ff,
       patternId: 0,
       nx: -0.5,
       ny: -0.45,
@@ -254,6 +254,7 @@ function seedTestPaint(simState: SimMatchState): void {
 }
 
 function createSimMatchState(
+  mode: GameModeDefinition,
   seedPaint: boolean,
   lobbyEnabled: boolean,
   weaponPickupLayout: WeaponPickupLayout,
@@ -284,7 +285,7 @@ function createSimMatchState(
     nextProjectileId: 0,
   };
   if (seedPaint) {
-    seedTestPaint(simState);
+    seedTestPaint(simState, mode);
   }
   return simState;
 }
@@ -402,6 +403,7 @@ export class MatchSimulation {
   constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
     this.mode = mode;
     this.simState = createSimMatchState(
+      mode,
       options.seedTestPaint ?? false,
       options.lobbyEnabled ?? false,
       options.weaponPickupLayout ?? "map",
@@ -454,7 +456,9 @@ export class MatchSimulation {
     const taken = new Set(this.takenColorIndices());
     const paletteLen = this.mode.slots.length;
     const requestedPaletteIndex =
-      typeof requestedColorIndex === "number" && Number.isSafeInteger(requestedColorIndex)
+      !this.mode.isTeamBased &&
+      typeof requestedColorIndex === "number" &&
+      Number.isSafeInteger(requestedColorIndex)
         ? requestedColorIndex
         : null;
     const matchesTeam = (paletteIndex: number): boolean =>
@@ -948,9 +952,9 @@ export class MatchSimulation {
     );
 
     const teamScores = Array.from({ length: this.mode.teamCount }, () => 0);
-    for (const entry of entries) {
-      if (this.mode.isTeamBased && entry.teamId !== NO_TEAM_ID) {
-        teamScores[entry.teamId] = (teamScores[entry.teamId] ?? 0) + entry.paintScore;
+    if (this.mode.isTeamBased) {
+      for (let teamId = 0; teamId < this.mode.teamCount; teamId++) {
+        teamScores[teamId] = this.simState.scores.get(teamId.toString()) ?? 0;
       }
     }
 

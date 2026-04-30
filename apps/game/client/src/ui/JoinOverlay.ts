@@ -21,6 +21,8 @@ export class JoinOverlay {
   private readonly statusText: HTMLParagraphElement;
   private readonly progressContainer: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
+  private readonly colorLabel: HTMLParagraphElement;
+  private readonly swatchRow: HTMLDivElement;
   private readonly leaderboardList: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
   private readonly guestPlayerName: string;
@@ -28,6 +30,7 @@ export class JoinOverlay {
   private readonly leaderboardCache = new Map<GlobalLeaderboardWindow, GlobalLeaderboardEntry[]>();
   private selectedIndex = 0;
   private isLoading = true;
+  private isTeamMode = false;
 
   constructor() {
     this.guestPlayerName = JoinOverlay.getGuestPlayerName();
@@ -159,12 +162,16 @@ export class JoinOverlay {
       marginBottom: "8px",
     });
 
-    const colorLabel = document.createElement("p");
-    colorLabel.textContent = "Choose your player / slime color";
-    Object.assign(colorLabel.style, { margin: "4px 0 8px", fontSize: "0.8rem", color: "#fff" });
+    this.colorLabel = document.createElement("p");
+    this.colorLabel.textContent = "Choose your player / slime color";
+    Object.assign(this.colorLabel.style, {
+      margin: "4px 0 8px",
+      fontSize: "0.8rem",
+      color: "#fff",
+    });
 
-    const swatchRow = document.createElement("div");
-    Object.assign(swatchRow.style, {
+    this.swatchRow = document.createElement("div");
+    Object.assign(this.swatchRow.style, {
       display: "flex",
       gap: "6px",
       flexWrap: "wrap",
@@ -195,7 +202,7 @@ export class JoinOverlay {
         this.selectSwatch(i);
       });
       this.swatches.push(btn);
-      swatchRow.appendChild(btn);
+      this.swatchRow.appendChild(btn);
     });
 
     this.joinBtn = document.createElement("button");
@@ -245,8 +252,8 @@ export class JoinOverlay {
       subtitle,
       this.progressContainer,
       this.nameInput,
-      colorLabel,
-      swatchRow,
+      this.colorLabel,
+      this.swatchRow,
       this.joinBtn,
       this.statusText,
       leaderboardPanel,
@@ -450,6 +457,7 @@ export class JoinOverlay {
   }
 
   setTakenColorIndices(taken: number[]): void {
+    if (this.isTeamMode) return;
     const takenSet = new Set(taken);
     this.swatches.forEach((btn, i) => {
       const isTaken = takenSet.has(i);
@@ -463,6 +471,18 @@ export class JoinOverlay {
     });
   }
 
+  setTeamMode(isTeamMode: boolean): void {
+    if (this.isTeamMode === isTeamMode) return;
+    this.isTeamMode = isTeamMode;
+    if (isTeamMode) {
+      this.colorLabel.textContent = "Team colors are assigned automatically";
+      this.swatchRow.style.display = "none";
+    } else {
+      this.colorLabel.textContent = "Choose your player / slime color";
+      this.swatchRow.style.display = "flex";
+    }
+  }
+
   onJoin(callback: (name: string, colorIndex: number) => void): void {
     const submit = (): void => {
       const rawName = this.nameInput.value.trim();
@@ -472,7 +492,7 @@ export class JoinOverlay {
         return;
       }
       const name = rawName || this.guestPlayerName;
-      callback(name, this.selectedIndex);
+      callback(name, this.isTeamMode ? -1 : this.selectedIndex);
     };
     this.joinBtn.addEventListener("click", submit);
     this.nameInput.addEventListener("keydown", (e) => {

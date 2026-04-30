@@ -1,6 +1,6 @@
 import { getStateCallbacks, type Room } from "@colyseus/sdk";
 import { colyseusClient } from "./colyseusClient.ts";
-import { GameState } from "@splat/protocol/schemas/gameState.ts";
+import { GameState, NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
@@ -43,7 +43,7 @@ export interface RoomCallbacks {
   onKillEvents(events: KillEventMessage[]): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
-  onMatchPhase(phase: MatchPhase, timer: number): void;
+  onMatchPhase(phase: MatchPhase, timer: number, winningTeamId?: number): void;
   onDisconnect(): void;
 }
 
@@ -68,6 +68,10 @@ export class RoomConnection {
   }
 
   get winningTeamId(): number | undefined {
+    const schemaWinningTeamId = this.room?.state.winningTeamId;
+    if (schemaWinningTeamId !== undefined && schemaWinningTeamId !== NO_WINNING_TEAM_ID) {
+      return schemaWinningTeamId;
+    }
     return this._winningTeamId;
   }
 
@@ -129,7 +133,9 @@ export class RoomConnection {
     this.room.onStateChange((state: GameState) => {
       if (state.matchPhase !== lastPhase) {
         lastPhase = state.matchPhase;
-        callbacks.onMatchPhase(state.matchPhase, state.matchTimer);
+        const winningTeamId =
+          state.winningTeamId === NO_WINNING_TEAM_ID ? undefined : state.winningTeamId;
+        callbacks.onMatchPhase(state.matchPhase, state.matchTimer, winningTeamId);
       }
     });
 

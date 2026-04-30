@@ -9,7 +9,7 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
-import { GameState } from "@splat/protocol/schemas/gameState.ts";
+import { GameState, NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import {
   PlanetPaintState,
   TerritoryCell,
@@ -94,6 +94,7 @@ export function createRoomState(simState: SimMatchState, mode: GameModeDefinitio
   state.matchTimer = simState.matchTimer;
   state.isTeamBased = mode.isTeamBased;
   state.teamColors = new ArraySchema<number>(...mode.teamColors);
+  state.winningTeamId = NO_WINNING_TEAM_ID;
 
   simState.planets.forEach((planet, planetId) => {
     state.planets.set(planetId, schemaPlanetFromSim(planet));
@@ -170,6 +171,13 @@ export function syncRoomStateFromSimulation(state: GameState, simState: SimMatch
   simState.scores.forEach((score, key) => {
     state.scores.set(key, score);
   });
+}
+
+export function syncRoomWinnerFromSimulation(state: GameState, simulation: MatchSimulation): void {
+  state.winningTeamId =
+    simulation.matchState.matchPhase === MatchPhase.Ended
+      ? (simulation.computeWinningTeamId() ?? NO_WINNING_TEAM_ID)
+      : NO_WINNING_TEAM_ID;
 }
 
 export function buildJoinBootstrap(simulation: MatchSimulation): MatchRoomJoinBootstrap {

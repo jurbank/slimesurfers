@@ -677,6 +677,32 @@ export class MatchScene {
     this.localPlayerPatternId = patternId;
   }
 
+  private resolveTeamVisual(
+    sessionId: string,
+    fallbackColor: number,
+    fallbackPatternId: number,
+  ): { slimeColor: number; patternId: number } {
+    const roomState = this.connection.roomState;
+    if (!roomState?.isTeamBased) {
+      return { slimeColor: fallbackColor, patternId: fallbackPatternId };
+    }
+    const teamId = roomState.players.get(sessionId)?.teamId;
+    const teamColor = teamId === undefined ? undefined : roomState.teamColors[teamId];
+    return { slimeColor: teamColor ?? fallbackColor, patternId: 0 };
+  }
+
+  private resolvePaintGroupVisual(
+    paintGroupId: number,
+    fallbackColor: number,
+    fallbackPatternId: number,
+  ): { slimeColor: number; patternId: number } {
+    const roomState = this.connection.roomState;
+    if (!roomState?.isTeamBased) {
+      return { slimeColor: fallbackColor, patternId: fallbackPatternId };
+    }
+    return { slimeColor: roomState.teamColors[paintGroupId] ?? fallbackColor, patternId: 0 };
+  }
+
   private ensureRemotePlayer(
     sessionId: string,
     slimeColor: number,
@@ -746,9 +772,22 @@ export class MatchScene {
     const liveProjectileIds = new Set<string>();
     for (const projectile of snapshot.projectiles) {
       liveProjectileIds.add(projectile.id);
-      const color = projectile.slimeColor;
-      const isNew = this.projectiles.syncProjectile(projectile.id, projectile, color, receivedAtMs);
-      this.matchAudio.handleProjectileSync(projectile, isNew);
+      const visual = this.resolvePaintGroupVisual(
+        projectile.paintGroupId,
+        projectile.slimeColor,
+        projectile.patternId,
+      );
+      const visualProjectile =
+        visual.slimeColor === projectile.slimeColor && visual.patternId === projectile.patternId
+          ? projectile
+          : { ...projectile, slimeColor: visual.slimeColor, patternId: visual.patternId };
+      const isNew = this.projectiles.syncProjectile(
+        projectile.id,
+        visualProjectile,
+        visual.slimeColor,
+        receivedAtMs,
+      );
+      this.matchAudio.handleProjectileSync(visualProjectile, isNew);
     }
     this.matchAudio.handleRemovedProjectiles(this.projectiles.removeMissing(liveProjectileIds));
   }
@@ -840,13 +879,14 @@ export class MatchScene {
         patternId: number,
         paintGroupId: number,
       ) => {
-        this.playerColors.set(sessionId, slimeColor);
-        this.playerPatterns.set(sessionId, patternId);
+        const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
+        this.playerColors.set(sessionId, visual.slimeColor);
+        this.playerPatterns.set(sessionId, visual.patternId);
         if (sessionId === this.connection.sessionId) {
-          this.ensureLocalPlayer(slimeColor, patternId);
+          this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
           this.runtime.setLocalPaintGroupId(paintGroupId);
         } else {
-          this.ensureRemotePlayer(sessionId, slimeColor, patternId, name);
+          this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
           this.applyTeamRelation(sessionId);
         }
       },
@@ -858,13 +898,14 @@ export class MatchScene {
         paintGroupId: number,
       ) => {
         this.removedSessions.delete(sessionId);
-        this.playerColors.set(sessionId, slimeColor);
-        this.playerPatterns.set(sessionId, patternId);
+        const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
+        this.playerColors.set(sessionId, visual.slimeColor);
+        this.playerPatterns.set(sessionId, visual.patternId);
         if (sessionId === this.connection.sessionId) {
-          this.ensureLocalPlayer(slimeColor, patternId);
+          this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
           this.runtime.setLocalPaintGroupId(paintGroupId);
         } else {
-          this.ensureRemotePlayer(sessionId, slimeColor, patternId, name);
+          this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
           this.applyTeamRelation(sessionId);
         }
       },
@@ -892,10 +933,19 @@ export class MatchScene {
       onPaintStamps: (stamps) => {
         this.matchAudio.handlePaintStamps(stamps);
         for (const stamp of stamps) {
-          this.paint.addStamp(stamp);
+          const visual = this.resolvePaintGroupVisual(
+            stamp.paintGroupId,
+            stamp.color,
+            stamp.patternId,
+          );
+          const visualStamp =
+            visual.slimeColor === stamp.color && visual.patternId === stamp.patternId
+              ? stamp
+              : { ...stamp, color: visual.slimeColor, patternId: visual.patternId };
+          this.paint.addStamp(visualStamp);
           const planetState = this.planetPaint.get(stamp.planetId);
           if (planetState) {
-            appendPaintStamp(planetState, stamp);
+            appendPaintStamp(planetState, visualStamp);
           }
         }
       },
@@ -914,8 +964,13 @@ export class MatchScene {
         this.matchAudio.handleSnapshotPlayers(snapshot.players);
         for (const player of snapshot.players) {
           const isLocal = player.sessionId === localSessionId;
-          const slimeColor = player.slimeColor;
-          const patternId = player.patternId;
+          const visual = this.resolveTeamVisual(
+            player.sessionId,
+            player.slimeColor,
+            player.patternId,
+          );
+          const slimeColor = visual.slimeColor;
+          const patternId = visual.patternId;
           if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
           else {
             liveRemoteIds.add(player.sessionId);
@@ -934,7 +989,7 @@ export class MatchScene {
         const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
         this.leaderboard.update(message, this.connection.sessionId, timer, teamColors);
       },
-      onMatchPhase: (phase) => {
+      onMatchPhase: (phase, _timer, winningTeamId) => {
         this.currentPhase = phase;
         if (phase === MatchPhase.Countdown) {
           this.syncCenterCountdown(0);
@@ -949,7 +1004,7 @@ export class MatchScene {
           this.matchEnd.show(
             this.lastLeaderboard,
             this.connection.sessionId,
-            this.connection.winningTeamId,
+            winningTeamId ?? this.connection.winningTeamId,
             teamColors,
           );
           this.input.setEnabled(false);
@@ -1227,7 +1282,12 @@ export class MatchScene {
           this.gaugeActivityPulseSeq,
         );
         if (this.localTrail) {
-          this.localTrail.update(predictedLocalState, planetCenter, predictedLocalState.slimeColor);
+          const visual = this.resolveTeamVisual(
+            this.connection.sessionId ?? "",
+            predictedLocalState.slimeColor,
+            predictedLocalState.patternId,
+          );
+          this.localTrail.update(predictedLocalState, planetCenter, visual.slimeColor);
         }
         this.lastAimDir = this.camera.update(
           predictedLocalState.pos,
@@ -1257,11 +1317,16 @@ export class MatchScene {
           roomState?.isTeamBased && localSchemaPlayer !== undefined
             ? roomState.teamColors[localSchemaPlayer.teamId]
             : undefined;
+        const teamId =
+          roomState?.isTeamBased && localSchemaPlayer !== undefined
+            ? localSchemaPlayer.teamId
+            : undefined;
         this.combatHud.update(
           weaponLabel,
           predictedLocalState.health,
           GAME_CONFIG.player.maxHealth,
           teamColor,
+          teamId,
         );
       } else {
         this.lastLocalHealth = null;
@@ -1311,7 +1376,12 @@ export class MatchScene {
           );
           this.remoteTrails
             .get(sessionId)
-            ?.update(remoteState, nearestPlanetCenter(remotePos), remoteState.slimeColor);
+            ?.update(
+              remoteState,
+              nearestPlanetCenter(remotePos),
+              this.resolveTeamVisual(sessionId, remoteState.slimeColor, remoteState.patternId)
+                .slimeColor,
+            );
         }
       }
 

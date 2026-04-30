@@ -1,11 +1,11 @@
-import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type {
   KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
 } from "@splat/protocol/network/serverMessages.ts";
-import { countPaintableTerritoryCells } from "@splat/simulation/paint/territoryGrid.ts";
 import { formatKillFeedLine, type FormattedKillFeedLine } from "./formatKillFeedLine.ts";
+import { getTeamLabel } from "./teamPresentation.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 const MAX_DISPLAY_ENTRIES = 10;
@@ -14,10 +14,6 @@ const KILL_FEED_LIFETIME_MS = 4000;
 const KILL_FEED_ENTER_MS = 180;
 const KILL_FEED_FADE_MS = 900;
 const JOIN_PILL_LIFETIME_MS = 5000;
-const { rows: TOTAL_TERRITORY_ROWS, cols: TOTAL_TERRITORY_COLS } = getPaintTerritoryDimensions();
-const TOTAL_PAINTABLE_CELLS =
-  countPaintableTerritoryCells(TOTAL_TERRITORY_ROWS, TOTAL_TERRITORY_COLS) *
-  GAME_CONFIG.planet.count;
 
 interface ActiveKillFeedItem {
   createdAtMs: number;
@@ -150,6 +146,7 @@ export class LeaderboardOverlay {
       display: "grid",
       gap: "6px",
       marginBottom: "12px",
+      marginTop: "10px",
     });
 
     this.progressLabel = document.createElement("div");
@@ -211,9 +208,9 @@ export class LeaderboardOverlay {
 
     this.root.append(
       this.title,
-      this.list,
       this.progressLabel,
       this.progressBar,
+      this.list,
       this.killFeedSection,
       goalsSection,
       tipsSection,
@@ -267,6 +264,11 @@ export class LeaderboardOverlay {
 
     const isTeamMode = message.teamScores && message.teamScores.length > 0;
     this.isLeaderboardVisible = true;
+    this.progressLabel.textContent = isTeamMode ? "Team Coverage" : "Slime Coverage";
+
+    if (isTeamMode) {
+      this.renderTeamSummary(message, localSessionId, teamColors);
+    }
 
     const header = document.createElement("div");
     Object.assign(header.style, {
@@ -377,6 +379,10 @@ export class LeaderboardOverlay {
     message.teamScores.forEach((teamScore, teamId) => {
       const teamColor = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
       const colorHex = `#${teamColor.toString(16).padStart(6, "0")}`;
+      const teamLabel = getTeamLabel(teamId, teamColor);
+      const isLocalTeam = message.entries.some(
+        (entry) => entry.sessionId === localSessionId && entry.teamId === teamId,
+      );
 
       const teamHeader = document.createElement("div");
       Object.assign(teamHeader.style, {
@@ -390,17 +396,89 @@ export class LeaderboardOverlay {
         borderRadius: "4px",
         marginTop: "4px",
       });
-      teamHeader.innerHTML = `<span>Team ${teamId + 1}</span> <span>${Math.round(teamScore)}</span>`;
+      const label = document.createElement("span");
+      label.textContent = isLocalTeam ? `${teamLabel}  YOU` : teamLabel;
+      const score = document.createElement("span");
+      score.textContent = `${Math.round(teamScore)}`;
+      teamHeader.append(label, score);
       this.list.appendChild(teamHeader);
 
       const teamEntries = teams.get(teamId) || [];
-      teamEntries.slice(0, 5).forEach((entry) => this.renderEntry(entry, localSessionId));
+      teamEntries
+        .slice(0, 5)
+        .forEach((entry) => this.renderEntry(entry, localSessionId, teamColor, 0));
     });
   }
 
   private renderFFAEntries(message: LeaderboardMessage, localSessionId: string | null): void {
     const topEntries = message.entries.slice(0, MAX_DISPLAY_ENTRIES);
     topEntries.forEach((entry) => this.renderEntry(entry, localSessionId));
+  }
+
+  private renderTeamSummary(
+    message: LeaderboardMessage,
+    localSessionId: string | null,
+    teamColors: readonly number[],
+  ): void {
+    const localTeamId = message.entries.find((entry) => entry.sessionId === localSessionId)?.teamId;
+    const summary = document.createElement("div");
+    Object.assign(summary.style, {
+      display: "grid",
+      gridTemplateColumns: `repeat(${Math.max(1, message.teamScores.length)}, minmax(0, 1fr))`,
+      gap: "6px",
+      marginBottom: "8px",
+    });
+
+    message.teamScores.forEach((teamScore, teamId) => {
+      const teamColor = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
+      const hex = `#${teamColor.toString(16).padStart(6, "0")}`;
+      const r = (teamColor >> 16) & 0xff;
+      const g = (teamColor >> 8) & 0xff;
+      const b = teamColor & 0xff;
+
+      const item = document.createElement("div");
+      Object.assign(item.style, {
+        minWidth: "0",
+        padding: "7px 8px",
+        borderRadius: "6px",
+        background: `rgba(${r}, ${g}, ${b}, 0.12)`,
+        border:
+          localTeamId === teamId
+            ? `1px solid rgba(${r}, ${g}, ${b}, 0.72)`
+            : `1px solid rgba(${r}, ${g}, ${b}, 0.28)`,
+      });
+
+      const label = document.createElement("div");
+      label.textContent =
+        localTeamId === teamId
+          ? `${getTeamLabel(teamId, teamColor)}  YOU`
+          : getTeamLabel(teamId, teamColor);
+      Object.assign(label.style, {
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        color: hex,
+        fontSize: "0.66rem",
+        fontWeight: "bold",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+      });
+
+      const score = document.createElement("div");
+      score.textContent = `${Math.round(teamScore)}`;
+      Object.assign(score.style, {
+        marginTop: "3px",
+        color: "#f6f7fb",
+        fontSize: "1rem",
+        fontWeight: "bold",
+        fontVariantNumeric: "tabular-nums",
+      });
+
+      item.append(label, score);
+      summary.appendChild(item);
+    });
+
+    this.list.appendChild(summary);
   }
 
   private renderRecentLeaves(nowMs: number): void {
@@ -437,6 +515,7 @@ export class LeaderboardOverlay {
       backgroundImage: bg.backgroundImage,
       backgroundSize: bg.backgroundSize,
       flexShrink: "0",
+
     });
 
     const nameCell = document.createElement("span");
@@ -489,7 +568,12 @@ export class LeaderboardOverlay {
     this.list.appendChild(row);
   }
 
-  private renderEntry(entry: LeaderboardEntry, localSessionId: string | null): void {
+  private renderEntry(
+    entry: LeaderboardEntry,
+    localSessionId: string | null,
+    visualColor = entry.slimeColor,
+    visualPatternId = entry.patternId,
+  ): void {
     const row = document.createElement("div");
     Object.assign(row.style, {
       display: "grid",
@@ -503,7 +587,7 @@ export class LeaderboardOverlay {
     });
 
     const swatch = document.createElement("div");
-    const bg = swatchBackground({ color: entry.slimeColor, patternId: entry.patternId });
+    const bg = swatchBackground({ color: visualColor, patternId: visualPatternId });
     Object.assign(swatch.style, {
       width: "14px",
       height: "14px",
@@ -521,7 +605,7 @@ export class LeaderboardOverlay {
 
     const name = document.createElement("span");
     name.textContent = entry.sessionId === localSessionId ? `${entry.name}*` : entry.name;
-    name.style.color = `#${entry.slimeColor.toString(16).padStart(6, "0")}`;
+    name.style.color = `#${visualColor.toString(16).padStart(6, "0")}`;
     name.style.whiteSpace = "nowrap";
     name.style.overflow = "hidden";
     name.style.textOverflow = "ellipsis";
@@ -570,34 +654,32 @@ export class LeaderboardOverlay {
   }
 
   private renderTeamProgressBar(message: LeaderboardMessage, teamColors: readonly number[]): void {
-    let totalClaimed = 0;
+    const totalScore = message.teamScores.reduce((sum, score) => sum + Math.max(0, score), 0);
     message.teamScores.forEach((score, teamId) => {
-      const width = (score / TOTAL_PAINTABLE_CELLS) * 100;
-      totalClaimed += width;
-      if (width > 0) {
-        const color = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
-        const segment = this.createProgressSegment(color, 0, width);
-        this.progressBar.appendChild(segment);
-      }
+      const width =
+        totalScore > 0 ? (Math.max(0, score) / totalScore) * 100 : 100 / message.teamScores.length;
+      const color = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
+      const segment = this.createProgressSegment(color, 0, width);
+      segment.title = `${getTeamLabel(teamId, color)} ${Math.round(score)}`;
+      this.progressBar.appendChild(segment);
     });
-    this.addUncontestedSegment(totalClaimed);
   }
 
   private renderFFAProgressBar(message: LeaderboardMessage): void {
-    let totalClaimed = 0;
     const stableEntries = [...message.entries].sort((a, b) =>
       a.sessionId.localeCompare(b.sessionId),
     );
+    const totalScore = stableEntries.reduce((sum, entry) => sum + Math.max(0, entry.paintScore), 0);
 
     stableEntries.forEach((entry) => {
-      const width = (entry.paintScore / TOTAL_PAINTABLE_CELLS) * 100;
-      totalClaimed += width;
-      if (width > 0.5) {
-        const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);
-        this.progressBar.appendChild(segment);
-      }
+      const width =
+        totalScore > 0
+          ? (Math.max(0, entry.paintScore) / totalScore) * 100
+          : 100 / stableEntries.length;
+      const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);
+      segment.title = `${entry.name} ${Math.round(entry.paintScore)}`;
+      this.progressBar.appendChild(segment);
     });
-    this.addUncontestedSegment(totalClaimed);
   }
 
   private createProgressSegment(color: number, patternId: number, width: number): HTMLDivElement {
@@ -611,20 +693,6 @@ export class LeaderboardOverlay {
       transition: "width 300ms ease-out",
     });
     return segment;
-  }
-
-  private addUncontestedSegment(claimedWidth: number): void {
-    const uncontestedWidth = Math.max(0, 100 - claimedWidth);
-    if (uncontestedWidth > 0) {
-      const segment = document.createElement("div");
-      Object.assign(segment.style, {
-        height: "100%",
-        width: `${uncontestedWidth}%`,
-        background: "rgba(255, 255, 255, 0.1)",
-        transition: "width 300ms ease-out",
-      });
-      this.progressBar.appendChild(segment);
-    }
   }
 
   private createKillFeedRow(formatted: FormattedKillFeedLine): HTMLDivElement {

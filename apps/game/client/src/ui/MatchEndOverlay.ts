@@ -2,6 +2,7 @@ import type {
   LeaderboardEntry,
   LeaderboardMessage,
 } from "@splat/protocol/network/serverMessages.ts";
+import { getTeamLabel } from "./teamPresentation.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 export class MatchEndOverlay {
@@ -123,17 +124,18 @@ export class MatchEndOverlay {
     const localEntry = message.entries.find((e) => e.sessionId === localSessionId);
     const localTeamId = localEntry?.teamId;
     const localWon = localTeamId !== undefined && localTeamId === winningTeamId;
+    const winningTeamColor = teamColors[winningTeamId] ?? 0xffffff;
+    const winningTeamLabel = getTeamLabel(winningTeamId, winningTeamColor);
 
     // Subtitle — personal outcome
     if (localEntry) {
-      this.subtitle.textContent = localWon ? "Your team wins!" : "Your team loses.";
-      const winColor = teamColors[winningTeamId] ?? 0xffffff;
+      this.subtitle.textContent = `${winningTeamLabel} wins! ${localWon ? "Victory" : "Defeat"}`;
       this.subtitle.style.color = localWon
-        ? `#${winColor.toString(16).padStart(6, "0")}`
+        ? `#${winningTeamColor.toString(16).padStart(6, "0")}`
         : "#9fb3c8";
     } else {
-      this.subtitle.textContent = `Team ${winningTeamId + 1} wins!`;
-      this.subtitle.style.color = `#${(teamColors[winningTeamId] ?? 0xffffff).toString(16).padStart(6, "0")}`;
+      this.subtitle.textContent = `${winningTeamLabel} wins!`;
+      this.subtitle.style.color = `#${winningTeamColor.toString(16).padStart(6, "0")}`;
     }
     Object.assign(this.subtitle.style, {
       background: "",
@@ -172,7 +174,7 @@ export class MatchEndOverlay {
       const color = teamColors[teamId] ?? 0xffffff;
       this.list.appendChild(this.renderTeamHeader(teamId, color, teamId === winningTeamId));
       for (const [i, entry] of entries.entries()) {
-        this.list.appendChild(this.renderEntry(entry, i + 1, localSessionId, false));
+        this.list.appendChild(this.renderEntry(entry, i + 1, localSessionId, false, color, 0));
       }
     }
   }
@@ -311,7 +313,8 @@ export class MatchEndOverlay {
       color: hex,
       background: `rgba(${r},${g},${b},0.12)`,
     });
-    header.textContent = isWinner ? `Team ${teamId + 1}  ★` : `Team ${teamId + 1}`;
+    const teamLabel = getTeamLabel(teamId, color);
+    header.textContent = isWinner ? `${teamLabel}  ★` : teamLabel;
     return header;
   }
 
@@ -349,6 +352,8 @@ export class MatchEndOverlay {
     placement: number,
     localSessionId: string | null,
     showPlacement: boolean,
+    visualColor = entry.slimeColor,
+    visualPatternId = entry.patternId,
   ): HTMLDivElement {
     const cols = showPlacement ? "24px 1fr 30px 30px 50px" : "1fr 30px 30px 50px";
     const row = document.createElement("div");
@@ -363,7 +368,7 @@ export class MatchEndOverlay {
       background: entry.sessionId === localSessionId ? "rgba(255, 255, 255, 0.1)" : "transparent",
     });
 
-    const bg = swatchBackground({ color: entry.slimeColor, patternId: entry.patternId });
+    const bg = swatchBackground({ color: visualColor, patternId: visualPatternId });
     const swatch = document.createElement("div");
     Object.assign(swatch.style, {
       width: "14px",
@@ -384,7 +389,7 @@ export class MatchEndOverlay {
     const name = document.createElement("span");
     name.textContent = entry.sessionId === localSessionId ? `${entry.name}*` : entry.name;
     Object.assign(name.style, {
-      color: `#${entry.slimeColor.toString(16).padStart(6, "0")}`,
+      color: `#${visualColor.toString(16).padStart(6, "0")}`,
       whiteSpace: "nowrap",
       overflow: "hidden",
       textOverflow: "ellipsis",

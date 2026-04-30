@@ -79,7 +79,11 @@ if (!skipJoinScreen && overlay) {
 
   const refreshTakenColors = async (): Promise<void> => {
     try {
-      const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
+      const res = await colyseusClient.http.get<{
+        takenColorIndices: number[];
+        isTeamBased?: boolean;
+      }>("/colors");
+      overlay.setTeamMode(res.data.isTeamBased === true);
       overlay.setTakenColorIndices(res.data.takenColorIndices ?? []);
     } catch {
       // server not up yet — all colors available

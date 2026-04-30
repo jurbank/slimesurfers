@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import { TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
+import { NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import {
@@ -8,6 +10,7 @@ import {
   buildJoinBootstrap,
   buildTickBroadcasts,
   createRoomState,
+  syncRoomWinnerFromSimulation,
   syncRoomStateFromSimulation,
 } from "./matchRoomReplication.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
@@ -128,5 +131,22 @@ describe("matchRoomReplication", () => {
     expect(state.players.get(alpha.sessionId)?.paintScore).toBe(1);
     expect(state.planets.get("planet-0")?.cells[0]?.ownerPaintGroupId).toBe(alpha.paintGroupId);
     expect(state.planets.get("planet-0")?.territoryRows).toBe(rows);
+  });
+
+  it("replicates the winning team in schema state at match end", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    simulation.addPlayer("session-1", "Alpha");
+    simulation.addPlayer("session-2", "Bravo");
+    simulation.matchState.scores.set("0", 12);
+    simulation.matchState.scores.set("1", 4);
+    const state = createRoomState(simulation.matchState, simulation.mode);
+
+    syncRoomWinnerFromSimulation(state, simulation);
+    expect(state.winningTeamId).toBe(NO_WINNING_TEAM_ID);
+
+    simulation.matchState.matchPhase = MatchPhase.Ended;
+    syncRoomWinnerFromSimulation(state, simulation);
+
+    expect(state.winningTeamId).toBe(0);
   });
 });

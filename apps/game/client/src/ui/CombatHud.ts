@@ -1,3 +1,5 @@
+import { getTeamLabel } from "./teamPresentation.ts";
+
 const OUTER_MIN_HALF_PX = 20;
 const OUTER_MAX_HALF_PX = 90;
 const INNER_HALF_PX = 14;
@@ -213,7 +215,13 @@ export class CombatHud {
     document.body.appendChild(this.sniperScopeRoot);
   }
 
-  update(weaponLabel: string, health: number, maxHealth: number, teamColor?: number): void {
+  update(
+    weaponLabel: string,
+    health: number,
+    maxHealth: number,
+    teamColor?: number,
+    teamId?: number,
+  ): void {
     this.root.style.display = "flex";
     this.crosshair.style.display = "block";
     this.weaponLabel.textContent = weaponLabel;
@@ -230,7 +238,8 @@ export class CombatHud {
       this.teamPill.style.color = hex;
       this.teamPill.style.background = `rgba(${r}, ${g}, ${b}, 0.18)`;
       this.teamPill.style.border = `1px solid rgba(${r}, ${g}, ${b}, 0.45)`;
-      this.teamPill.textContent = "Your Team";
+      this.teamPill.textContent =
+        teamId === undefined ? "Your Team" : getTeamLabel(teamId, teamColor).toUpperCase();
     } else {
       this.teamPill.style.display = "none";
     }

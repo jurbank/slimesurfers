@@ -17,6 +17,7 @@ import {
   buildJoinBootstrap,
   buildTickBroadcasts,
   createRoomState,
+  syncRoomWinnerFromSimulation,
   syncRoomStateFromSimulation,
 } from "./matchRoomReplication.ts";
 import type { LeaderboardEntry } from "@splat/protocol/network/serverMessages.ts";
@@ -33,6 +34,7 @@ interface MatchRoomCreateOptions {
 
 interface MatchRoomMetadata {
   devClusterSpawns: boolean;
+  isTeamBased: boolean;
   takenColorIndices?: number[];
 }
 
@@ -45,9 +47,9 @@ function resolveWeaponPickupLayout(): "map" | "cluster" {
 }
 
 function resolveMatchMode(options: MatchRoomCreateOptions): string | undefined {
-  if (process.env.NODE_ENV !== "production" && options.devClusterSpawns === true) return "dev";
   if (typeof options.matchMode === "string") return options.matchMode;
   if (process.env.MATCH_MODE) return process.env.MATCH_MODE;
+  if (process.env.NODE_ENV !== "production" && options.devClusterSpawns === true) return "dev";
   return undefined;
 }
 
@@ -181,6 +183,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   private updateRoomMetadata(): Promise<void> {
     return this.setMetadata({
       devClusterSpawns: this.devClusterSpawns,
+      isTeamBased: this.simulation.mode.isTeamBased,
       takenColorIndices: this.simulation.takenColorIndices(),
     });
   }
@@ -257,7 +260,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     }
 
     if (changed) {
-      void this.setMetadata({ takenColorIndices: this.simulation.takenColorIndices() });
+      void this.updateRoomMetadata();
     }
   }
 
@@ -339,6 +342,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     const result = this.simulation.tick(dt);
     this.maybePostBotEmotes(dt);
     syncRoomStateFromSimulation(this.state, this.simulation.matchState);
+    syncRoomWinnerFromSimulation(this.state, this.simulation);
 
     const broadcasts = buildTickBroadcasts(result, this.simulation);
     if (broadcasts.matchPhase) {

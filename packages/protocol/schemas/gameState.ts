@@ -7,6 +7,8 @@ import { PlanetPaintState, RailPaintState } from "./paintedState.ts";
 import { MatchPhase } from "../network/matchPhase.ts";
 export { MatchPhase };
 
+export const NO_WINNING_TEAM_ID = 255;
+
 // -- GameState (root Colyseus room state) ------------------------------------
 
 export class GameState extends Schema {
@@ -26,6 +28,8 @@ export class GameState extends Schema {
   declare isTeamBased: boolean;
   /** Team colors in team-index order (0xRRGGBB). Empty for FFA. */
   declare teamColors: ArraySchema<number>;
+  /** Winning team index when the match has ended. NO_WINNING_TEAM_ID means unset/FFA. */
+  declare winningTeamId: number;
 }
 defineTypes(GameState, {
   players: { map: PlayerState },
@@ -36,4 +40,5 @@ defineTypes(GameState, {
   scores: { map: "uint32" },
   isTeamBased: "boolean",
   teamColors: ["uint32"],
+  winningTeamId: "uint8",
 });

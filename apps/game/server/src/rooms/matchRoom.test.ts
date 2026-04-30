@@ -103,13 +103,39 @@ describe("MatchRoom", () => {
     const previousMode = process.env.MATCH_MODE;
     const previousNodeEnv = process.env.NODE_ENV;
     try {
-      process.env.MATCH_MODE = "ffa";
+      delete process.env.MATCH_MODE;
       process.env.NODE_ENV = "development";
 
       const harness = createRoomHarness({ devClusterSpawns: true });
 
       expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
         "dev",
+      );
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.MATCH_MODE;
+      } else {
+        process.env.MATCH_MODE = previousMode;
+      }
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
+  });
+
+  it("does not let dev cluster spawns override the configured server match mode", () => {
+    const previousMode = process.env.MATCH_MODE;
+    const previousNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.MATCH_MODE = "teams";
+      process.env.NODE_ENV = "development";
+
+      const harness = createRoomHarness({ devClusterSpawns: true });
+
+      expect((harness.room as unknown as { simulation: MatchSimulation }).simulation.mode.id).toBe(
+        "teams",
       );
     } finally {
       if (previousMode === undefined) {

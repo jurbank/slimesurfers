@@ -81,10 +81,9 @@ function buildTeamSlots(
   const teamCount = Math.max(1, teamColors.length);
   for (let playerIndex = 0; playerIndex < count; playerIndex++) {
     const teamId = playerIndex % teamCount;
-    const teamCycle = Math.floor(playerIndex / teamCount);
     slots.push({
       color: teamColors[teamId] ?? 0xffffff,
-      patternId: teamCycle % PATTERN_COUNT,
+      patternId: 0,
       teamId,
     });
   }
