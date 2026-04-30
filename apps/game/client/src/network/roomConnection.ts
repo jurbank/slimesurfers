@@ -3,7 +3,11 @@ import { colyseusClient } from "./colyseusClient.ts";
 import { GameState, NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
-import type { EmotePostMessage, InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import type {
+  EmotePostMessage,
+  InputMessage,
+  MatchModeId,
+} from "@splat/protocol/network/clientMessages.ts";
 import type {
   EmoteEventBatchMessage,
   EmoteEventMessage,
@@ -47,6 +51,14 @@ export interface RoomCallbacks {
   onDisconnect(): void;
 }
 
+export interface MatchJoinConfig {
+  name: string;
+  colorIndex: number;
+  playerUuid: string | null;
+  matchMode: MatchModeId;
+  teamId?: number;
+}
+
 export class RoomConnection {
   private room: Room<unknown, GameState> | null = null;
   private _winningTeamId: number | undefined = undefined;
@@ -84,18 +96,13 @@ export class RoomConnection {
     }
   }
 
-  async join(
-    name: string,
-    colorIndex: number,
-    playerUuid: string | null,
-    callbacks: RoomCallbacks,
-  ): Promise<void> {
+  async join(options: MatchJoinConfig, callbacks: RoomCallbacks): Promise<void> {
     this._winningTeamId = undefined;
     const devClusterSpawns =
       import.meta.env.DEV && import.meta.env.VITE_CLUSTER_PLAYER_SPAWNS === "true";
     this.room = await colyseusClient.joinOrCreate(
       "match",
-      { name, colorIndex, playerUuid, devClusterSpawns },
+      { ...options, devClusterSpawns },
       GameState,
     );
 

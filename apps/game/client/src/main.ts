@@ -1,7 +1,8 @@
-import { JoinOverlay } from "./ui/JoinOverlay.ts";
+import { JoinOverlay, type LobbySummary } from "./ui/JoinOverlay.ts";
 import { MatchScene } from "./scenes/matchScene.ts";
 import { colyseusClient } from "./network/colyseusClient.ts";
 import { getOrCreatePlayerUuid } from "./network/supabaseClient.ts";
+import type { MatchModeId } from "@splat/protocol/network/clientMessages.ts";
 
 const scene = new MatchScene();
 const skipJoinScreen = import.meta.env.DEV && import.meta.env.VITE_SKIP_JOIN_SCREEN === "true";
@@ -23,10 +24,16 @@ const getDevPlayerName = (): string => {
   return name;
 };
 
-const connect = async (name: string, colorIndex: number, onError: () => void): Promise<boolean> => {
+const connect = async (
+  name: string,
+  colorIndex: number,
+  onError: () => void,
+  matchMode: MatchModeId = "ffa",
+  teamId?: number,
+): Promise<boolean> => {
   try {
     const playerUuid = await playerUuidPromise;
-    await scene.connect(name, colorIndex, playerUuid);
+    await scene.connect(name, colorIndex, playerUuid, matchMode, teamId);
     return true;
   } catch (err) {
     console.error(err);
@@ -77,23 +84,19 @@ async function startDevAutoJoin(): Promise<void> {
 if (!skipJoinScreen && overlay) {
   let pollInterval: number | null = null;
 
-  const refreshTakenColors = async (): Promise<void> => {
+  const refreshLobbies = async (): Promise<void> => {
     try {
-      const res = await colyseusClient.http.get<{
-        takenColorIndices: number[];
-        isTeamBased?: boolean;
-      }>("/colors");
-      overlay.setTeamMode(res.data.isTeamBased === true);
-      overlay.setTakenColorIndices(res.data.takenColorIndices ?? []);
+      const res = await colyseusClient.http.get<LobbySummary>("/lobbies");
+      overlay.setLobbySummary(res.data);
     } catch {
-      // server not up yet — all colors available
+      // server not up yet — keep local defaults
     }
   };
 
   const startPolling = (): void => {
     if (pollInterval !== null) return;
-    void refreshTakenColors();
-    pollInterval = window.setInterval(() => void refreshTakenColors(), 2000);
+    void refreshLobbies();
+    pollInterval = window.setInterval(() => void refreshLobbies(), 2000);
   };
 
   const stopPolling = (): void => {
@@ -110,13 +113,19 @@ if (!skipJoinScreen && overlay) {
     startPolling();
   });
 
-  overlay.onJoin(async (name, colorIndex) => {
+  overlay.onJoin(async (selection) => {
     stopPolling();
     overlay.setConnecting();
-    const connected = await connect(name, colorIndex, () => {
-      overlay.show("Could not connect. Is the server running?");
-      startPolling();
-    });
+    const connected = await connect(
+      selection.name,
+      selection.colorIndex,
+      () => {
+        overlay.show("Could not connect. Is the server running?");
+        startPolling();
+      },
+      selection.matchMode,
+      selection.teamId,
+    );
     if (connected) {
       overlay.hide();
       scene.requestPointerCapture();

@@ -1,4 +1,5 @@
-import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
+import { FFA_MODE, TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
+import type { MatchModeId } from "@splat/protocol/network/clientMessages.ts";
 import { isProfane } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
 import {
@@ -14,6 +15,37 @@ const GUEST_PLAYER_NAME_STORAGE_KEY = "splat.guestPlayerName";
 const DESKTOP_HINT_SHOWN_KEY = "splat.desktopHintShown";
 const GLOBAL_LEADERBOARD_WINDOW: GlobalLeaderboardWindow = "all_time";
 
+export interface LobbyPlayerSummary {
+  name: string;
+  isBot: boolean;
+  teamId: number;
+  colorIndex: number;
+  slimeColor: number;
+  patternId: number;
+}
+
+export interface ModeLobbySummary {
+  matchMode: MatchModeId;
+  displayName: string;
+  isTeamBased: boolean;
+  teamColors: number[];
+  takenColorIndices: number[];
+  players: LobbyPlayerSummary[];
+  teamCounts: number[];
+  suggestedTeamId?: number;
+}
+
+export interface LobbySummary {
+  modes: Record<MatchModeId, ModeLobbySummary>;
+}
+
+export interface JoinSelection {
+  name: string;
+  matchMode: MatchModeId;
+  colorIndex: number;
+  teamId?: number;
+}
+
 export class JoinOverlay {
   private readonly root: HTMLDivElement;
   private readonly nameInput: HTMLInputElement;
@@ -23,12 +55,19 @@ export class JoinOverlay {
   private readonly progressBar: HTMLDivElement;
   private readonly colorLabel: HTMLParagraphElement;
   private readonly swatchRow: HTMLDivElement;
+  private readonly modeButtons = new Map<MatchModeId, HTMLButtonElement>();
+  private readonly ffaPlayersList: HTMLDivElement;
+  private readonly teamSelection: HTMLDivElement;
   private readonly leaderboardList: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
   private readonly guestPlayerName: string;
   private readonly video: HTMLVideoElement;
   private readonly leaderboardCache = new Map<GlobalLeaderboardWindow, GlobalLeaderboardEntry[]>();
   private selectedIndex = 0;
+  private selectedMode: MatchModeId = "ffa";
+  private selectedTeamId = 0;
+  private hasManualTeamSelection = false;
+  private lobbySummary: LobbySummary | null = null;
   private isLoading = true;
   private isTeamMode = false;
 
@@ -162,6 +201,36 @@ export class JoinOverlay {
       marginBottom: "8px",
     });
 
+    const modeSelector = document.createElement("div");
+    Object.assign(modeSelector.style, {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: "8px",
+      width: "300px",
+      maxWidth: "calc(100vw - 32px)",
+      marginBottom: "4px",
+    });
+
+    for (const mode of [FFA_MODE, TEAMS_MODE]) {
+      const matchMode = mode.id as MatchModeId;
+      const btn = document.createElement("button");
+      btn.textContent = mode.displayName.toUpperCase();
+      Object.assign(btn.style, {
+        padding: "9px 10px",
+        borderRadius: "6px",
+        border: "1px solid rgba(255,255,255,0.24)",
+        background: "rgba(8, 10, 20, 0.74)",
+        color: "#cfe8f3",
+        cursor: "pointer",
+        fontSize: "0.78rem",
+        fontWeight: "800",
+        letterSpacing: "0.08em",
+      });
+      btn.addEventListener("click", () => this.selectMode(matchMode));
+      this.modeButtons.set(matchMode, btn);
+      modeSelector.appendChild(btn);
+    }
+
     this.colorLabel = document.createElement("p");
     this.colorLabel.textContent = "Choose your player / slime color";
     Object.assign(this.colorLabel.style, {
@@ -203,6 +272,25 @@ export class JoinOverlay {
       });
       this.swatches.push(btn);
       this.swatchRow.appendChild(btn);
+    });
+
+    this.ffaPlayersList = document.createElement("div");
+    Object.assign(this.ffaPlayersList.style, {
+      display: "grid",
+      gap: "4px",
+      width: "300px",
+      maxWidth: "calc(100vw - 32px)",
+      margin: "-4px 0 12px",
+    });
+
+    this.teamSelection = document.createElement("div");
+    Object.assign(this.teamSelection.style, {
+      display: "none",
+      gridTemplateColumns: "1fr 1fr",
+      gap: "8px",
+      width: "360px",
+      maxWidth: "calc(100vw - 32px)",
+      marginBottom: "16px",
     });
 
     this.joinBtn = document.createElement("button");
@@ -252,8 +340,11 @@ export class JoinOverlay {
       subtitle,
       this.progressContainer,
       this.nameInput,
+      modeSelector,
       this.colorLabel,
       this.swatchRow,
+      this.ffaPlayersList,
+      this.teamSelection,
       this.joinBtn,
       this.statusText,
       leaderboardPanel,
@@ -263,6 +354,7 @@ export class JoinOverlay {
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
+    this.selectMode("ffa");
     void this.loadGlobalLeaderboard();
     this.focusNameInput();
     JoinOverlay.maybeShowDesktopHint();
@@ -435,13 +527,232 @@ export class JoinOverlay {
     this.leaderboardList.appendChild(row);
   }
 
+  setLobbySummary(summary: LobbySummary): void {
+    this.lobbySummary = summary;
+    const suggested = summary.modes.teams.suggestedTeamId;
+    if (this.selectedMode === "teams" && !this.hasManualTeamSelection) {
+      this.selectedTeamId = suggested ?? 0;
+    }
+    this.renderModePanels();
+    this.setTakenColorIndices(summary.modes.ffa.takenColorIndices);
+  }
+
+  private selectMode(mode: MatchModeId): void {
+    this.selectedMode = mode;
+    const suggested = this.lobbySummary?.modes.teams.suggestedTeamId;
+    if (mode === "teams" && !this.hasManualTeamSelection && suggested !== undefined) {
+      this.selectedTeamId = suggested;
+    }
+    this.setTeamMode(mode === "teams");
+    this.renderModeButtons();
+    this.renderModePanels();
+  }
+
+  private renderModeButtons(): void {
+    for (const [mode, btn] of this.modeButtons) {
+      const selected = mode === this.selectedMode;
+      btn.style.background = selected ? "#00e5ff" : "rgba(8, 10, 20, 0.74)";
+      btn.style.color = selected ? "#001018" : "#cfe8f3";
+      btn.style.borderColor = selected ? "#00e5ff" : "rgba(255,255,255,0.24)";
+    }
+  }
+
+  private renderModePanels(): void {
+    const summary = this.lobbySummary;
+    if (!summary) {
+      this.renderFfaPlayers([]);
+      this.renderTeams(TEAMS_MODE.teamColors, [], 0, []);
+      return;
+    }
+    this.renderFfaPlayers(summary.modes.ffa.players);
+    this.renderTeams(
+      summary.modes.teams.teamColors,
+      summary.modes.teams.teamCounts,
+      summary.modes.teams.suggestedTeamId ?? 0,
+      summary.modes.teams.players,
+    );
+  }
+
+  private renderFfaPlayers(players: LobbyPlayerSummary[]): void {
+    this.ffaPlayersList.replaceChildren();
+    if (this.selectedMode !== "ffa") return;
+
+    const title = this.renderLobbySectionTitle(`Players (${players.length})`);
+    this.ffaPlayersList.appendChild(title);
+
+    if (players.length === 0) {
+      this.ffaPlayersList.appendChild(this.renderEmptyLobbyLine("No players yet"));
+      return;
+    }
+
+    for (const player of players) {
+      const row = document.createElement("div");
+      Object.assign(row.style, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        minHeight: "24px",
+        padding: "3px 6px",
+        borderRadius: "6px",
+        background: "rgba(255,255,255,0.06)",
+        color: "#f6f7fb",
+        fontSize: "0.8rem",
+      });
+      const bg = swatchBackground({ color: player.slimeColor, patternId: player.patternId });
+      const swatch = document.createElement("span");
+      Object.assign(swatch.style, {
+        width: "12px",
+        height: "12px",
+        borderRadius: "50%",
+        backgroundImage: bg.backgroundImage,
+        backgroundSize: bg.backgroundSize,
+        flexShrink: "0",
+      });
+      const name = document.createElement("span");
+      name.textContent = player.isBot ? `${player.name} BOT` : player.name;
+      Object.assign(name.style, {
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      });
+      row.append(swatch, name);
+      this.ffaPlayersList.appendChild(row);
+    }
+  }
+
+  private renderTeams(
+    teamColors: readonly number[],
+    teamCounts: readonly number[],
+    suggestedTeamId: number,
+    players: readonly LobbyPlayerSummary[],
+  ): void {
+    this.teamSelection.replaceChildren();
+    if (this.selectedMode !== "teams") return;
+
+    const teamCount = Math.max(teamColors.length, teamCounts.length, TEAMS_MODE.teamCount);
+    for (let teamId = 0; teamId < teamCount; teamId++) {
+      const color = teamColors[teamId] ?? TEAMS_MODE.teamColors[teamId] ?? 0xffffff;
+      const colorHex = `#${color.toString(16).padStart(6, "0")}`;
+      const selected = this.selectedTeamId === teamId;
+      const suggested = suggestedTeamId === teamId;
+      const card = document.createElement("button");
+      Object.assign(card.style, {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: "8px",
+        minHeight: "132px",
+        padding: "10px",
+        borderRadius: "8px",
+        border: selected ? `2px solid ${colorHex}` : "1px solid rgba(255,255,255,0.16)",
+        background: selected ? "rgba(255,255,255,0.12)" : "rgba(8, 10, 20, 0.78)",
+        color: "#f6f7fb",
+        cursor: "pointer",
+        textAlign: "left",
+      });
+      card.addEventListener("click", () => {
+        this.selectedTeamId = teamId;
+        this.hasManualTeamSelection = true;
+        this.renderModePanels();
+      });
+
+      const header = document.createElement("div");
+      Object.assign(header.style, {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "6px",
+      });
+      const label = document.createElement("span");
+      label.textContent = `Team ${teamId + 1}`;
+      Object.assign(label.style, {
+        color: colorHex,
+        fontWeight: "800",
+        fontSize: "0.82rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+      });
+      const count = document.createElement("span");
+      count.textContent = `${teamCounts[teamId] ?? 0}`;
+      Object.assign(count.style, {
+        color: "#fff",
+        fontWeight: "800",
+        fontVariantNumeric: "tabular-nums",
+      });
+      header.append(label, count);
+
+      const hint = document.createElement("div");
+      hint.textContent = suggested ? "SUGGESTED" : selected ? "SELECTED" : "";
+      Object.assign(hint.style, {
+        minHeight: "13px",
+        color: suggested ? "#ffd166" : "#9fb3c8",
+        fontSize: "0.65rem",
+        fontWeight: "800",
+        letterSpacing: "0.08em",
+      });
+
+      const list = document.createElement("div");
+      Object.assign(list.style, {
+        display: "grid",
+        gap: "4px",
+        color: "#cfe8f3",
+        fontSize: "0.76rem",
+      });
+      const teamPlayers = players.filter((player) => player.teamId === teamId);
+      if (teamPlayers.length === 0) {
+        list.appendChild(this.renderEmptyLobbyLine("Empty"));
+      } else {
+        for (const player of teamPlayers) {
+          const item = document.createElement("div");
+          item.textContent = player.isBot ? `${player.name} BOT` : player.name;
+          Object.assign(item.style, {
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          });
+          list.appendChild(item);
+        }
+      }
+
+      card.append(header, hint, list);
+      this.teamSelection.appendChild(card);
+    }
+  }
+
+  private renderLobbySectionTitle(text: string): HTMLDivElement {
+    const title = document.createElement("div");
+    title.textContent = text;
+    Object.assign(title.style, {
+      color: "#9fb3c8",
+      fontSize: "0.68rem",
+      fontWeight: "800",
+      letterSpacing: "0.1em",
+      textTransform: "uppercase",
+      textAlign: "center",
+    });
+    return title;
+  }
+
+  private renderEmptyLobbyLine(text: string): HTMLDivElement {
+    const line = document.createElement("div");
+    line.textContent = text;
+    Object.assign(line.style, {
+      color: "#6b7d8f",
+      fontSize: "0.76rem",
+      fontStyle: "italic",
+      textAlign: "center",
+      padding: "4px",
+    });
+    return line;
+  }
+
   setProgress(percent: number): void {
     this.progressBar.style.width = `${percent}%`;
     if (percent >= 100 && this.isLoading) {
       this.isLoading = false;
       this.joinBtn.disabled = false;
-      this.joinBtn.textContent = "JOIN";
-      this.joinBtn.style.background = "#00e5ff";
+      this.joinBtn.textContent = "PLAY";
+      this.joinBtn.style.background = "#cbed02";
       this.joinBtn.style.color = "#000";
       this.joinBtn.style.cursor = "pointer";
       this.statusText.textContent = "";
@@ -457,7 +768,6 @@ export class JoinOverlay {
   }
 
   setTakenColorIndices(taken: number[]): void {
-    if (this.isTeamMode) return;
     const takenSet = new Set(taken);
     this.swatches.forEach((btn, i) => {
       const isTaken = takenSet.has(i);
@@ -477,13 +787,17 @@ export class JoinOverlay {
     if (isTeamMode) {
       this.colorLabel.textContent = "Team colors are assigned automatically";
       this.swatchRow.style.display = "none";
+      this.ffaPlayersList.style.display = "none";
+      this.teamSelection.style.display = "grid";
     } else {
       this.colorLabel.textContent = "Choose your player / slime color";
       this.swatchRow.style.display = "flex";
+      this.ffaPlayersList.style.display = "grid";
+      this.teamSelection.style.display = "none";
     }
   }
 
-  onJoin(callback: (name: string, colorIndex: number) => void): void {
+  onJoin(callback: (selection: JoinSelection) => void): void {
     const submit = (): void => {
       const rawName = this.nameInput.value.trim();
       if (rawName && isProfane(rawName)) {
@@ -492,7 +806,12 @@ export class JoinOverlay {
         return;
       }
       const name = rawName || this.guestPlayerName;
-      callback(name, this.isTeamMode ? -1 : this.selectedIndex);
+      callback({
+        name,
+        matchMode: this.selectedMode,
+        colorIndex: this.selectedMode === "ffa" ? this.selectedIndex : -1,
+        teamId: this.selectedMode === "teams" ? this.selectedTeamId : undefined,
+      });
     };
     this.joinBtn.addEventListener("click", submit);
     this.nameInput.addEventListener("keydown", (e) => {
@@ -511,7 +830,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => {});
+    void this.video.play().catch(() => { });
   }
 
   hide(): void {

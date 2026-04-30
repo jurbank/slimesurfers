@@ -430,9 +430,17 @@ export class MatchSimulation {
     return Array.from(this.simState.players.values()).map((p) => p.paletteIndex);
   }
 
-  private resolveBalancedSlot(playerIndex: number): AssignedPlayerSlot {
+  private resolveBalancedSlot(playerIndex: number, requestedTeamId?: unknown): AssignedPlayerSlot {
     if (!this.mode.isTeamBased || this.mode.teamCount === 0) {
       return this.mode.assignPlayerSlot(playerIndex);
+    }
+    if (
+      typeof requestedTeamId === "number" &&
+      Number.isSafeInteger(requestedTeamId) &&
+      requestedTeamId >= 0 &&
+      requestedTeamId < this.mode.teamCount
+    ) {
+      return { teamId: requestedTeamId, paintGroupId: requestedTeamId };
     }
     const counts: number[] = [];
     for (let t = 0; t < this.mode.teamCount; t++) counts.push(0);
@@ -487,9 +495,14 @@ export class MatchSimulation {
     return playerIndex % paletteLen;
   }
 
-  addPlayer(sessionId: string, name?: unknown, requestedColorIndex?: unknown): SimPlayerState {
+  addPlayer(
+    sessionId: string,
+    name?: unknown,
+    requestedColorIndex?: unknown,
+    requestedTeamId?: unknown,
+  ): SimPlayerState {
     const playerIndex = this.playerCount++;
-    const assignedSlot = this.resolveBalancedSlot(playerIndex);
+    const assignedSlot = this.resolveBalancedSlot(playerIndex, requestedTeamId);
     const paletteIndex = this.resolvePaletteIndex(
       playerIndex,
       requestedColorIndex,

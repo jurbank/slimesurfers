@@ -8,7 +8,7 @@ import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { MatchRoom } from "./matchRoom.ts";
 
-function createRoomHarness() {
+function createRoomHarness(options?: Parameters<MatchRoom["onCreate"]>[0]) {
   const room = new MatchRoom();
   const broadcasts: Array<{ type: string; payload: unknown }> = [];
   (room as any).setState = (state: any) => {
@@ -21,7 +21,7 @@ function createRoomHarness() {
   };
   (room as any).setMetadata = () => Promise.resolve();
 
-  room.onCreate();
+  room.onCreate(options);
   return { room, broadcasts };
 }
 
@@ -113,6 +113,29 @@ describe("Bot Population", () => {
       expect(humans.length).toBe(1);
       expect(bots.length).toBe(3);
       expect(room.state.players.size).toBe(4);
+    });
+  });
+
+  it("removes a bot from the overfilled team after a suggested team join", () => {
+    withTargetBotPopulation("3", () => {
+      const { room } = createRoomHarness({ matchMode: "teams" });
+
+      const beforeJoinCounts = [0, 0];
+      for (const player of (room as any).simulation.players.values()) {
+        beforeJoinCounts[player.teamId] += 1;
+      }
+      expect(beforeJoinCounts).toEqual([2, 2]);
+
+      const client = createFakeClient("human-1");
+      room.onJoin(client as any, { name: "Human", teamId: 0 });
+
+      const afterJoinCounts = [0, 0];
+      for (const player of (room as any).simulation.players.values()) {
+        afterJoinCounts[player.teamId] += 1;
+      }
+
+      expect(afterJoinCounts).toEqual([2, 2]);
+      expect(room.state.players.get("human-1")?.teamId).toBe(0);
     });
   });
 

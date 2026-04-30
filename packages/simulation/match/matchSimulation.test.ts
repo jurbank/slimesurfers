@@ -368,6 +368,27 @@ describe("MatchSimulation", () => {
     expect(bravo.paletteIndex).toBe(1);
   });
 
+  it("honors valid requested teams and balances invalid requested teams", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", undefined, 1);
+    const bravo = simulation.addPlayer("session-2", "Bravo", undefined, 99);
+
+    expect(alpha.teamId).toBe(1);
+    expect(alpha.paintGroupId).toBe(1);
+    expect(bravo.teamId).toBe(0);
+    expect(bravo.paintGroupId).toBe(0);
+  });
+
+  it("ignores requested teams in ffa mode", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+
+    const alpha = simulation.addPlayer("session-1", "Alpha", 0, 1);
+
+    expect(alpha.teamId).toBe(255);
+    expect(alpha.paintGroupId).toBe(0);
+  });
+
   it("reports team scores once per paint group instead of once per teammate", () => {
     const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
 

@@ -39,6 +39,7 @@ export class LeaderboardOverlay {
   private lastKillTemplateId: string | null = null;
   private readonly isMobile: boolean;
   private mobileCollapsed: boolean;
+  private lastIsTeamMode: boolean | null = null;
 
   private readonly knownSessionIds = new Set<string>();
   private readonly recentJoins = new Map<string, number>(); // sessionId → joinedAtMs
@@ -263,6 +264,10 @@ export class LeaderboardOverlay {
     }
 
     const isTeamMode = message.teamScores && message.teamScores.length > 0;
+    if (this.isMobile && this.lastIsTeamMode !== isTeamMode) {
+      this.mobileCollapsed = true;
+    }
+    this.lastIsTeamMode = isTeamMode;
     this.isLeaderboardVisible = true;
     this.progressLabel.textContent = isTeamMode ? "Team Coverage" : "Slime Coverage";
 
@@ -361,6 +366,8 @@ export class LeaderboardOverlay {
     this.lastKnownEntries.clear();
     this.seenFirstLeaderboard = false;
     this.isLeaderboardVisible = false;
+    this.lastIsTeamMode = null;
+    this.mobileCollapsed = this.isMobile;
     this.updateVisibility();
   }
 
@@ -515,7 +522,6 @@ export class LeaderboardOverlay {
       backgroundImage: bg.backgroundImage,
       backgroundSize: bg.backgroundSize,
       flexShrink: "0",
-
     });
 
     const nameCell = document.createElement("span");
