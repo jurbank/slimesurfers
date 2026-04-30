@@ -25,12 +25,19 @@ export interface PlayerSnapshot {
   surfState: number;
   isCarving: boolean;
   skiJumpCharge: number;
+  grindRailId: number;
+  grindT: number;
+  lastGrindT: number;
+  grindSpeed: number;
+  grindCooldownMs: number;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
   health: number;
   slimeLevel: number;
   respawnTimer: number;
+  /** True if the player is currently standing on or submerged in their own team's paint */
+  isOnFriendlyPaint: boolean;
   /** Visual identity */
   slimeColor: number;
   patternId: number;
@@ -49,6 +56,7 @@ export interface SnapshotMessage {
   players: PlayerSnapshot[];
   projectiles: ProjectileSnapshot[];
   pickups: PickupSnapshot[];
+  healthPickups: HealthPickupSnapshot[];
 }
 
 export interface ProjectileSnapshot {
@@ -70,6 +78,11 @@ export interface PickupSnapshot {
   id: string;
   weaponId: WeaponId;
   planetId: string;
+  pos: Vec3Data;
+}
+
+export interface HealthPickupSnapshot {
+  id: string;
   pos: Vec3Data;
 }
 

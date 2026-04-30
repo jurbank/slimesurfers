@@ -9,7 +9,7 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { PlayerMovementState } from "@splat/simulation/match/simState.ts";
-import type { RemovedProjectile } from "./projectileSystem.ts";
+import type { RemovedProjectile } from "../projectileSystem.ts";
 import { SoundSystem } from "./soundSystem.ts";
 
 const PROJECTILE_IMPACT_COOLDOWN_MS = 60;

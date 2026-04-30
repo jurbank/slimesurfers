@@ -73,7 +73,10 @@ export const GAME_CONFIG = {
   // -- Player ----------------------------------------------------------------
   player: {
     visualScale: PLAYER_SIZE_SCALE,
-    projectileMuzzleHeight: 1.5 * PLAYER_SIZE_SCALE,
+    /** Combat target radius relative to movement.collisionRadius. Covers visible appendages
+     * without changing movement, ground clearance, or pickup collision. */
+    targetRadiusMultiplier: 1.6,
+    projectileMuzzleHeight: 1.4 * PLAYER_SIZE_SCALE,
     maxHealth: 100,
     projectileDamage: 34,
     shootingRevealDurationMs: 220,
@@ -322,7 +325,7 @@ export const GAME_CONFIG = {
   // -- Bots ------------------------------------------------------------------
   bot: {
     // Desired total players in the room, including humans. Missing slots are filled with bots.
-    targetPopulation: 3,
+    targetPopulation: 0,
     // Max distance at which a bot looks for enemies to track or engage.
     scanRadius: 60,
     // Max distance at which a bot is allowed to start shooting a tracked target.
@@ -394,6 +397,19 @@ export const GAME_CONFIG = {
     showPaintColliders: false,
   },
 } as const;
+
+interface PlayerTargetRadiusConfig {
+  player: {
+    targetRadiusMultiplier: number;
+  };
+  movement: {
+    collisionRadius: number;
+  };
+}
+
+export function getPlayerTargetRadius(cfg: PlayerTargetRadiusConfig = GAME_CONFIG): number {
+  return cfg.movement.collisionRadius * cfg.player.targetRadiusMultiplier;
+}
 
 export function getPaintTerritoryDimensions(planetRadius = GAME_CONFIG.planet.radius): {
   rows: number;

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  type BotConfigEntry,
+  type WeightedBotConfigEntry,
+} from "@splat/content/config/gameConfig.ts";
 import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { MatchRoom } from "./matchRoom.ts";
@@ -41,8 +45,11 @@ function withTargetBotPopulation(value: string, run: () => void) {
 
 function withBotConfig(
   patch: {
-    namedBots: typeof GAME_CONFIG.bot.namedBots;
-    generatedBots: typeof GAME_CONFIG.bot.generatedBots;
+    namedBots: BotConfigEntry[];
+    generatedBots: {
+      count: number;
+      mix: WeightedBotConfigEntry[];
+    };
   },
   run: () => void,
 ) {
@@ -51,14 +58,26 @@ function withBotConfig(
   try {
     (GAME_CONFIG.bot as { namedBots: typeof GAME_CONFIG.bot.namedBots }).namedBots =
       patch.namedBots;
-    (GAME_CONFIG.bot as { generatedBots: typeof GAME_CONFIG.bot.generatedBots }).generatedBots =
-      patch.generatedBots;
+    (
+      GAME_CONFIG.bot as {
+        generatedBots: {
+          count: number;
+          mix: WeightedBotConfigEntry[];
+        };
+      }
+    ).generatedBots = patch.generatedBots;
     run();
   } finally {
     (GAME_CONFIG.bot as { namedBots: typeof GAME_CONFIG.bot.namedBots }).namedBots =
       previousNamedBots;
-    (GAME_CONFIG.bot as { generatedBots: typeof GAME_CONFIG.bot.generatedBots }).generatedBots =
-      previousGeneratedBots;
+    (
+      GAME_CONFIG.bot as {
+        generatedBots: {
+          count: number;
+          mix: WeightedBotConfigEntry[];
+        };
+      }
+    ).generatedBots = previousGeneratedBots;
   }
 }
 
@@ -227,14 +246,11 @@ describe("Bot Population", () => {
 
           const emoteBroadcast = broadcasts.find((entry) => entry.type === MessageType.EmoteEvents);
           expect(emoteBroadcast).toBeDefined();
-          expect(
-            (emoteBroadcast?.payload as { events: Array<{ playerId: string; emoteIds: string[] }> })
-              .events[0]?.playerId,
-          ).toMatch(/^bot-/);
-          expect(
-            (emoteBroadcast?.payload as { events: Array<{ playerId: string; emoteIds: string[] }> })
-              .events[0]?.emoteIds.length,
-          ).toBeGreaterThan(0);
+          const payload = emoteBroadcast!.payload as {
+            events: Array<{ playerId: string; emoteIds: string[] }>;
+          };
+          expect(payload.events[0]?.playerId).toMatch(/^bot-/);
+          expect(payload.events[0]?.emoteIds.length).toBeGreaterThan(0);
         },
       );
     } finally {

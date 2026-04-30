@@ -86,7 +86,8 @@ export interface PlayerMeshRig {
   deadMesh: THREE.Group;
   deathParticles: PlayerDeathParticles;
   poseRig: PlayerPoseRig;
-  weaponMesh: THREE.Mesh;
+  weaponMesh: THREE.Group;
+  weaponFallbackMesh: THREE.Mesh;
   snowboardMesh: THREE.Group;
   outlineMesh: THREE.Group;
   jsrOutline: THREE.Group;
@@ -268,7 +269,9 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     emissive: getWeaponDefinition(WeaponId.Bazooka).pickupColor,
     emissiveIntensity: 0.4,
   });
-  const weaponMesh = new THREE.Mesh(weaponGeom, weaponMat);
+  const weaponMesh = new THREE.Group();
+  const weaponFallbackMesh = new THREE.Mesh(weaponGeom, weaponMat);
+  weaponMesh.add(weaponFallbackMesh);
   weaponMesh.position.set(0.52, -0.02, 0.28);
   weaponMesh.rotation.x = Math.PI / 2;
   weaponMesh.rotation.y = Math.PI / 18;
@@ -428,6 +431,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     deathParticles,
     poseRig,
     weaponMesh,
+    weaponFallbackMesh,
     snowboardMesh,
     outlineMesh,
     jsrOutline,

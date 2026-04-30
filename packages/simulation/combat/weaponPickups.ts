@@ -115,12 +115,7 @@ export function collectWeaponPickup(
     if (!pickup.active) return;
     if (pickup.planetId !== player.planetId) return;
     if (pickup.weaponId === player.equippedWeaponId) return;
-    const pickupBasePos = {
-      x: pickup.pos.x - pickup.normal.x * cfg.pickups.hoverHeight,
-      y: pickup.pos.y - pickup.normal.y * cfg.pickups.hoverHeight,
-      z: pickup.pos.z - pickup.normal.z * cfg.pickups.hoverHeight,
-    };
-    if (distanceSquared(player.pos, pickupBasePos) > collectDistanceSq) return;
+    if (distanceSquared(player.pos, pickup.pos) > collectDistanceSq) return;
 
     player.equippedWeaponId = pickup.weaponId;
     player.disposableShotsRemaining = getWeaponDefinition(pickup.weaponId).disposableShots ?? 0;

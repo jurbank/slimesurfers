@@ -22,6 +22,8 @@ export interface WeaponDefinition {
   blastImpulse: number;
   paintRadiusMultiplier: number;
   pickupColor: number;
+  /** Client-facing public asset path used for pickup presentation. */
+  pickupModelPath: string;
   /** If set, this weapon is disposable: the player gets this many shots then reverts to the default weapon. */
   disposableShots?: number;
   /** If true, holding fire enables target acquisition and launches a homing projectile on release. */
@@ -74,6 +76,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     blastImpulse: 0,
     paintRadiusMultiplier: 1,
     pickupColor: 0x3fe7ff,
+    pickupModelPath: "/models/rifle-model.glb",
   },
   [WeaponId.HeavyMachineGun]: {
     id: WeaponId.HeavyMachineGun,
@@ -90,6 +93,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     blastImpulse: 0,
     paintRadiusMultiplier: 0.8,
     pickupColor: 0xffd447,
+    pickupModelPath: "/models/heavy-machinegun-model.glb",
     disposableShots: 48,
     spinUpMs: 320,
     sprayRange: 52,
@@ -110,6 +114,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     blastImpulse: 40,
     paintRadiusMultiplier: 2.4,
     pickupColor: 0xff9b3d,
+    pickupModelPath: "/models/bazooka-model.glb",
     disposableShots: 3,
     homingCapable: true,
   },
@@ -128,6 +133,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     blastImpulse: 0,
     paintRadiusMultiplier: 1.5,
     pickupColor: 0xb63542,
+    pickupModelPath: "/models/rifle-model.glb",
     disposableShots: 5,
     hitscanConeHalfAngleDeg: 2.5,
     hitscanTrailMinDist: 20,

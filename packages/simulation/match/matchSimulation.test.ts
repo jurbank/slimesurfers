@@ -13,6 +13,7 @@ import {
   GAME_CONFIG,
   getPaintStampChordRadius,
   getPaintTerritoryDimensions,
+  getPlayerTargetRadius,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
 import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
@@ -23,6 +24,10 @@ import { buildComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
 import { generateBotInput } from "../ai/botController.ts";
+
+const MACHINE_GUN_KILL_SHOTS = Math.ceil(
+  GAME_CONFIG.player.maxHealth / getWeaponDefinition(WeaponId.MachineGun).directDamage,
+);
 
 function createForwardInput(seq: number): InputMessage {
   return {
@@ -816,6 +821,22 @@ describe("MatchSimulation", () => {
     expect(player.airTrickCombo).toBe(0);
   });
 
+  it("includes rail grinding state in snapshots for client reconciliation", () => {
+    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const player = simulation.addPlayer("session-1", "Alpha");
+    makeGrindingSkier(player);
+
+    const snapshot = simulation.buildSnapshotMessage();
+    const playerSnapshot = snapshot.players.find((entry) => entry.sessionId === player.sessionId);
+
+    expect(playerSnapshot?.movementState).toBe(PlayerMovementState.Grinding);
+    expect(playerSnapshot?.grindRailId).toBe(player.grindRailId);
+    expect(playerSnapshot?.grindT).toBe(player.grindT);
+    expect(playerSnapshot?.lastGrindT).toBe(player.lastGrindT);
+    expect(playerSnapshot?.grindSpeed).toBe(player.grindSpeed);
+    expect(playerSnapshot?.grindCooldownMs).toBe(player.grindCooldownMs);
+  });
+
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
@@ -1271,6 +1292,14 @@ describe("MatchSimulation", () => {
     expect(simulation.matchState.projectiles.size).toBe(0);
   });
 
+  it("keeps zero-radius hitscan weapons on the visible player target radius", () => {
+    expect(getWeaponDefinition(WeaponId.HeavyMachineGun).projectileCollisionRadius).toBe(0);
+    expect(getPlayerTargetRadius()).toBeCloseTo(
+      GAME_CONFIG.movement.collisionRadius * GAME_CONFIG.player.targetRadiusMultiplier,
+    );
+    expect(getPlayerTargetRadius()).toBeGreaterThan(GAME_CONFIG.movement.collisionRadius);
+  });
+
   it("reverts a heavy machine gun pickup to Pew Pew after the disposable spray runs out", () => {
     const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
@@ -1381,8 +1410,8 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
 
     const planetId = "planet-0";
-    const targetNormal = surfaceNormalForCell(5, 0);
-    const targetPoint = surfacePointForCell(planetId, 5, 0);
+    const targetNormal = surfaceNormalForCell(0, 0);
+    const targetPoint = surfacePointForCell(planetId, 0, 0);
     const impactSpeed = 6 / (simulation.tickIntervalMs / 1000);
     // Projectile is airborne (planetId = "") so the launch-planet skip does not
     // apply, and the surface collision is detected as it enters planet-0.
@@ -1514,7 +1543,7 @@ describe("MatchSimulation", () => {
 
     target.vel = { x: 0, y: 0, z: 0 };
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
       simulation.matchState.projectiles.set(`test-${shot}`, {
         id: `test-${shot}`,
         ownerId: shooter.sessionId,
@@ -1556,7 +1585,7 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
       simulation.matchState.projectiles.set(`leaderboard-kd-${shot}`, {
         id: `leaderboard-kd-${shot}`,
         ownerId: shooter.sessionId,
@@ -1587,8 +1616,8 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
 
-    for (let shot = 0; shot < 3; shot++) {
-      simulation.matchState.projectiles.set(`kill-feed-${shot}`, {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
+      simulation.matchState.projectiles.set(`test-${shot}`, {
         id: `kill-feed-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
@@ -1627,7 +1656,7 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
 
-    for (let shot = 0; shot < 3; shot++) {
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
       simulation.matchState.projectiles.set(`respawn-check-${shot}`, {
         id: `respawn-check-${shot}`,
         ownerId: shooter.sessionId,

@@ -1,12 +1,18 @@
 import { FFA_MODE } from "@splat/content/modes/gameModes.ts";
 import { isProfane } from "@splat/content/utils/profanity.ts";
 import { generateGuestPlayerName } from "@splat/content/utils/guestPlayerNames.ts";
+import {
+  fetchGlobalLeaderboard,
+  type GlobalLeaderboardEntry,
+  type GlobalLeaderboardWindow,
+} from "../network/supabaseClient.ts";
 import { swatchBackground } from "./uiUtils.ts";
 
 const SLOTS = FFA_MODE.slots;
-const GUEST_PLAYER_NAME_STORAGE_KEY = "splat.guestPlayerName";
 const MOBILE_VIEWPORT_MAX_WIDTH_PX = 768;
+const GUEST_PLAYER_NAME_STORAGE_KEY = "splat.guestPlayerName";
 const DESKTOP_HINT_SHOWN_KEY = "splat.desktopHintShown";
+const GLOBAL_LEADERBOARD_WINDOW: GlobalLeaderboardWindow = "all_time";
 
 export class JoinOverlay {
   private readonly root: HTMLDivElement;
@@ -15,9 +21,11 @@ export class JoinOverlay {
   private readonly statusText: HTMLParagraphElement;
   private readonly progressContainer: HTMLDivElement;
   private readonly progressBar: HTMLDivElement;
+  private readonly leaderboardList: HTMLDivElement;
   private readonly swatches: HTMLButtonElement[] = [];
   private readonly guestPlayerName: string;
   private readonly video: HTMLVideoElement;
+  private readonly leaderboardCache = new Map<GlobalLeaderboardWindow, GlobalLeaderboardEntry[]>();
   private selectedIndex = 0;
   private isLoading = true;
 
@@ -28,13 +36,15 @@ export class JoinOverlay {
       position: "fixed",
       inset: "0",
       display: "flex",
+      flexDirection: "column",
       alignItems: "center",
-      justifyContent: "center",
       background: "#080818",
       zIndex: "20",
       fontFamily: "sans-serif",
       color: "#fff",
-      flexDirection: "column",
+      overflowY: "auto",
+      padding: "0px 0 20px",
+      boxSizing: "border-box",
     });
 
     this.video = document.createElement("video");
@@ -44,7 +54,7 @@ export class JoinOverlay {
     this.video.loop = true;
     this.video.setAttribute("playsinline", "");
     Object.assign(this.video.style, {
-      position: "absolute",
+      position: "fixed",
       inset: "0",
       width: "100%",
       height: "100%",
@@ -63,7 +73,7 @@ export class JoinOverlay {
 
     const videoScrim = document.createElement("div");
     Object.assign(videoScrim.style, {
-      position: "absolute",
+      position: "fixed",
       inset: "0",
       background: "rgba(8, 8, 24, 0.62)",
       pointerEvents: "none",
@@ -73,22 +83,39 @@ export class JoinOverlay {
     Object.assign(contentWrapper.style, {
       position: "relative",
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
-      gap: "12px",
+      justifyContent: "center",
+      margin: "auto",
+      // minHeight: "0",
+      width: "100%",
     });
 
     this.root.append(this.video, videoScrim, contentWrapper);
 
-    const title = document.createElement("h1");
-    title.textContent = "Slime Surfers";
-    Object.assign(title.style, { margin: "0 0 8px", fontSize: "2.5rem", letterSpacing: "0.15em" });
+    const joinPanel = document.createElement("div");
+    Object.assign(joinPanel.style, {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "12px",
+      minWidth: "0",
+    });
+
+    const logo = document.createElement("img");
+    logo.src = "/images/slime-surfers-logo.png";
+    logo.alt = "Slime Surfers";
+    Object.assign(logo.style, {
+      width: "380px",
+      height: "auto",
+      // marginBottom: "12px",
+      filter: "drop-shadow(0 0 20px rgba(0, 229, 255, 0.2))",
+    });
 
     const subtitle = document.createElement("p");
     subtitle.textContent =
       "Cover the planet in slime, splat your rivals, and pull off huge tricks.";
     Object.assign(subtitle.style, {
-      margin: "0 0 12px",
+      margin: "0 0 16px",
       maxWidth: "360px",
       textAlign: "center",
       fontSize: "0.95rem",
@@ -103,7 +130,7 @@ export class JoinOverlay {
       background: "#222",
       borderRadius: "2px",
       overflow: "hidden",
-      marginBottom: "8px",
+      marginBottom: "16px",
     });
 
     this.progressBar = document.createElement("div");
@@ -129,11 +156,12 @@ export class JoinOverlay {
       outline: "none",
       width: "220px",
       boxSizing: "border-box",
+      marginBottom: "8px",
     });
 
     const colorLabel = document.createElement("p");
     colorLabel.textContent = "Choose your player / slime color";
-    Object.assign(colorLabel.style, { margin: "4px 0 0", fontSize: "0.8rem", color: "#888" });
+    Object.assign(colorLabel.style, { margin: "4px 0 8px", fontSize: "0.8rem", color: "#fff" });
 
     const swatchRow = document.createElement("div");
     Object.assign(swatchRow.style, {
@@ -142,6 +170,7 @@ export class JoinOverlay {
       flexWrap: "wrap",
       justifyContent: "center",
       maxWidth: "300px",
+      marginBottom: "16px",
     });
 
     SLOTS.forEach((slot, i) => {
@@ -182,6 +211,7 @@ export class JoinOverlay {
       color: "#888",
       cursor: "not-allowed",
       letterSpacing: "0.1em",
+      marginBottom: "8px",
     });
 
     this.statusText = document.createElement("p");
@@ -189,23 +219,29 @@ export class JoinOverlay {
     this.statusText.style.color = "#888";
     this.statusText.textContent = "Loading assets...";
 
+    this.leaderboardList = document.createElement("div");
+    Object.assign(this.leaderboardList.style, {
+      display: "grid",
+      gap: "6px",
+    });
+    const leaderboardPanel = this.buildGlobalLeaderboardPanel();
+
     const twitterLink = document.createElement("a");
     twitterLink.href = "https://x.com/johnurbank";
     twitterLink.target = "_blank";
     twitterLink.textContent = "Follow me on X @johnurbank";
     Object.assign(twitterLink.style, {
-      position: "absolute",
-      bottom: "20px",
+      marginTop: "16px",
       fontSize: "0.8rem",
-      color: "#666",
+      color: "#fff",
       textDecoration: "none",
       transition: "color 0.2s",
     });
     twitterLink.addEventListener("mouseenter", () => (twitterLink.style.color = "#00e5ff"));
-    twitterLink.addEventListener("mouseleave", () => (twitterLink.style.color = "#666"));
+    twitterLink.addEventListener("mouseleave", () => (twitterLink.style.color = "#fff"));
 
-    contentWrapper.append(
-      title,
+    joinPanel.append(
+      logo,
       subtitle,
       this.progressContainer,
       this.nameInput,
@@ -213,13 +249,183 @@ export class JoinOverlay {
       swatchRow,
       this.joinBtn,
       this.statusText,
+      leaderboardPanel,
+      twitterLink,
     );
-    this.root.appendChild(twitterLink);
+    contentWrapper.append(joinPanel);
     document.body.appendChild(this.root);
 
     this.selectSwatch(0);
+    void this.loadGlobalLeaderboard();
     this.focusNameInput();
     JoinOverlay.maybeShowDesktopHint();
+  }
+
+  private buildGlobalLeaderboardPanel(): HTMLDivElement {
+    const panel = document.createElement("div");
+    Object.assign(panel.style, {
+      width: "100%",
+      marginTop: "8px",
+      padding: "12px",
+      borderRadius: "8px",
+      background: "rgba(8, 10, 20, 0.78)",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
+      backdropFilter: "blur(10px)",
+      boxSizing: "border-box",
+    });
+
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      marginBottom: "10px",
+    });
+
+    const title = document.createElement("div");
+    title.textContent = "Top Surfers";
+    Object.assign(title.style, {
+      color: "#f6f7fb",
+      fontSize: "0.8rem",
+      fontWeight: "700",
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+      whiteSpace: "nowrap",
+    });
+
+    header.appendChild(title);
+    panel.append(header, this.leaderboardList);
+    this.renderLeaderboardStatus("Loading leaderboard...");
+    return panel;
+  }
+
+  private async loadGlobalLeaderboard(): Promise<void> {
+    const cached = this.leaderboardCache.get(GLOBAL_LEADERBOARD_WINDOW);
+    if (cached) {
+      this.renderLeaderboard(cached);
+      return;
+    }
+
+    this.renderLeaderboardStatus("Loading leaderboard...");
+    try {
+      const entries = await fetchGlobalLeaderboard(GLOBAL_LEADERBOARD_WINDOW, 10);
+      this.leaderboardCache.set(GLOBAL_LEADERBOARD_WINDOW, entries);
+      this.renderLeaderboard(entries);
+    } catch (err) {
+      console.warn("[supabase] Global leaderboard failed:", err);
+      this.renderLeaderboardStatus("Leaderboard unavailable");
+    }
+  }
+
+  private renderLeaderboard(entries: GlobalLeaderboardEntry[]): void {
+    this.leaderboardList.replaceChildren();
+
+    if (entries.length === 0) {
+      this.renderLeaderboardStatus("No scores yet");
+      return;
+    }
+
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+      display: "grid",
+      gridTemplateColumns: "30px 1fr 56px",
+      gap: "8px",
+      padding: "0 6px 4px",
+      color: "#6b7d8f",
+      fontSize: "0.68rem",
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+    });
+    for (const text of ["#", "Player", "Pts"]) {
+      const cell = document.createElement("span");
+      cell.textContent = text;
+      if (text === "Pts") cell.style.textAlign = "right";
+      header.appendChild(cell);
+    }
+    this.leaderboardList.appendChild(header);
+
+    entries.forEach((entry, index) => {
+      this.leaderboardList.appendChild(this.renderLeaderboardEntry(entry, index + 1));
+    });
+  }
+
+  private renderLeaderboardEntry(entry: GlobalLeaderboardEntry, placement: number): HTMLDivElement {
+    const row = document.createElement("div");
+    Object.assign(row.style, {
+      display: "grid",
+      gridTemplateColumns: "30px 1fr 56px",
+      gap: "8px",
+      alignItems: "center",
+      minHeight: "28px",
+      padding: "4px 6px",
+      borderRadius: "6px",
+      background: placement <= 3 ? "rgba(255, 255, 255, 0.07)" : "transparent",
+      fontSize: "0.82rem",
+    });
+
+    const rank = document.createElement("span");
+    rank.textContent = JoinOverlay.formatLeaderboardPlacement(placement);
+    Object.assign(rank.style, {
+      color: placement <= 3 ? "#ffd166" : "#6b7d8f",
+      fontWeight: placement <= 3 ? "700" : "500",
+      fontVariantNumeric: "tabular-nums",
+    });
+
+    const bg = swatchBackground({ color: entry.slimeColor, patternId: entry.patternId });
+    const swatch = document.createElement("span");
+    Object.assign(swatch.style, {
+      width: "14px",
+      height: "14px",
+      borderRadius: "50%",
+      backgroundImage: bg.backgroundImage,
+      backgroundSize: bg.backgroundSize,
+      flexShrink: "0",
+    });
+
+    const nameWrap = document.createElement("span");
+    Object.assign(nameWrap.style, {
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      minWidth: "0",
+      overflow: "hidden",
+    });
+
+    const name = document.createElement("span");
+    name.textContent = entry.name;
+    Object.assign(name.style, {
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      color: "#f6f7fb",
+    });
+    nameWrap.append(swatch, name);
+
+    const score = document.createElement("span");
+    score.textContent = `${Math.round(entry.paintScore)}`;
+    Object.assign(score.style, {
+      color: "#f6f7fb",
+      fontWeight: "700",
+      fontVariantNumeric: "tabular-nums",
+      textAlign: "right",
+    });
+
+    row.append(rank, nameWrap, score);
+    return row;
+  }
+
+  private renderLeaderboardStatus(message: string): void {
+    this.leaderboardList.replaceChildren();
+    const row = document.createElement("div");
+    row.textContent = message;
+    Object.assign(row.style, {
+      padding: "36px 8px",
+      color: "#6b7d8f",
+      fontSize: "0.82rem",
+      textAlign: "center",
+    });
+    this.leaderboardList.appendChild(row);
   }
 
   setProgress(percent: number): void {
@@ -285,7 +491,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => {});
+    void this.video.play().catch(() => { });
   }
 
   hide(): void {
@@ -327,6 +533,19 @@ export class JoinOverlay {
     const name = generateGuestPlayerName(seed);
     sessionStorage.setItem(GUEST_PLAYER_NAME_STORAGE_KEY, name);
     return name;
+  }
+
+  private static formatLeaderboardPlacement(placement: number): string {
+    switch (placement) {
+      case 1:
+        return "🥇";
+      case 2:
+        return "🥈";
+      case 3:
+        return "🥉";
+      default:
+        return `${placement}`;
+    }
   }
 
   private focusNameInput(): void {

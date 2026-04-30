@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly DEV: boolean;
+  readonly VITE_SERVER_URL?: string;
   readonly VITE_DEV_MODE?: string;
   readonly VITE_CLUSTER_PLAYER_SPAWNS?: string;
   readonly VITE_SKIP_JOIN_SCREEN?: string;

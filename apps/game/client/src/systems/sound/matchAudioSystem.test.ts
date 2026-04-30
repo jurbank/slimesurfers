@@ -4,7 +4,7 @@ import { type WeaponId as WeaponIdValue, WeaponId } from "@splat/content/combat/
 import type { PlayerSnapshot } from "@splat/protocol/network/serverMessages.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import { MatchAudioSystem } from "./matchAudioSystem.ts";
-import type { RemovedProjectile } from "./projectileSystem.ts";
+import type { RemovedProjectile } from "../projectileSystem.ts";
 import type { SoundSystem } from "./soundSystem.ts";
 
 function createRemovedProjectile(weaponId: WeaponIdValue = WeaponId.MachineGun): RemovedProjectile {
@@ -26,12 +26,18 @@ function createPlayerSnapshot(movementState: PlayerMovementState): PlayerSnapsho
     surfState: PlayerSurfState.None,
     isCarving: false,
     skiJumpCharge: 0,
+    grindRailId: -1,
+    grindT: 0,
+    lastGrindT: 0,
+    grindSpeed: 0,
+    grindCooldownMs: 0,
     isShooting: false,
     equippedWeaponId: WeaponId.MachineGun,
     disposableShotsRemaining: 0,
     health: 100,
     slimeLevel: 0,
     respawnTimer: 0,
+    isOnFriendlyPaint: false,
     slimeColor: 0x00ff00,
     patternId: 0,
     inputSeq: 0,

@@ -17,13 +17,24 @@ export class MatchEndOverlay {
       display: "none",
       flexDirection: "column",
       alignItems: "center",
-      justifyContent: "center",
-      gap: "16px",
       background: "rgba(4, 6, 14, 0.94)",
       backdropFilter: "blur(8px)",
       zIndex: "25",
       fontFamily: "sans-serif",
       color: "#f6f7fb",
+      overflowY: "auto",
+      padding: "40px 0",
+      boxSizing: "border-box",
+    });
+
+    const contentWrapper = document.createElement("div");
+    Object.assign(contentWrapper.style, {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "16px",
+      margin: "auto",
+      width: "100%",
     });
 
     const title = document.createElement("h2");
@@ -79,7 +90,8 @@ export class MatchEndOverlay {
     });
     changeSetup.addEventListener("click", onChangeSetup);
 
-    this.root.append(title, this.subtitle, this.list, playAgain, changeSetup);
+    contentWrapper.append(title, this.subtitle, this.list, playAgain, changeSetup);
+    this.root.appendChild(contentWrapper);
     document.body.appendChild(this.root);
   }
 

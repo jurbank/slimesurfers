@@ -9,6 +9,7 @@ import { InputKey } from "@splat/protocol/network/clientMessages.ts";
 import {
   GAME_CONFIG,
   getPaintTerritoryDimensions,
+  getPlayerTargetRadius,
   PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -25,15 +26,16 @@ import { InputSystem } from "../systems/inputSystem.ts";
 import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
-import { PickupSystem } from "../systems/pickupSystem.ts";
+import { PickupSystem } from "../systems/pickup/pickupSystem.ts";
+import { HealthPickupSystem } from "../systems/pickup/healthPickupSystem.ts";
 import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { RailSystem } from "../systems/railSystem.ts";
-import { MatchAudioSystem } from "../systems/matchAudioSystem.ts";
-import { SoundSystem } from "../systems/soundSystem.ts";
+import { MatchAudioSystem } from "../systems/sound/matchAudioSystem.ts";
+import { SoundSystem } from "../systems/sound/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
 import { LocalPlayer } from "../entities/player/player.ts";
@@ -108,6 +110,7 @@ export class MatchScene {
   private readonly clouds: CloudSystem;
   private readonly props: PropSystem;
   private readonly pickups: PickupSystem;
+  private readonly healthPickups: HealthPickupSystem;
   private readonly projectiles: ProjectileSystem;
   private readonly trickText: TrickTextSystem;
   private readonly emoteBubbles: EmoteBubbleSystem;
@@ -158,6 +161,9 @@ export class MatchScene {
   // Bazooka homing acquisition state
   private fireHoldStartMs: number | null = null;
   private prevFireDown = false;
+  private gaugeActivityPulseSeq = 0;
+  private dryFireGaugePulseSeq = 0;
+  private nextGaugeActivityPulseMs = 0;
   private acquisitionLockedTargetId: string | null = null;
   private acquisitionIsGuaranteed = false;
   private readonly acquisitionTestVec = new THREE.Vector3();
@@ -199,7 +205,7 @@ export class MatchScene {
     const weapon = getWeaponDefinition(weaponId);
     const playerHitRadius = Math.max(
       GAME_CONFIG.movement.collisionRadius + weapon.projectileCollisionRadius,
-      GAME_CONFIG.movement.collisionRadius * 1.2,
+      getPlayerTargetRadius(GAME_CONFIG),
     );
     const playerHitRadiusSq = playerHitRadius * playerHitRadius;
 
@@ -367,6 +373,7 @@ export class MatchScene {
     this.clouds = new CloudSystem(this.render.scene);
     this.props = new PropSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
+    this.healthPickups = new HealthPickupSystem(this.render.scene);
     this.projectiles = new ProjectileSystem(this.render.scene);
     this.trickText = new TrickTextSystem();
     this.emoteBubbles = new EmoteBubbleSystem();
@@ -727,6 +734,17 @@ export class MatchScene {
         refDistance: 14,
       });
     }
+
+    const liveHealthPickupIds = new Set<string>();
+    for (const pickup of snapshot.healthPickups ?? []) {
+      liveHealthPickupIds.add(pickup.id);
+      this.healthPickups.syncPickup(pickup, receivedAtMs);
+    }
+    for (const removed of this.healthPickups.removeMissing(liveHealthPickupIds)) {
+      this.sound.playSfxAt("weaponPickup", removed.position, {
+        refDistance: 14,
+      });
+    }
   }
 
   private getPlayerMesh(sessionId: string): THREE.Object3D | null {
@@ -904,6 +922,7 @@ export class MatchScene {
         this.clouds.dispose();
         this.props.dispose();
         this.pickups.clear();
+        this.healthPickups.clear();
         this.projectiles.clear();
         this.rails.dispose(this.render.scene);
         this.trickText.clear();
@@ -1106,8 +1125,14 @@ export class MatchScene {
       }
 
       if (keyBits & InputKey.Fire) {
-        const { fireCooldownMs } = getWeaponDefinition(localState.equippedWeaponId);
-        this.sound.playSfx(getLocalFireSoundKey(localState.equippedWeaponId), {
+        const { fireCooldownMs, slimeCost } = getWeaponDefinition(localState.equippedWeaponId);
+        const isDry = slimeCost > 0 && localState.slimeLevel < slimeCost;
+        if (now >= this.nextGaugeActivityPulseMs) {
+          this.gaugeActivityPulseSeq++;
+          if (isDry) this.dryFireGaugePulseSeq++;
+          this.nextGaugeActivityPulseMs = now + fireCooldownMs;
+        }
+        this.sound.playSfx(isDry ? "gunDry" : getLocalFireSoundKey(localState.equippedWeaponId), {
           cooldownMs: fireCooldownMs,
         });
       }
@@ -1157,6 +1182,8 @@ export class MatchScene {
           dt,
           visualRotation,
           new THREE.Vector3(aimDir.x, aimDir.y, aimDir.z),
+          this.dryFireGaugePulseSeq,
+          this.gaugeActivityPulseSeq,
         );
         if (this.localTrail) {
           this.localTrail.update(predictedLocalState, planetCenter, predictedLocalState.slimeColor);
@@ -1240,6 +1267,7 @@ export class MatchScene {
       }
 
       this.pickups.update(now);
+      this.healthPickups.update(now);
       this.portal?.update(now, playerPos);
       this.projectiles.update(now);
       this.rails.update(this.connection.roomState);

@@ -42,6 +42,7 @@ export interface PlayerPhysics {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
+  isOnFriendlyPaint: boolean;
 }
 
 /**
@@ -327,6 +328,7 @@ function stepOnSurface(
   const oldNormal = normalize(sub(state.pos, planet.center));
   const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint);
   const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
+  state.isOnFriendlyPaint = onFriendlyPaint;
   const onEnemyPaint = paint !== null && !onFriendlyPaint;
   const onNeutralSurface = paint === null;
   const terrainHeight =
@@ -612,6 +614,7 @@ function stepAirborne(
   cfg: StepConfig,
   terrainProvider?: TerrainSurfaceProvider,
 ): void {
+  state.isOnFriendlyPaint = false;
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
@@ -707,6 +710,7 @@ export function stepPlayer(
   if (state.movementState === PlayerMovementState.Dead) {
     state.surfState = PlayerSurfState.None;
     state.isCarving = false;
+    state.isOnFriendlyPaint = false;
     return;
   }
   if (state.movementState === PlayerMovementState.Grinding) {
