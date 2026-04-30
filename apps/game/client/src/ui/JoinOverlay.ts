@@ -205,10 +205,9 @@ export class JoinOverlay {
     Object.assign(modeSelector.style, {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
-      gap: "8px",
-      width: "300px",
+      gap: "0",
+      width: "100%",
       maxWidth: "calc(100vw - 32px)",
-      marginBottom: "4px",
     });
 
     for (const mode of [FFA_MODE, TEAMS_MODE]) {
@@ -216,25 +215,51 @@ export class JoinOverlay {
       const btn = document.createElement("button");
       btn.textContent = mode.displayName.toUpperCase();
       Object.assign(btn.style, {
-        padding: "9px 10px",
-        borderRadius: "6px",
-        border: "1px solid rgba(255,255,255,0.24)",
-        background: "rgba(8, 10, 20, 0.74)",
+        padding: "10px 10px",
+        border: "1px solid rgba(255,255,255,0.16)",
+        borderBottom: "none",
+        background: "rgba(8, 10, 20, 0.62)",
         color: "#cfe8f3",
         cursor: "pointer",
         fontSize: "0.78rem",
         fontWeight: "800",
         letterSpacing: "0.08em",
+        margin: "0",
       });
+      if (matchMode === "ffa") {
+        btn.style.borderTopLeftRadius = "8px";
+      } else {
+        btn.style.borderTopRightRadius = "8px";
+      }
       btn.addEventListener("click", () => this.selectMode(matchMode));
       this.modeButtons.set(matchMode, btn);
       modeSelector.appendChild(btn);
     }
 
+    const modeContent = document.createElement("div");
+    Object.assign(modeContent.style, {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      width: "100%",
+      padding: "12px",
+      border: "1px solid rgba(255,255,255,0.16)",
+      borderRadius: "0 0 8px 8px",
+      background: "rgba(8, 10, 20, 0.78)",
+      boxSizing: "border-box",
+    });
+
+    const modePanel = document.createElement("div");
+    Object.assign(modePanel.style, {
+      width: "380px",
+      maxWidth: "calc(100vw - 32px)",
+      marginBottom: "4px",
+    });
+
     this.colorLabel = document.createElement("p");
     this.colorLabel.textContent = "Choose your player / slime color";
     Object.assign(this.colorLabel.style, {
-      margin: "4px 0 8px",
+      margin: "0 0 8px",
       fontSize: "0.8rem",
       color: "#fff",
     });
@@ -246,7 +271,7 @@ export class JoinOverlay {
       flexWrap: "wrap",
       justifyContent: "center",
       maxWidth: "300px",
-      marginBottom: "16px",
+      marginBottom: "12px",
     });
 
     SLOTS.forEach((slot, i) => {
@@ -278,9 +303,9 @@ export class JoinOverlay {
     Object.assign(this.ffaPlayersList.style, {
       display: "grid",
       gap: "4px",
-      width: "300px",
-      maxWidth: "calc(100vw - 32px)",
-      margin: "-4px 0 12px",
+      width: "100%",
+      maxWidth: "300px",
+      margin: "0",
     });
 
     this.teamSelection = document.createElement("div");
@@ -288,10 +313,12 @@ export class JoinOverlay {
       display: "none",
       gridTemplateColumns: "1fr 1fr",
       gap: "8px",
-      width: "360px",
-      maxWidth: "calc(100vw - 32px)",
-      marginBottom: "16px",
+      width: "100%",
+      margin: "0",
     });
+
+    modeContent.append(this.colorLabel, this.swatchRow, this.ffaPlayersList, this.teamSelection);
+    modePanel.append(modeSelector, modeContent);
 
     this.joinBtn = document.createElement("button");
     this.joinBtn.textContent = "LOADING...";
@@ -340,11 +367,7 @@ export class JoinOverlay {
       subtitle,
       this.progressContainer,
       this.nameInput,
-      modeSelector,
-      this.colorLabel,
-      this.swatchRow,
-      this.ffaPlayersList,
-      this.teamSelection,
+      modePanel,
       this.joinBtn,
       this.statusText,
       leaderboardPanel,
@@ -551,9 +574,11 @@ export class JoinOverlay {
   private renderModeButtons(): void {
     for (const [mode, btn] of this.modeButtons) {
       const selected = mode === this.selectedMode;
-      btn.style.background = selected ? "#00e5ff" : "rgba(8, 10, 20, 0.74)";
-      btn.style.color = selected ? "#001018" : "#cfe8f3";
-      btn.style.borderColor = selected ? "#00e5ff" : "rgba(255,255,255,0.24)";
+      btn.style.background = selected ? "rgba(8, 10, 20, 0.78)" : "rgba(8, 10, 20, 0.44)";
+      btn.style.color = selected ? "#fff" : "#8da4b7";
+      btn.style.borderColor = selected ? "rgba(255,255,255,0.26)" : "rgba(255,255,255,0.12)";
+      btn.style.boxShadow = selected ? "inset 0 3px 0 #00e5ff" : "none";
+      btn.style.transform = selected ? "translateY(1px)" : "none";
     }
   }
 
@@ -577,7 +602,7 @@ export class JoinOverlay {
     this.ffaPlayersList.replaceChildren();
     if (this.selectedMode !== "ffa") return;
 
-    const title = this.renderLobbySectionTitle(`Players (${players.length})`);
+    const title = this.renderLobbySectionTitle(`Playing - (${players.length})`);
     this.ffaPlayersList.appendChild(title);
 
     if (players.length === 0) {
@@ -787,10 +812,11 @@ export class JoinOverlay {
     if (isTeamMode) {
       this.colorLabel.textContent = "Team colors are assigned automatically";
       this.swatchRow.style.display = "none";
+      this.colorLabel.style.display = "none";
       this.ffaPlayersList.style.display = "none";
       this.teamSelection.style.display = "grid";
     } else {
-      this.colorLabel.textContent = "Choose your player / slime color";
+      this.colorLabel.textContent = "Choose your slime color";
       this.swatchRow.style.display = "flex";
       this.ffaPlayersList.style.display = "grid";
       this.teamSelection.style.display = "none";
