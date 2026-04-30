@@ -43,7 +43,7 @@ export class JoinOverlay {
       fontFamily: "sans-serif",
       color: "#fff",
       overflowY: "auto",
-      padding: "20px 0",
+      padding: "0px 0 20px",
       boxSizing: "border-box",
     });
 
@@ -86,7 +86,7 @@ export class JoinOverlay {
       alignItems: "center",
       justifyContent: "center",
       margin: "auto",
-      minHeight: "0",
+      // minHeight: "0",
       width: "100%",
     });
 
@@ -107,7 +107,7 @@ export class JoinOverlay {
     Object.assign(logo.style, {
       width: "380px",
       height: "auto",
-      marginBottom: "12px",
+      // marginBottom: "12px",
       filter: "drop-shadow(0 0 20px rgba(0, 229, 255, 0.2))",
     });
 
@@ -491,7 +491,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => {});
+    void this.video.play().catch(() => { });
   }
 
   hide(): void {
