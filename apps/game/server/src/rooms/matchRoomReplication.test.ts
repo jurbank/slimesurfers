@@ -23,7 +23,7 @@ describe("matchRoomReplication", () => {
   it("projects simulation players into room schema state", () => {
     const simulation = new MatchSimulation();
     const alpha = simulation.addPlayer("session-1", "Alpha");
-    const state = createRoomState(simulation.matchState);
+    const state = createRoomState(simulation.matchState, simulation.mode);
 
     addSimPlayerToRoomState(state, alpha);
     alpha.paintScore = 12;
@@ -110,7 +110,7 @@ describe("matchRoomReplication", () => {
   it("syncs authoritative territory scores and cell ownership into room schema state", () => {
     const simulation = new MatchSimulation();
     const alpha = simulation.addPlayer("session-1", "Alpha");
-    const state = createRoomState(simulation.matchState);
+    const state = createRoomState(simulation.matchState, simulation.mode);
 
     addSimPlayerToRoomState(state, alpha);
     const planet = simulation.matchState.planets.get("planet-0");

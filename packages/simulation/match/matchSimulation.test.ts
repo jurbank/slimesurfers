@@ -1651,6 +1651,124 @@ describe("MatchSimulation", () => {
     expect(simulation.drainKillEventMessages()).toHaveLength(0);
   });
 
+  it("re-balances teams when a player joins after a departure in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const alpha = simulation.addPlayer("session-1", "Alpha"); // team 0
+    const bravo = simulation.addPlayer("session-2", "Bravo"); // team 1
+    const charlie = simulation.addPlayer("session-3", "Charlie"); // team 0 (balanced: 1-1 tie → index 0)
+
+    expect(alpha.teamId).toBe(0);
+    expect(bravo.teamId).toBe(1);
+    expect(charlie.teamId).toBe(0);
+
+    simulation.removePlayer(alpha.sessionId);
+    simulation.removePlayer(charlie.sessionId);
+
+    // Team 0 now has 0 players, team 1 has 1 — next joiner should go to team 0
+    const delta = simulation.addPlayer("session-4", "Delta");
+    expect(delta.teamId).toBe(0);
+    expect(delta.paintGroupId).toBe(0);
+  });
+
+  it("does not damage a teammate in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const shooter = simulation.addPlayer("session-1", "Alpha"); // playerIndex 0 → team 0
+    const enemy = simulation.addPlayer("session-2", "Bravo"); // playerIndex 1 → team 1
+    const teammate = simulation.addPlayer("session-3", "Charlie"); // playerIndex 2 → team 0
+
+    expect(shooter.teamId).toBe(teammate.teamId);
+    expect(shooter.teamId).not.toBe(enemy.teamId);
+
+    teammate.pos = {
+      x: shooter.pos.x + GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    teammate.vel = { x: 0, y: 0, z: 0 };
+    teammate.planetId = shooter.planetId;
+
+    simulation.matchState.projectiles.set("friendly-fire-test", {
+      id: "friendly-fire-test",
+      ownerId: shooter.sessionId,
+      ownerTeamId: shooter.teamId,
+      weaponId: WeaponId.MachineGun,
+      paintGroupId: shooter.paintGroupId,
+      slimeColor: shooter.slimeColor,
+      patternId: 0,
+      pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
+      vel: { x: 0, y: 0, z: 0 },
+      planetId: teammate.planetId,
+      lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+    });
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(teammate.health).toBe(GAME_CONFIG.player.maxHealth);
+    expect(enemy.health).toBe(GAME_CONFIG.player.maxHealth);
+  });
+
+  it("does not credit kills for team eliminations in teams mode", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE);
+    const shooter = simulation.addPlayer("session-1", "Alpha"); // playerIndex 0 → team 0
+    const enemy = simulation.addPlayer("session-2", "Bravo"); // playerIndex 1 → team 1
+    const teammate = simulation.addPlayer("session-3", "Charlie"); // playerIndex 2 → team 0
+
+    teammate.pos = {
+      x: shooter.pos.x + GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    teammate.vel = { x: 0, y: 0, z: 0 };
+    teammate.planetId = shooter.planetId;
+
+    enemy.pos = {
+      x: shooter.pos.x - GAME_CONFIG.movement.collisionRadius,
+      y: shooter.pos.y,
+      z: shooter.pos.z,
+    };
+    enemy.vel = { x: 0, y: 0, z: 0 };
+    enemy.planetId = shooter.planetId;
+
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
+      simulation.matchState.projectiles.set(`friendly-kill-${shot}`, {
+        id: `friendly-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        ownerTeamId: shooter.teamId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: 0,
+        pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: teammate.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(teammate.health).toBe(GAME_CONFIG.player.maxHealth);
+    expect(shooter.killCount).toBe(0);
+
+    for (let shot = 0; shot < MACHINE_GUN_KILL_SHOTS; shot++) {
+      simulation.matchState.projectiles.set(`enemy-kill-${shot}`, {
+        id: `enemy-kill-${shot}`,
+        ownerId: shooter.sessionId,
+        ownerTeamId: shooter.teamId,
+        weaponId: WeaponId.MachineGun,
+        paintGroupId: shooter.paintGroupId,
+        slimeColor: shooter.slimeColor,
+        patternId: 0,
+        pos: { x: enemy.pos.x, y: enemy.pos.y, z: enemy.pos.z },
+        vel: { x: 0, y: 0, z: 0 },
+        planetId: enemy.planetId,
+        lifeMs: getWeaponDefinition(WeaponId.MachineGun).projectileLifetimeMs,
+      });
+      simulation.tick(simulation.tickIntervalMs);
+    }
+
+    expect(enemy.movementState).toBe(PlayerMovementState.Dead);
+    expect(shooter.killCount).toBe(1);
+  });
+
   it("counts respawn time down over intermediate ticks before reviving the player", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");

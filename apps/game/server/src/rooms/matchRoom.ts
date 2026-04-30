@@ -28,6 +28,7 @@ type DepartedEntry = LeaderboardEntry & { playerUuid?: string; isBot?: boolean }
 
 interface MatchRoomCreateOptions {
   devClusterSpawns?: unknown;
+  matchMode?: unknown;
 }
 
 interface MatchRoomMetadata {
@@ -45,6 +46,7 @@ function resolveWeaponPickupLayout(): "map" | "cluster" {
 
 function resolveMatchMode(options: MatchRoomCreateOptions): string | undefined {
   if (process.env.NODE_ENV !== "production" && options.devClusterSpawns === true) return "dev";
+  if (typeof options.matchMode === "string") return options.matchMode;
   if (process.env.MATCH_MODE) return process.env.MATCH_MODE;
   return undefined;
 }
@@ -67,7 +69,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
       weaponPickupLayout: resolveWeaponPickupLayout(),
     });
-    this.setState(createRoomState(this.simulation.matchState));
+    this.setState(createRoomState(this.simulation.matchState, this.simulation.mode));
     void this.updateRoomMetadata();
     this.maxClients = NETWORK_CONFIG.rooms.maxPlayers;
 

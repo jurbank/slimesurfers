@@ -1,4 +1,8 @@
-import { FFA_MODE, type GameModeDefinition } from "@splat/content/modes/gameModes.ts";
+import {
+  FFA_MODE,
+  type AssignedPlayerSlot,
+  type GameModeDefinition,
+} from "@splat/content/modes/gameModes.ts";
 import { DEFAULT_WEAPON_ID, type WeaponPickupLayout } from "@splat/content/combat/weaponDefs.ts";
 import {
   GAME_CONFIG,
@@ -306,8 +310,9 @@ function createSimPlayer(
     origin?: BotOrigin;
     configIndex?: number;
   },
+  assignedSlot?: AssignedPlayerSlot,
 ): SimPlayerState {
-  const slot = { ...mode.assignPlayerSlot(playerIndex), paletteIndex };
+  const slot = { ...(assignedSlot ?? mode.assignPlayerSlot(playerIndex)), paletteIndex };
   const spawn = selectSpawnSurface(
     mode,
     existingPlayers,
@@ -423,6 +428,24 @@ export class MatchSimulation {
     return Array.from(this.simState.players.values()).map((p) => p.paletteIndex);
   }
 
+  private resolveBalancedSlot(playerIndex: number): AssignedPlayerSlot {
+    if (!this.mode.isTeamBased || this.mode.teamCount === 0) {
+      return this.mode.assignPlayerSlot(playerIndex);
+    }
+    const counts: number[] = [];
+    for (let t = 0; t < this.mode.teamCount; t++) counts.push(0);
+    for (const player of this.simState.players.values()) {
+      if (player.teamId >= 0 && player.teamId < this.mode.teamCount) {
+        counts[player.teamId] = (counts[player.teamId] ?? 0) + 1;
+      }
+    }
+    let smallestTeam = 0;
+    for (let t = 1; t < this.mode.teamCount; t++) {
+      if (counts[t]! < counts[smallestTeam]!) smallestTeam = t;
+    }
+    return { teamId: smallestTeam, paintGroupId: smallestTeam };
+  }
+
   private resolvePaletteIndex(
     playerIndex: number,
     requestedColorIndex: unknown,
@@ -462,7 +485,7 @@ export class MatchSimulation {
 
   addPlayer(sessionId: string, name?: unknown, requestedColorIndex?: unknown): SimPlayerState {
     const playerIndex = this.playerCount++;
-    const assignedSlot = this.mode.assignPlayerSlot(playerIndex);
+    const assignedSlot = this.resolveBalancedSlot(playerIndex);
     const paletteIndex = this.resolvePaletteIndex(
       playerIndex,
       requestedColorIndex,
@@ -476,6 +499,8 @@ export class MatchSimulation {
       paletteIndex,
       this.mode,
       this.simState.players.values(),
+      undefined,
+      assignedSlot,
     );
     this.simState.players.set(sessionId, player);
     this.inputQueues.set(sessionId, []);
@@ -494,7 +519,7 @@ export class MatchSimulation {
     },
   ): SimPlayerState {
     const playerIndex = this.playerCount++;
-    const assignedSlot = this.mode.assignPlayerSlot(playerIndex);
+    const assignedSlot = this.resolveBalancedSlot(playerIndex);
     const paletteIndex = this.resolvePaletteIndex(playerIndex, null, assignedSlot.teamId);
     const player = createSimPlayer(
       sessionId,
@@ -505,6 +530,7 @@ export class MatchSimulation {
       this.mode,
       this.simState.players.values(),
       botOptions,
+      assignedSlot,
     );
     this.simState.players.set(sessionId, player);
     return player;
@@ -885,6 +911,17 @@ export class MatchSimulation {
     });
 
     return { tick: this.tickCount, players, projectiles, pickups, healthPickups };
+  }
+
+  computeWinningTeamId(): number | undefined {
+    if (!this.mode.isTeamBased || this.mode.teamCount === 0) return undefined;
+    const { teamScores } = this.buildLeaderboardMessage();
+    if (teamScores.length === 0) return undefined;
+    let winner = 0;
+    for (let t = 1; t < teamScores.length; t++) {
+      if ((teamScores[t] ?? 0) > (teamScores[winner] ?? 0)) winner = t;
+    }
+    return winner;
   }
 
   buildLeaderboardMessage(): LeaderboardMessage {

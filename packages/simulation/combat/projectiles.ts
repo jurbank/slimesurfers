@@ -22,6 +22,7 @@ import { getPaintAtPoint } from "../paint/paintDetection.ts";
 import { applyPaintImpact } from "../paint/stampPaint.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import {
+  NO_TEAM_ID,
   PlayerMovementState,
   PlayerSurfState,
   type SimMatchState,
@@ -132,6 +133,10 @@ function fract(value: number): number {
 
 function seededUnit(seed: number): number {
   return fract(Math.sin(seed * 12.9898 + 78.233) * 43758.5453123);
+}
+
+function areFriendly(teamA: number, teamB: number): boolean {
+  return teamA !== NO_TEAM_ID && teamA === teamB;
 }
 
 function rotateToward(from: Vec3Data, toward: Vec3Data, maxAngleRad: number): SimVec3 {
@@ -522,6 +527,7 @@ function applySplashDamage(
   paintStamps: PaintStampMessage[],
   owner: SimPlayerState | undefined,
   ownerId: string,
+  ownerTeamId: number,
   impactPos: Vec3Data,
   splashRadius: number,
   splashDamage: number,
@@ -537,6 +543,7 @@ function applySplashDamage(
     if (player.sessionId === ownerId) return;
     if (player.movementState === PlayerMovementState.Dead) return;
     if (excludedPlayerIds.has(player.sessionId)) return;
+    if (areFriendly(ownerTeamId, player.teamId)) return;
 
     const hitDistance = splashRadius + cfg.movement.collisionRadius;
     const playerDistance = distance(player.pos, impactPos);
@@ -705,6 +712,7 @@ export function tryFireProjectile(
     simState.players.forEach((target) => {
       if (target.sessionId === player.sessionId) return;
       if (target.movementState === PlayerMovementState.Dead) return;
+      if (areFriendly(player.teamId, target.teamId)) return;
       const capsule = getPlayerCapsuleSegment(target, planets, cfg);
       const { pointA: impactPos, pointB: playerHitPoint } = closestPointsBetweenSegments(
         muzzlePos,
@@ -789,6 +797,7 @@ export function tryFireProjectile(
   const projectile: SimProjectileState = {
     id: `projectile-${simState.nextProjectileId++}`,
     ownerId: player.sessionId,
+    ownerTeamId: player.teamId,
     weaponId: weapon.id,
     paintGroupId: player.paintGroupId,
     slimeColor: player.slimeColor,
@@ -884,6 +893,7 @@ export function tickProjectiles(
       if (hit) return;
       if (player.sessionId === projectile.ownerId) return;
       if (player.movementState === PlayerMovementState.Dead) return;
+      if (areFriendly(projectile.ownerTeamId ?? NO_TEAM_ID, player.teamId)) return;
       const hitDistance = cfg.movement.collisionRadius + weapon.projectileCollisionRadius;
       const impactPos = closestPointOnSegment(player.pos, startPos, projectile.pos);
       const playerHitPoint = closestPointOnPlayerCapsule(impactPos, player, planets, cfg);
@@ -904,6 +914,7 @@ export function tickProjectiles(
         paintStamps,
         owner,
         projectile.ownerId,
+        projectile.ownerTeamId ?? NO_TEAM_ID,
         impactPos,
         weapon.splashRadius,
         weapon.splashDamage,
@@ -969,6 +980,7 @@ export function tickProjectiles(
             paintStamps,
             owner,
             projectile.ownerId,
+            projectile.ownerTeamId ?? NO_TEAM_ID,
             impactPos,
             weapon.splashRadius,
             weapon.splashDamage,
@@ -1029,6 +1041,7 @@ export function tryFireHitscan(
   simState.players.forEach((target) => {
     if (target.sessionId === player.sessionId) return;
     if (target.movementState === PlayerMovementState.Dead) return;
+    if (areFriendly(player.teamId, target.teamId)) return;
 
     const toTarget = sub(target.pos, muzzlePos);
     const dist = length(toTarget);

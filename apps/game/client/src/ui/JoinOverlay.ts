@@ -491,7 +491,7 @@ export class JoinOverlay {
     this.statusText.textContent = message;
     this.joinBtn.disabled = false;
     this.joinBtn.textContent = "JOIN";
-    void this.video.play().catch(() => { });
+    void this.video.play().catch(() => {});
   }
 
   hide(): void {

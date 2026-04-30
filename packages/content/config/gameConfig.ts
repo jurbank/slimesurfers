@@ -170,7 +170,7 @@ export const GAME_CONFIG = {
   // -- Match -----------------------------------------------------------------
   match: {
     durationSeconds: 15 * 60,
-    countdownSeconds: 10,
+    countdownSeconds: 0,
     teamCount: 2,
     teamColors: [0x00aaff, 0xff6600] as const,
     /** Free-for-all palette — one colour per player slot (index = player.paletteIndex in FFA mode) */

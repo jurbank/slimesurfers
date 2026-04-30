@@ -16,6 +16,7 @@ import {
 import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
 import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
 import { HealthBar } from "./healthBar.ts";
+import { Nameplate, type TeamRelation } from "./nameplate.ts";
 
 const HELD_WEAPON_MODEL_SIZE = 1.95;
 const HELD_WEAPON_MODEL_ROTATION_X = -Math.PI / 2;
@@ -50,13 +51,14 @@ export class RemotePlayer {
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly trickAnimator = new PlayerTrickAnimator();
   private readonly healthBar: HealthBar;
+  private readonly nameplate: Nameplate;
   private wasDead = false;
   private deathAge = 0;
   private currentWeaponModelPath = "";
   private weaponModelRoot?: THREE.Object3D;
   private disposed = false;
 
-  constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
+  constructor(scene: THREE.Scene, slimeColor: number, patternId = 0, name = "") {
     const rig = createPlayerMesh(slimeColor, patternId);
     this.mesh = rig.group;
     this.liveMesh = rig.liveMesh;
@@ -74,14 +76,16 @@ export class RemotePlayer {
       slimeColor,
     );
     this.healthBar = new HealthBar(GAME_CONFIG.player.maxHealth);
+    this.nameplate = new Nameplate(name, slimeColor);
     this.mesh.add(this.healthBar.sprite);
+    this.mesh.add(this.nameplate.sprite);
     // Detach disturbance from group so it stays visible when the player mesh is hidden.
     this.mesh.remove(this.disturbanceMesh);
     scene.add(this.disturbanceMesh);
     scene.add(this.mesh);
   }
 
-  update(state: PlayerTransformState, dt: number): void {
+  update(state: PlayerTransformState, dt: number, camera?: THREE.Camera): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     this.mesh.quaternion.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
 
@@ -102,6 +106,7 @@ export class RemotePlayer {
       this.jsrOutline.visible = false;
       this.disturbanceMesh.visible = false;
       this.healthBar.update(state, dt, GAME_CONFIG.player.maxHealth);
+      this.nameplate.update(false, dt, camera);
       this.wasDead = true;
       return;
     }
@@ -142,6 +147,15 @@ export class RemotePlayer {
     }
 
     this.healthBar.update(state, dt, GAME_CONFIG.player.maxHealth);
+    this.nameplate.update(!effectivelySubmerged, dt, camera);
+  }
+
+  setName(name: string): void {
+    this.nameplate.setName(name);
+  }
+
+  setTeamRelation(relation: TeamRelation, teamColor?: number): void {
+    this.nameplate.setTeamRelation(relation, teamColor);
   }
 
   dispose(scene: THREE.Scene): void {
@@ -150,6 +164,7 @@ export class RemotePlayer {
       disposeWeaponModel(this.weaponModelRoot);
     }
     this.healthBar.dispose();
+    this.nameplate.dispose();
     scene.remove(this.mesh);
     scene.remove(this.disturbanceMesh);
   }

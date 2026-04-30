@@ -221,7 +221,12 @@ export class LeaderboardOverlay {
     document.body.appendChild(this.root);
   }
 
-  update(message: LeaderboardMessage, localSessionId: string | null, matchTimerSeconds = 0): void {
+  update(
+    message: LeaderboardMessage,
+    localSessionId: string | null,
+    matchTimerSeconds = 0,
+    teamColors: readonly number[] = [],
+  ): void {
     this.timerEl.textContent =
       matchTimerSeconds > 0 ? LeaderboardOverlay.formatTimer(matchTimerSeconds) : "";
     const nowMs = performance.now();
@@ -289,8 +294,8 @@ export class LeaderboardOverlay {
     this.list.appendChild(header);
 
     if (isTeamMode) {
-      this.renderTeamGroups(message, localSessionId);
-      this.renderTeamProgressBar(message);
+      this.renderTeamGroups(message, localSessionId, teamColors);
+      this.renderTeamProgressBar(message, teamColors);
     } else {
       this.renderFFAEntries(message, localSessionId);
       this.renderFFAProgressBar(message);
@@ -357,7 +362,11 @@ export class LeaderboardOverlay {
     this.updateVisibility();
   }
 
-  private renderTeamGroups(message: LeaderboardMessage, localSessionId: string | null): void {
+  private renderTeamGroups(
+    message: LeaderboardMessage,
+    localSessionId: string | null,
+    teamColors: readonly number[],
+  ): void {
     const teams = new Map<number, LeaderboardEntry[]>();
     for (const entry of message.entries) {
       const list = teams.get(entry.teamId) || [];
@@ -366,7 +375,7 @@ export class LeaderboardOverlay {
     }
 
     message.teamScores.forEach((teamScore, teamId) => {
-      const teamColor = GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
+      const teamColor = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
       const colorHex = `#${teamColor.toString(16).padStart(6, "0")}`;
 
       const teamHeader = document.createElement("div");
@@ -560,17 +569,14 @@ export class LeaderboardOverlay {
     this.list.appendChild(row);
   }
 
-  private renderTeamProgressBar(message: LeaderboardMessage): void {
+  private renderTeamProgressBar(message: LeaderboardMessage, teamColors: readonly number[]): void {
     let totalClaimed = 0;
     message.teamScores.forEach((score, teamId) => {
       const width = (score / TOTAL_PAINTABLE_CELLS) * 100;
       totalClaimed += width;
       if (width > 0) {
-        const segment = this.createProgressSegment(
-          GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff,
-          0,
-          width,
-        );
+        const color = teamColors[teamId] ?? GAME_CONFIG.match.teamColors[teamId] ?? 0xffffff;
+        const segment = this.createProgressSegment(color, 0, width);
         this.progressBar.appendChild(segment);
       }
     });

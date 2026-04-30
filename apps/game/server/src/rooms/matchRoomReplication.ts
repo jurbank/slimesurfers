@@ -1,4 +1,5 @@
 import { ArraySchema, MapSchema } from "@colyseus/schema";
+import type { GameModeDefinition } from "@splat/content/modes/gameModes.ts";
 import type {
   KillEventMessage,
   LeaderboardMessage,
@@ -7,6 +8,7 @@ import type {
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
+import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import {
   PlanetPaintState,
@@ -82,7 +84,7 @@ function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
   return schema;
 }
 
-export function createRoomState(simState: SimMatchState): GameState {
+export function createRoomState(simState: SimMatchState, mode: GameModeDefinition): GameState {
   const state = new GameState();
   state.players = new MapSchema<PlayerState>();
   state.planets = new MapSchema<PlanetPaintState>();
@@ -90,6 +92,8 @@ export function createRoomState(simState: SimMatchState): GameState {
   state.scores = new MapSchema<number>();
   state.matchPhase = simState.matchPhase;
   state.matchTimer = simState.matchTimer;
+  state.isTeamBased = mode.isTeamBased;
+  state.teamColors = new ArraySchema<number>(...mode.teamColors);
 
   simState.planets.forEach((planet, planetId) => {
     state.planets.set(planetId, schemaPlanetFromSim(planet));
@@ -187,6 +191,10 @@ export function buildTickBroadcasts(
       ? {
           phase: simState.matchPhase,
           timer: simState.matchTimer,
+          winningTeamId:
+            simState.matchPhase === MatchPhase.Ended
+              ? simulation.computeWinningTeamId()
+              : undefined,
         }
       : undefined,
     snapshot: result.shouldBroadcastSnapshot ? simulation.buildSnapshotMessage() : undefined,

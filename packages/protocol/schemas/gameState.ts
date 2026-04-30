@@ -1,4 +1,4 @@
-import { Encoder, Schema, MapSchema, defineTypes } from "@colyseus/schema";
+import { ArraySchema, Encoder, Schema, MapSchema, defineTypes } from "@colyseus/schema";
 
 Encoder.BUFFER_SIZE = 64 * 1024;
 import { PlayerState } from "./playerState.ts";
@@ -22,6 +22,10 @@ export class GameState extends Schema {
   declare matchTimer: number;
   /** Aggregate territory scores keyed by paintGroupId.toString(); leaderboard ordering stays message-driven. */
   declare scores: MapSchema<number>;
+  /** True when this room runs a team-based mode. */
+  declare isTeamBased: boolean;
+  /** Team colors in team-index order (0xRRGGBB). Empty for FFA. */
+  declare teamColors: ArraySchema<number>;
 }
 defineTypes(GameState, {
   players: { map: PlayerState },
@@ -30,4 +34,6 @@ defineTypes(GameState, {
   matchPhase: "uint8",
   matchTimer: "float32",
   scores: { map: "uint32" },
+  isTeamBased: "boolean",
+  teamColors: ["uint32"],
 });

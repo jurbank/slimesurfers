@@ -677,22 +677,52 @@ export class MatchScene {
     this.localPlayerPatternId = patternId;
   }
 
-  private ensureRemotePlayer(sessionId: string, slimeColor: number, patternId: number): void {
+  private ensureRemotePlayer(
+    sessionId: string,
+    slimeColor: number,
+    patternId: number,
+    name = "",
+  ): void {
     const existing = this.remotePlayers.get(sessionId);
     if (
       existing &&
       this.playerPatterns.get(sessionId) === patternId &&
       this.playerColors.get(sessionId) === slimeColor
-    )
+    ) {
+      if (name) existing.setName(name);
       return;
+    }
     // Don't recreate a mesh for a session that was explicitly removed.
     if (!existing && this.removedSessions.has(sessionId)) return;
     existing?.dispose(this.render.scene);
     this.remoteTrails.get(sessionId)?.dispose();
-    this.remotePlayers.set(sessionId, new RemotePlayer(this.render.scene, slimeColor, patternId));
+    this.remotePlayers.set(
+      sessionId,
+      new RemotePlayer(this.render.scene, slimeColor, patternId, name),
+    );
     this.remoteTrails.set(sessionId, new SkiTrailSystem(this.render.scene, slimeColor));
     this.playerColors.set(sessionId, slimeColor);
     this.playerPatterns.set(sessionId, patternId);
+  }
+
+  private applyTeamRelation(sessionId: string): void {
+    const remotePlayer = this.remotePlayers.get(sessionId);
+    if (!remotePlayer) return;
+    const roomState = this.connection.roomState;
+    if (!roomState?.isTeamBased) {
+      remotePlayer.setTeamRelation("ffa");
+      return;
+    }
+    const localId = this.connection.sessionId;
+    const localSchema = localId ? roomState.players.get(localId) : undefined;
+    const remoteSchema = roomState.players.get(sessionId);
+    if (!localSchema || !remoteSchema) {
+      remotePlayer.setTeamRelation("ffa");
+      return;
+    }
+    const teamColor = roomState.teamColors[remoteSchema.teamId] ?? 0xffffff;
+    const relation = localSchema.teamId === remoteSchema.teamId ? "ally" : "enemy";
+    remotePlayer.setTeamRelation(relation, teamColor);
   }
 
   private removeRemotePlayers(liveIds: Set<string>): void {
@@ -805,6 +835,7 @@ export class MatchScene {
     await this.connection.join(name, colorIndex, playerUuid, {
       onPlayerInit: (
         sessionId: string,
+        name: string,
         slimeColor: number,
         patternId: number,
         paintGroupId: number,
@@ -815,7 +846,8 @@ export class MatchScene {
           this.ensureLocalPlayer(slimeColor, patternId);
           this.runtime.setLocalPaintGroupId(paintGroupId);
         } else {
-          this.ensureRemotePlayer(sessionId, slimeColor, patternId);
+          this.ensureRemotePlayer(sessionId, slimeColor, patternId, name);
+          this.applyTeamRelation(sessionId);
         }
       },
       onPlayerAdded: (
@@ -832,7 +864,8 @@ export class MatchScene {
           this.ensureLocalPlayer(slimeColor, patternId);
           this.runtime.setLocalPaintGroupId(paintGroupId);
         } else {
-          this.ensureRemotePlayer(sessionId, slimeColor, patternId);
+          this.ensureRemotePlayer(sessionId, slimeColor, patternId, name);
+          this.applyTeamRelation(sessionId);
         }
       },
       onPlayerRemoved: (sessionId: string) => {
@@ -886,7 +919,8 @@ export class MatchScene {
           if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
           else {
             liveRemoteIds.add(player.sessionId);
-            this.ensureRemotePlayer(player.sessionId, slimeColor, patternId);
+            const name = this.connection.roomState?.players.get(player.sessionId)?.name || "";
+            this.ensureRemotePlayer(player.sessionId, slimeColor, patternId, name);
           }
           this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetPaint);
         }
@@ -897,7 +931,8 @@ export class MatchScene {
       onLeaderboard: (message) => {
         this.lastLeaderboard = message;
         const timer = this.currentPhase === MatchPhase.Active ? this.connection.matchTimer : 0;
-        this.leaderboard.update(message, this.connection.sessionId, timer);
+        const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
+        this.leaderboard.update(message, this.connection.sessionId, timer, teamColors);
       },
       onMatchPhase: (phase) => {
         this.currentPhase = phase;
@@ -910,7 +945,13 @@ export class MatchScene {
           this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
         } else if (phase === MatchPhase.Ended) {
           this.countdown.hide();
-          this.matchEnd.show(this.lastLeaderboard, this.connection.sessionId);
+          const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
+          this.matchEnd.show(
+            this.lastLeaderboard,
+            this.connection.sessionId,
+            this.connection.winningTeamId,
+            teamColors,
+          );
           this.input.setEnabled(false);
         }
       },
@@ -1210,10 +1251,17 @@ export class MatchScene {
           disposableTotal > 0
             ? `${getWeaponDefinition(DEFAULT_WEAPON_ID).displayName} / ${equippedDef.displayName}`
             : equippedDef.displayName;
+        const roomState = this.connection.roomState;
+        const localSchemaPlayer = roomState?.players.get(this.connection.sessionId ?? "");
+        const teamColor =
+          roomState?.isTeamBased && localSchemaPlayer !== undefined
+            ? roomState.teamColors[localSchemaPlayer.teamId]
+            : undefined;
         this.combatHud.update(
           weaponLabel,
           predictedLocalState.health,
           GAME_CONFIG.player.maxHealth,
+          teamColor,
         );
       } else {
         this.lastLocalHealth = null;
@@ -1252,9 +1300,10 @@ export class MatchScene {
 
       for (const [sessionId, remotePlayer] of this.remotePlayers) {
         if (sessionId === localSessionId) continue;
+        this.applyTeamRelation(sessionId);
         const remoteState = this.runtime.getRemotePlayerState(sessionId, now);
         if (remoteState) {
-          remotePlayer.update(remoteState, dt);
+          remotePlayer.update(remoteState, dt, this.camera.camera);
           const remotePos = new THREE.Vector3(
             remoteState.pos.x,
             remoteState.pos.y,

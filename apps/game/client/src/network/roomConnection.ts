@@ -10,6 +10,7 @@ import type {
   KillEventBatchMessage,
   KillEventMessage,
   LeaderboardMessage,
+  MatchPhaseMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
   SnapshotMessage,
@@ -21,6 +22,7 @@ import type { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 export interface RoomCallbacks {
   onPlayerInit(
     sessionId: string,
+    name: string,
     slimeColor: number,
     patternId: number,
     paintGroupId: number,
@@ -47,6 +49,7 @@ export interface RoomCallbacks {
 
 export class RoomConnection {
   private room: Room<unknown, GameState> | null = null;
+  private _winningTeamId: number | undefined = undefined;
 
   get sessionId(): string | null {
     return this.room?.sessionId ?? null;
@@ -64,6 +67,10 @@ export class RoomConnection {
     return this.room?.state.matchPhase ?? MatchPhase.Lobby;
   }
 
+  get winningTeamId(): number | undefined {
+    return this._winningTeamId;
+  }
+
   async fetchTakenColorIndices(): Promise<number[]> {
     try {
       const res = await colyseusClient.http.get<{ takenColorIndices: number[] }>("/colors");
@@ -79,6 +86,7 @@ export class RoomConnection {
     playerUuid: string | null,
     callbacks: RoomCallbacks,
   ): Promise<void> {
+    this._winningTeamId = undefined;
     const devClusterSpawns =
       import.meta.env.DEV && import.meta.env.VITE_CLUSTER_PLAYER_SPAWNS === "true";
     this.room = await colyseusClient.joinOrCreate(
@@ -111,6 +119,12 @@ export class RoomConnection {
       callbacks.onKillEvents(message.events);
     });
 
+    this.room.onMessage(MessageType.MatchPhase, (message: MatchPhaseMessage) => {
+      if (message.winningTeamId !== undefined) {
+        this._winningTeamId = message.winningTeamId;
+      }
+    });
+
     let lastPhase: MatchPhase | null = null;
     this.room.onStateChange((state: GameState) => {
       if (state.matchPhase !== lastPhase) {
@@ -137,7 +151,13 @@ export class RoomConnection {
 
     const players = this.room.state.players;
     players?.forEach((player: PlayerState, sessionId: string) => {
-      callbacks.onPlayerInit(sessionId, player.slimeColor, player.patternId, player.paintGroupId);
+      callbacks.onPlayerInit(
+        sessionId,
+        player.name,
+        player.slimeColor,
+        player.patternId,
+        player.paintGroupId,
+      );
     });
 
     this.room.onLeave(() => {
