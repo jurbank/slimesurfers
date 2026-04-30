@@ -126,7 +126,9 @@ export class RemotePlayer {
     this.updateWeapon(state.equippedWeaponId);
 
     const airborne = state.movementState === PlayerMovementState.Airborne;
-    const effectivelySubmerged = state.isOnFriendlyPaint && !airborne && !state.isShooting;
+    const effectivelySubmerged =
+      (state.isOnFriendlyPaint && !airborne && !state.isShooting) ||
+      state.surfState === PlayerSurfState.SurfmingHidden;
 
     this.mesh.visible = !effectivelySubmerged;
 

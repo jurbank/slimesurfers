@@ -43,7 +43,7 @@ export class Nameplate {
     this.material = new THREE.SpriteMaterial({
       map: this.texture,
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
       opacity: 0,
     });
@@ -52,7 +52,7 @@ export class Nameplate {
     this.sprite.position.set(0, 3.25, 0);
     this.sprite.scale.set(SPRITE_WIDTH, SPRITE_HEIGHT, 1);
     this.sprite.renderOrder = 1201;
-    this.sprite.frustumCulled = false;
+    this.sprite.frustumCulled = true;
     this.sprite.visible = false;
 
     this.draw();

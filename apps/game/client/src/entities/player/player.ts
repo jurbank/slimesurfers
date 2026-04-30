@@ -170,7 +170,9 @@ export class LocalPlayer {
     }
 
     const airborne = state.movementState === PlayerMovementState.Airborne;
-    const effectivelySubmerged = state.isOnFriendlyPaint && !airborne && !state.isShooting;
+    const effectivelySubmerged =
+      (state.isOnFriendlyPaint && !airborne && !state.isShooting) ||
+      state.surfState === PlayerSurfState.SurfmingHidden;
 
     if (effectivelySubmerged) {
       this.submersionTimer += dt;
