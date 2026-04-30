@@ -26,16 +26,16 @@ import { InputSystem } from "../systems/inputSystem.ts";
 import { PaintSystem } from "../systems/paintSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
-import { PickupSystem } from "../systems/pickupSystem.ts";
-import { HealthPickupSystem } from "../systems/healthPickupSystem.ts";
+import { PickupSystem } from "../systems/pickup/pickupSystem.ts";
+import { HealthPickupSystem } from "../systems/pickup/healthPickupSystem.ts";
 import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { RailSystem } from "../systems/railSystem.ts";
-import { MatchAudioSystem } from "../systems/matchAudioSystem.ts";
-import { SoundSystem } from "../systems/soundSystem.ts";
+import { MatchAudioSystem } from "../systems/sound/matchAudioSystem.ts";
+import { SoundSystem } from "../systems/sound/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
 import { LocalPlayer } from "../entities/player/player.ts";
@@ -789,7 +789,7 @@ export class MatchScene {
   }
 
   requestPointerCapture(): void {
-    void this.render.renderer.domElement.requestPointerLock().catch(() => {});
+    void this.render.renderer.domElement.requestPointerLock().catch(() => { });
   }
 
   private reconnect(): void {

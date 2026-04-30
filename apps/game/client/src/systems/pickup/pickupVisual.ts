@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../assets/weaponModels.ts";
+import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../../assets/weaponModels.ts";
 
 const OUTLINE_FALLBACK_SCALE = 1.25;
 const OUTLINE_MODEL_SCALE = 1.18;

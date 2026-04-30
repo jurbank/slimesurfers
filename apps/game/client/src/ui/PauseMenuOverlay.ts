@@ -1,6 +1,6 @@
 import { AIR_TRICK_DEFS, type AirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
-import type { SoundSystem, SoundCategory } from "../systems/soundSystem.ts";
+import type { SoundSystem, SoundCategory } from "../systems/sound/soundSystem.ts";
 
 type PauseMenuCallback = () => void;
 

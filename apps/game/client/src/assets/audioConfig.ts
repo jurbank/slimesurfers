@@ -1,4 +1,4 @@
-import type { SoundCategory } from "../systems/soundSystem.ts";
+import type { SoundCategory } from "../systems/sound/soundSystem.ts";
 
 interface AudioAsset {
   url: string;

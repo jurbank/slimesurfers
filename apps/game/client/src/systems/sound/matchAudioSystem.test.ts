@@ -4,7 +4,7 @@ import { type WeaponId as WeaponIdValue, WeaponId } from "@splat/content/combat/
 import type { PlayerSnapshot } from "@splat/protocol/network/serverMessages.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import { MatchAudioSystem } from "./matchAudioSystem.ts";
-import type { RemovedProjectile } from "./projectileSystem.ts";
+import type { RemovedProjectile } from "../projectileSystem.ts";
 import type { SoundSystem } from "./soundSystem.ts";
 
 function createRemovedProjectile(weaponId: WeaponIdValue = WeaponId.MachineGun): RemovedProjectile {
@@ -47,7 +47,7 @@ function createPlayerSnapshot(movementState: PlayerMovementState): PlayerSnapsho
 it("alternates projectile impact splat sounds", () => {
   const playedKeys: string[] = [];
   const sound = {
-    playSfx: () => {},
+    playSfx: () => { },
     playSfxAt: (key: string) => {
       playedKeys.push(key);
     },
@@ -91,7 +91,7 @@ it("resets projectile impact splat alternation when cleared", () => {
 it("plays the big splat sound when a trick lands", () => {
   const playedKeys: string[] = [];
   const sound = {
-    playSfx: () => {},
+    playSfx: () => { },
     playSfxAt: (key: string) => {
       playedKeys.push(key);
     },
