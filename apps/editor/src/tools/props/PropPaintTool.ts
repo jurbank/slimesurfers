@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { PerformanceMetricGroup, PropBrushState } from "../../types.ts";
 import { MAX_SKATE_PARK_INSTANCES, SkateParkProp } from "./SkateParkProp.ts";
-import { MAX_TREE_INSTANCES, TreesProp } from "./TreesProp.ts";
+import { MAX_NATURE_INSTANCES, NatureProps } from "./NatureProps.ts";
 
 export interface PropPaintConnectOptions {
   canvas: HTMLCanvasElement;
@@ -19,7 +19,7 @@ export class PropPaintTool {
   private shouldOrbit: (() => boolean) | null = null;
 
   private readonly raycaster = new THREE.Raycaster();
-  private readonly treesProp = new TreesProp();
+  private readonly natureProps = new NatureProps();
   private readonly skateParkProp = new SkateParkProp();
   private readonly dummy = new THREE.Object3D();
   private readonly tangent = new THREE.Vector3();
@@ -48,7 +48,7 @@ export class PropPaintTool {
     this.shouldOrbit = options.shouldOrbit;
 
     this.brushCursor = this.createBrushCursor();
-    this.scene.add(this.treesProp.group, this.skateParkProp.group, this.brushCursor);
+    this.scene.add(this.natureProps.group, this.skateParkProp.group, this.brushCursor);
 
     this.canvas.addEventListener("pointermove", this.onPointerMove, false);
     this.canvas.addEventListener("pointerdown", this.onPointerDown, true);
@@ -70,7 +70,7 @@ export class PropPaintTool {
   }
 
   getPerformanceStats(): PerformanceMetricGroup[] {
-    return [...this.treesProp.getPerformanceStats(), ...this.skateParkProp.getPerformanceStats()];
+    return [...this.natureProps.getPerformanceStats(), ...this.skateParkProp.getPerformanceStats()];
   }
 
   dispose(): void {
@@ -82,11 +82,11 @@ export class PropPaintTool {
       this.canvas.style.cursor = "";
     }
     if (this.scene) {
-      this.scene.remove(this.treesProp.group);
+      this.scene.remove(this.natureProps.group);
       this.scene.remove(this.skateParkProp.group);
       if (this.brushCursor) this.scene.remove(this.brushCursor);
     }
-    this.treesProp.dispose();
+    this.natureProps.dispose();
     this.skateParkProp.dispose();
     if (this.brushCursor) {
       this.brushCursor.geometry.dispose();
@@ -158,11 +158,11 @@ export class PropPaintTool {
   private getPropCount(propId: PropBrushState["propId"]): number {
     return propId === "ramp"
       ? this.skateParkProp.getCount(propId)
-      : this.treesProp.getCount(propId);
+      : this.natureProps.getCount(propId);
   }
 
   private getMaxInstances(propId: PropBrushState["propId"]): number {
-    return propId === "ramp" ? MAX_SKATE_PARK_INSTANCES : MAX_TREE_INSTANCES;
+    return propId === "ramp" ? MAX_SKATE_PARK_INSTANCES : MAX_NATURE_INSTANCES;
   }
 
   private addPropInstance(propId: PropBrushState["propId"], matrix: THREE.Matrix4): void {
@@ -170,7 +170,7 @@ export class PropPaintTool {
       this.skateParkProp.add(propId, matrix);
       return;
     }
-    this.treesProp.add(propId, matrix);
+    this.natureProps.add(propId, matrix);
   }
 
   private buildBasis(n: THREE.Vector3): void {

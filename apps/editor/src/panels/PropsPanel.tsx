@@ -1,26 +1,48 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { PropBrushState, PropId } from "../types.ts";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
+import { GridSelector } from "./ui/GridSelector.tsx";
+import { PropPreview } from "./ui/PropPreview.tsx";
 
-const TREE_PROPS: { id: PropId; label: string; description: string }[] = [
+const NATURE_PROPS: { id: PropId; label: string; preview: ReactNode }[] = [
   {
     id: "lowPolyTree",
-    label: "Low Poly Tree",
-    description: "Paintable trunk and canopy instances",
+    label: "Low Poly",
+    preview: <PropPreview propId="lowPolyTree" />,
   },
   {
     id: "palmTree",
-    label: "Palm Tree",
-    description: "Tapered trunk with low poly fronds",
+    label: "Palm",
+    preview: <PropPreview propId="palmTree" />,
+  },
+  {
+    id: "mushroom",
+    label: "Mushroom",
+    preview: <PropPreview propId="mushroom" />,
+  },
+  {
+    id: "cactus",
+    label: "Cactus",
+    preview: <PropPreview propId="cactus" />,
+  },
+  {
+    id: "bush",
+    label: "Bush",
+    preview: <PropPreview propId="bush" />,
+  },
+  {
+    id: "flower",
+    label: "Flower",
+    preview: <PropPreview propId="flower" />,
   },
 ];
 
-const SKATE_PARK_PROPS: { id: PropId; label: string; description: string }[] = [
+const SKATE_PARK_PROPS: { id: PropId; label: string; preview: ReactNode }[] = [
   {
     id: "ramp",
     label: "Ramp",
-    description: "Low poly skate ramp instance",
+    preview: <PropPreview propId="ramp" />,
   },
 ];
 
@@ -53,8 +75,8 @@ export function PropsPanel({ onPropBrushChange }: PropsPanelProps) {
 
   function handlePropClick(propId: PropId) {
     const next = selectedProp === propId ? null : propId;
-    setSelectedProp(next);
-    notifyBrush(next, brushSize, density, scale);
+    setSelectedProp(next as PropId);
+    notifyBrush(next as PropId, brushSize, density, scale);
   }
 
   function handleSizeChange(v: number) {
@@ -70,33 +92,6 @@ export function PropsPanel({ onPropBrushChange }: PropsPanelProps) {
   function handleScaleChange(v: number) {
     setScale(v);
     if (selectedProp) notifyBrush(selectedProp, brushSize, density, v);
-  }
-
-  function renderPropButtons(props: { id: PropId; label: string; description: string }[]) {
-    return (
-      <div className="space-y-2">
-        {props.map(({ id, label, description }) => (
-          <button
-            key={id}
-            onClick={() => handlePropClick(id)}
-            className={`w-full text-left px-3 py-2 rounded border transition-colors ${
-              selectedProp === id
-                ? "bg-cyan-500 text-black border-cyan-400"
-                : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
-            }`}
-          >
-            <span className="block text-xs font-semibold">{label}</span>
-            <span
-              className={`block text-[11px] mt-0.5 ${
-                selectedProp === id ? "text-black/70" : "text-zinc-500"
-              }`}
-            >
-              {description}
-            </span>
-          </button>
-        ))}
-      </div>
-    );
   }
 
   function renderBrushSettings() {
@@ -135,14 +130,27 @@ export function PropsPanel({ onPropBrushChange }: PropsPanelProps) {
 
   return (
     <div className="space-y-4">
-      <Section title="Trees">
-        {renderPropButtons(TREE_PROPS)}
+      <Section title="Nature">
+        <GridSelector
+          items={NATURE_PROPS}
+          selectedId={selectedProp}
+          onSelect={(id) => handlePropClick(id as PropId)}
+        />
         {selectedProp &&
-          TREE_PROPS.some((prop) => prop.id === selectedProp) &&
+          NATURE_PROPS.some((prop) => prop.id === selectedProp) &&
           renderBrushSettings()}
       </Section>
 
-      <Section title="Skate Park">{renderPropButtons(SKATE_PARK_PROPS)}</Section>
+      <Section title="Skate Park">
+        <GridSelector
+          items={SKATE_PARK_PROPS}
+          selectedId={selectedProp}
+          onSelect={(id) => handlePropClick(id as PropId)}
+        />
+        {selectedProp &&
+          SKATE_PARK_PROPS.some((prop) => prop.id === selectedProp) &&
+          renderBrushSettings()}
+      </Section>
     </div>
   );
 }

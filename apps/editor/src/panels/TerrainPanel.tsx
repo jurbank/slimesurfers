@@ -10,6 +10,7 @@ import { BrushSettings } from "./ui/BrushSettings.tsx";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
+import { GridSelector } from "./ui/GridSelector.tsx";
 
 const BRUSH_MODES: { id: BrushMode; label: string }[] = [
   { id: "raise", label: "Raise" },
@@ -119,21 +120,12 @@ export function TerrainPanel({
   return (
     <div className="space-y-4">
       <Section title="Sculpt">
-        <div className="grid grid-cols-4 gap-1">
-          {BRUSH_MODES.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => handleModeClick(id)}
-              className={`py-1 text-xs rounded transition-colors ${
-                brushMode === id
-                  ? "bg-cyan-500 text-black font-semibold"
-                  : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <GridSelector
+          items={BRUSH_MODES}
+          selectedId={brushMode}
+          onSelect={(id) => handleModeClick(id as BrushMode)}
+          columns={4}
+        />
         {brushMode && (
           <div className="mt-3 space-y-2">
             <BrushSettings

@@ -8,6 +8,7 @@ import {
 } from "../tools/tracks/TrackTypes.ts";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
+import { GridSelector } from "./ui/GridSelector.tsx";
 
 const EDIT_MODES: { id: TrackEditMode; label: string }[] = [
   { id: "add", label: "Add" },
@@ -162,28 +163,16 @@ export function TracksPanel({
   return (
     <div className="space-y-4">
       <Section title="Tracks">
-        <div className="space-y-1">
-          {tracks.map((track) => (
-            <button
-              key={track.id}
-              onClick={() => onActiveTrackChange(track.id)}
-              className={`w-full text-left px-3 py-2 rounded border transition-colors ${
-                activeTrack.id === track.id
-                  ? "bg-cyan-500 text-black border-cyan-400"
-                  : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
-              }`}
-            >
-              <span className="block text-xs font-semibold">{track.name}</span>
-              <span
-                className={`block text-[11px] mt-0.5 ${
-                  activeTrack.id === track.id ? "text-black/70" : "text-zinc-500"
-                }`}
-              >
-                {track.points.length} points
-              </span>
-            </button>
-          ))}
-        </div>
+        <GridSelector
+          items={tracks.map((t) => ({
+            id: t.id,
+            label: t.name,
+            description: `${t.points.length} pts`,
+          }))}
+          selectedId={activeTrackId}
+          onSelect={onActiveTrackChange}
+          columns={2}
+        />
         <div className="grid grid-cols-3 gap-1 pt-1">
           <button
             onClick={addTrack}
@@ -211,24 +200,15 @@ export function TracksPanel({
         <input
           value={activeTrack.name}
           onChange={(e) => updateActiveTrack({ ...activeTrack, name: e.target.value })}
-          className="w-full px-2 py-1 text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 rounded focus:outline-none focus:border-cyan-500"
+          className="w-full px-2 py-1 text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 rounded focus:outline-none focus:border-cyan-500 mb-2"
         />
-        <div className="grid grid-cols-3 gap-1">
-          {EDIT_MODES.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => handleModeClick(id)}
-              className={`py-1 text-xs rounded transition-colors ${
-                mode === id
-                  ? "bg-cyan-500 text-black font-semibold"
-                  : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-1 pt-1">
+        <GridSelector
+          items={EDIT_MODES}
+          selectedId={mode}
+          onSelect={(id) => handleModeClick(id as TrackEditMode)}
+          columns={3}
+        />
+        <div className="grid grid-cols-2 gap-1 pt-2">
           <button
             onClick={() => updateActiveTrack({ ...activeTrack, closed: !activeTrack.closed })}
             className={`py-1 text-xs rounded transition-colors ${

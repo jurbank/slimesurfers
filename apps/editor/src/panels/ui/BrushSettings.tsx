@@ -1,5 +1,6 @@
 import type { BrushFalloff } from "../../types.ts";
 import { Slider } from "./Slider.tsx";
+import { GridSelector } from "./GridSelector.tsx";
 
 const FALLOFFS: { id: BrushFalloff; label: string }[] = [
   { id: "smooth", label: "Smooth" },
@@ -43,23 +44,14 @@ export function BrushSettings({
         step={0.01}
         onChange={onStrengthChange}
       />
-      <div className="flex items-center justify-between">
+      <div className="space-y-1.5 pt-1">
         <label className="text-xs text-zinc-400">Falloff</label>
-        <div className="flex gap-1">
-          {FALLOFFS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => onFalloffChange(id)}
-              className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                falloff === id
-                  ? "bg-cyan-500 text-black font-semibold"
-                  : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <GridSelector
+          items={FALLOFFS}
+          selectedId={falloff}
+          onSelect={(id) => onFalloffChange(id as BrushFalloff)}
+          columns={3}
+        />
       </div>
     </div>
   );
