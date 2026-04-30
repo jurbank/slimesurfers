@@ -3,7 +3,7 @@ import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
 const DEFAULT_PLANET_RADIUS = 50;
 const DEFAULT_TERRITORY_ROWS = 12;
 const DEFAULT_IMPACT_STAMP_RADIUS = 0.03;
-const PLAYER_SIZE_SCALE = 2;
+const PLAYER_SIZE_SCALE = 1.8;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
