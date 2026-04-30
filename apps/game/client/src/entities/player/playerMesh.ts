@@ -100,6 +100,7 @@ export interface PlayerPosePart {
   mesh: THREE.Mesh;
   outline: THREE.Mesh;
   jsrOutline: THREE.Mesh;
+  trickOutline: THREE.Mesh;
 }
 
 export interface PlayerPoseRig {
@@ -160,10 +161,10 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   ];
   const appendages: Record<
     AppendageKey,
-    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh }
+    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh; trickOutline?: THREE.Mesh }
   > = {} as Record<
     AppendageKey,
-    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh }
+    { mesh: THREE.Mesh; outline?: THREE.Mesh; jsrOutline?: THREE.Mesh; trickOutline?: THREE.Mesh }
   >;
 
   for (const pos of appendagePositions) {
@@ -342,26 +343,68 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
 
   liveVisualMesh.add(jsrOutline);
 
+  // 7. Trick Charge Aura (Inverted Hull)
+  const trickOutlineMat = new THREE.MeshBasicMaterial({
+    color: slimeColor,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const trickChargeAura = new THREE.Group();
+  trickChargeAura.visible = false;
+
+  const bodyTrick = new THREE.Mesh(bodyGeom, trickOutlineMat);
+  bodyTrick.scale.setScalar(1.25);
+  trickChargeAura.add(bodyTrick);
+
+  const leftEarTrick = new THREE.Mesh(earGeom, trickOutlineMat);
+  leftEarTrick.position.copy(leftEar.position);
+  leftEarTrick.rotation.copy(leftEar.rotation);
+  leftEarTrick.scale.setScalar(1.25);
+  trickChargeAura.add(leftEarTrick);
+
+  const rightEarTrick = new THREE.Mesh(earGeom, trickOutlineMat);
+  rightEarTrick.position.copy(rightEar.position);
+  rightEarTrick.rotation.copy(rightEar.rotation);
+  rightEarTrick.scale.setScalar(1.25);
+  trickChargeAura.add(rightEarTrick);
+
+  for (const appendage of Object.values(appendages)) {
+    const appendageTrick = new THREE.Mesh(appendageGeom, trickOutlineMat);
+    appendageTrick.position.copy(appendage.mesh.position);
+    appendageTrick.scale.setScalar(1.25);
+    appendage.trickOutline = appendageTrick;
+    trickChargeAura.add(appendageTrick);
+  }
+
+  liveVisualMesh.add(trickChargeAura);
+
   const poseRig: PlayerPoseRig = {
     leftArm: {
       mesh: appendages.leftArm.mesh,
       outline: appendages.leftArm.outline!,
       jsrOutline: appendages.leftArm.jsrOutline!,
+      trickOutline: appendages.leftArm.trickOutline!,
     },
     rightArm: {
       mesh: appendages.rightArm.mesh,
       outline: appendages.rightArm.outline!,
       jsrOutline: appendages.rightArm.jsrOutline!,
+      trickOutline: appendages.rightArm.trickOutline!,
     },
     frontFoot: {
       mesh: appendages.frontFoot.mesh,
       outline: appendages.frontFoot.outline!,
       jsrOutline: appendages.frontFoot.jsrOutline!,
+      trickOutline: appendages.frontFoot.trickOutline!,
     },
     rearFoot: {
       mesh: appendages.rearFoot.mesh,
       outline: appendages.rearFoot.outline!,
       jsrOutline: appendages.rearFoot.jsrOutline!,
+      trickOutline: appendages.rearFoot.trickOutline!,
     },
   };
 
@@ -380,49 +423,6 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   disturbanceMesh.position.y = -0.3;
   disturbanceMesh.visible = false;
   group.add(disturbanceMesh);
-
-  const trickChargeAura = new THREE.Group();
-  trickChargeAura.visible = false;
-
-  const auraShell = new THREE.Mesh(
-    new THREE.SphereGeometry(bodyRadius * 1.32, 24, 18),
-    new THREE.MeshBasicMaterial({
-      color: slimeColor,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.BackSide,
-    }),
-  );
-  trickChargeAura.add(auraShell);
-
-  const ringGeometry = new THREE.TorusGeometry(bodyRadius * 1.2, 0.055, 10, 42);
-  const ringMaterial = new THREE.MeshBasicMaterial({
-    color: slimeColor,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const horizontalRing = new THREE.Mesh(ringGeometry, ringMaterial);
-  horizontalRing.rotation.x = Math.PI / 2;
-  trickChargeAura.add(horizontalRing);
-
-  const verticalRing = new THREE.Mesh(
-    ringGeometry,
-    new THREE.MeshBasicMaterial({
-      color: slimeColor,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
-  verticalRing.rotation.y = Math.PI / 2;
-  trickChargeAura.add(verticalRing);
-
-  liveVisualMesh.add(trickChargeAura);
 
   return {
     group,
