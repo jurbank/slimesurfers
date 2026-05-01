@@ -14,6 +14,8 @@ export interface WeaponDefinition {
   projectileSpeed: number;
   projectileLifetimeMs: number;
   projectileCollisionRadius: number;
+  /** Acceleration toward the projectile's nearest planet, in world units per second squared. */
+  projectileGravity?: number;
   fireCooldownMs: number;
   slimeCost: number;
   directDamage: number;
@@ -63,18 +65,19 @@ export const DEFAULT_WEAPON_ID = WeaponId.MachineGun;
 export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
   [WeaponId.MachineGun]: {
     id: WeaponId.MachineGun,
-    displayName: "Pew Pew",
+    displayName: "Slime Spew",
     behavior: "projectile",
-    projectileSpeed: 150,
-    projectileLifetimeMs: 6000,
-    projectileCollisionRadius: 0.2,
-    fireCooldownMs: 80,
-    slimeCost: 3,
-    directDamage: 10,
+    projectileSpeed: 94,
+    projectileLifetimeMs: 2200,
+    projectileCollisionRadius: 0.34,
+    projectileGravity: 52,
+    fireCooldownMs: 50,
+    slimeCost: 1,
+    directDamage: 5,
     splashDamage: 0,
     splashRadius: 0,
     blastImpulse: 0,
-    paintRadiusMultiplier: 1,
+    paintRadiusMultiplier: 0.7,
     pickupColor: 0x3fe7ff,
     pickupModelPath: "/models/rifle-model.glb",
   },

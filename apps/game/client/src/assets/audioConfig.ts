@@ -11,7 +11,7 @@ interface AudioAsset {
 
 export const AUDIO: Record<string, AudioAsset> = {
   // SFX
-  pow: { url: "/audio/pew_pow.mp3", category: "sfx", volume: 0.5 },
+  pow: { url: "/audio/pew_pow.mp3", category: "sfx", volume: 0.0 },
   gunDry: { url: "/audio/gun_dry.mp3", category: "sfx", volume: 0.5 },
   bazookaPow: { url: "/audio/bazooka_pow.mp3", category: "sfx", volume: 0.7 },
   riflePow: { url: "/audio/rifle_pow.mp3", category: "sfx", volume: 0.65 },

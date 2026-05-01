@@ -85,6 +85,7 @@ export interface PlayerMeshRig {
   liveMesh: THREE.Group;
   deadMesh: THREE.Group;
   deathParticles: PlayerDeathParticles;
+  face: PlayerFaceRig;
   poseRig: PlayerPoseRig;
   weaponMesh: THREE.Group;
   weaponFallbackMesh: THREE.Mesh;
@@ -111,6 +112,183 @@ export interface PlayerPoseRig {
 }
 
 type AppendageKey = keyof PlayerPoseRig;
+export type PlayerFaceExpression = "normal" | "spewing";
+
+export interface PlayerFaceRig {
+  mesh: THREE.Group;
+  material: THREE.MeshBasicMaterial;
+  setExpression: (expression: PlayerFaceExpression) => void;
+}
+
+const FACE_IMAGE_PATHS: Record<PlayerFaceExpression, string> = {
+  normal: "/images/player-faces/normal.png",
+  spewing: "/images/player-faces/spewing.png",
+};
+const FACE_IMAGE_ASPECT = 179 / 135;
+const FACE_SURFACE_OFFSET = 0.006;
+const faceTextureCache: Partial<Record<PlayerFaceExpression, THREE.Texture>> = {};
+
+function getFaceTexture(expression: PlayerFaceExpression): THREE.Texture {
+  const cached = faceTextureCache[expression];
+  if (cached) return cached;
+
+  if (typeof window === "undefined") {
+    const texture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    texture.needsUpdate = true;
+    faceTextureCache[expression] = texture;
+    return texture;
+  }
+
+  const texture = new THREE.TextureLoader().load(FACE_IMAGE_PATHS[expression]);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  faceTextureCache[expression] = texture;
+  return texture;
+}
+
+function buildCurvedRectPatchGeometry(
+  width: number,
+  height: number,
+  bodyRadius: number,
+  yOffset: number,
+  surfaceOffset: number,
+  columns = 16,
+  rows = 12,
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let row = 0; row <= rows; row++) {
+    const v = row / rows;
+    const y = yOffset + (0.5 - v) * height;
+    for (let column = 0; column <= columns; column++) {
+      const u = column / columns;
+      const x = (u - 0.5) * width;
+      const z = Math.sqrt(Math.max(0, bodyRadius * bodyRadius - x * x - y * y)) + surfaceOffset;
+      positions.push(x, y, z);
+      uvs.push(u, 1 - v);
+    }
+  }
+
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const a = row * (columns + 1) + column;
+      const b = a + 1;
+      const c = a + columns + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function buildCurvedCirclePatchGeometry(
+  radius: number,
+  bodyRadius: number,
+  yOffset: number,
+  surfaceOffset: number,
+  radialSegments = 8,
+  angularSegments = 48,
+): THREE.BufferGeometry {
+  const positions: number[] = [0, yOffset, bodyRadius + surfaceOffset];
+  const uvs: number[] = [0.5, 0.5];
+  const indices: number[] = [];
+
+  for (let ring = 1; ring <= radialSegments; ring++) {
+    const r = (radius * ring) / radialSegments;
+    for (let segment = 0; segment < angularSegments; segment++) {
+      const theta = (segment / angularSegments) * Math.PI * 2;
+      const x = Math.cos(theta) * r;
+      const y = yOffset + Math.sin(theta) * r;
+      const z = Math.sqrt(Math.max(0, bodyRadius * bodyRadius - x * x - y * y)) + surfaceOffset;
+      positions.push(x, y, z);
+      uvs.push(0.5 + x / (radius * 2), 0.5 + (y - yOffset) / (radius * 2));
+    }
+  }
+
+  for (let segment = 0; segment < angularSegments; segment++) {
+    indices.push(0, 1 + segment, 1 + ((segment + 1) % angularSegments));
+  }
+
+  for (let ring = 1; ring < radialSegments; ring++) {
+    const innerStart = 1 + (ring - 1) * angularSegments;
+    const outerStart = 1 + ring * angularSegments;
+    for (let segment = 0; segment < angularSegments; segment++) {
+      const next = (segment + 1) % angularSegments;
+      const a = innerStart + segment;
+      const b = innerStart + next;
+      const c = outerStart + segment;
+      const d = outerStart + next;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createPlayerFace(bodyRadius: number): PlayerFaceRig {
+  let currentExpression: PlayerFaceExpression = "normal";
+  const faceHeight = bodyRadius * 1.08;
+  const faceWidth = faceHeight * FACE_IMAGE_ASPECT;
+  const faceYOffset = -bodyRadius * 0.03;
+  const group = new THREE.Group();
+
+  const backing = new THREE.Mesh(
+    buildCurvedCirclePatchGeometry(faceWidth * 0.52, bodyRadius, faceYOffset, FACE_SURFACE_OFFSET),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  backing.renderOrder = 2;
+  group.add(backing);
+
+  const material = new THREE.MeshBasicMaterial({
+    map: getFaceTexture(currentExpression),
+    transparent: true,
+    alphaTest: 0.02,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const mesh = new THREE.Mesh(
+    buildCurvedRectPatchGeometry(
+      faceWidth,
+      faceHeight,
+      bodyRadius,
+      faceYOffset,
+      FACE_SURFACE_OFFSET * 1.8,
+    ),
+    material,
+  );
+  mesh.renderOrder = 3;
+  group.add(mesh);
+
+  return {
+    mesh: group,
+    material,
+    setExpression(expression: PlayerFaceExpression): void {
+      if (expression === currentExpression) return;
+      currentExpression = expression;
+      material.map = getFaceTexture(expression);
+      material.needsUpdate = true;
+    },
+  };
+}
 
 export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshRig {
   const group = new THREE.Group();
@@ -174,29 +352,8 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     liveVisualMesh.add(appendage);
   }
 
-  // 4. 4 Alien Eyes
-  const eyeGeom = new THREE.SphereGeometry(0.05, 8, 8);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-
-  const eyePositions = [
-    { x: -0.15, y: 0.15, z: 0.4 }, // Top left
-    { x: 0.15, y: 0.15, z: 0.4 }, // Top right
-    { x: -0.12, y: -0.05, z: 0.45 }, // Bottom left
-    { x: 0.12, y: -0.05, z: 0.45 }, // Bottom right
-  ];
-
-  for (const pos of eyePositions) {
-    const eye = new THREE.Mesh(eyeGeom, eyeMat);
-    eye.position.set(pos.x, pos.y, pos.z);
-    liveVisualMesh.add(eye);
-  }
-
-  // 5. Tiny Mouth
-  const mouthGeom = new THREE.SphereGeometry(0.03, 8, 8);
-  const mouthMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  const mouth = new THREE.Mesh(mouthGeom, mouthMat);
-  mouth.position.set(0, -0.2, 0.45);
-  liveVisualMesh.add(mouth);
+  const face = createPlayerFace(bodyRadius);
+  liveVisualMesh.add(face.mesh);
 
   const snowboardMesh = new THREE.Group();
 
@@ -429,6 +586,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     liveMesh,
     deadMesh,
     deathParticles,
+    face,
     poseRig,
     weaponMesh,
     weaponFallbackMesh,

@@ -7,7 +7,7 @@ import {
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../../assets/weaponModels.ts";
-import { createPlayerMesh, type PlayerPoseRig } from "./playerMesh.ts";
+import { createPlayerMesh, type PlayerFaceRig, type PlayerPoseRig } from "./playerMesh.ts";
 import {
   resetPlayerDeathParticles,
   updatePlayerDeathParticles,
@@ -42,6 +42,7 @@ export class RemotePlayer {
   private readonly liveMesh: THREE.Group;
   private readonly deadMesh: THREE.Group;
   private readonly deathParticles: PlayerDeathParticles;
+  private readonly face: PlayerFaceRig;
   private readonly poseRig: PlayerPoseRig;
   private readonly weaponMesh: THREE.Group;
   private readonly weaponFallbackMesh: THREE.Mesh;
@@ -64,6 +65,7 @@ export class RemotePlayer {
     this.liveMesh = rig.liveMesh;
     this.deadMesh = rig.deadMesh;
     this.deathParticles = rig.deathParticles;
+    this.face = rig.face;
     this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
     this.weaponFallbackMesh = rig.weaponFallbackMesh;
@@ -120,6 +122,7 @@ export class RemotePlayer {
     this.liveMesh.scale.set(1, 1, 1);
     this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
     this.trickChargeEffect.update(state, dt);
+    this.face.setExpression(state.isShooting ? "spewing" : "normal");
     if (state.isCarving) {
       this.liveMesh.scale.set(1.12, 0.68, 1.08);
     }

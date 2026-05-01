@@ -703,6 +703,33 @@ describe("MatchSimulation", () => {
     );
   });
 
+  it("bends default slime stream projectiles toward the nearest planet", () => {
+    const simulation = new MatchSimulation();
+    const shooter = simulation.addPlayer("session-1", "Alpha");
+    const machineGun = getWeaponDefinition(WeaponId.MachineGun);
+    const planet = PLANET_POSITIONS[0]!;
+    const startY = planet.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 30;
+
+    simulation.matchState.projectiles.set("stream-arc-test", {
+      id: "stream-arc-test",
+      ownerId: shooter.sessionId,
+      weaponId: WeaponId.MachineGun,
+      paintGroupId: shooter.paintGroupId,
+      slimeColor: shooter.slimeColor,
+      patternId: 0,
+      pos: { x: planet.x, y: startY, z: planet.z },
+      vel: { x: machineGun.projectileSpeed, y: 0, z: 0 },
+      planetId: "",
+      lifeMs: machineGun.projectileLifetimeMs,
+    });
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    const projectile = simulation.matchState.projectiles.get("stream-arc-test");
+    expect(projectile?.vel.y).toBeLessThan(0);
+    expect(projectile?.pos.y).toBeLessThan(startY);
+  });
+
   it("hits a target that is very close to the shooter", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
