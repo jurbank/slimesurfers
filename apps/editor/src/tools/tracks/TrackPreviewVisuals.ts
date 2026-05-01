@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { EditorConfig } from "../../types.ts";
 import type { TrackPoint, TrackState } from "./TrackTypes.ts";
+import {
+  TRACK_BRIDGE_THRESHOLD,
+  TRACK_SURFACE_OFFSET,
+  TRACK_TUNNEL_TERRAIN_THRESHOLD,
+} from "./trackConstants.ts";
 
 interface TrackSample {
   position: THREE.Vector3;
@@ -11,9 +16,6 @@ interface TrackSample {
 }
 
 export type TrackPreviewRadiusSampler = (nx: number, ny: number, nz: number) => number;
-
-const TRACK_SURFACE_OFFSET = 0.18;
-const TUNNEL_TERRAIN_THRESHOLD = -0.5;
 
 export class TrackPreviewVisuals {
   private config: EditorConfig;
@@ -164,7 +166,6 @@ export class TrackPreviewVisuals {
   private updateBridgeSupports(samples: TrackSample[]): void {
     const bridgeData: THREE.Matrix4[] = [];
     const pillarSpacing = 4;
-    const bridgeThreshold = 1.5;
 
     for (let i = 0; i < samples.length; i += pillarSpacing) {
       const sample = samples[i]!;
@@ -173,10 +174,10 @@ export class TrackPreviewVisuals {
         sample.position.length() > sample.waterRadius + 0.1 &&
         sample.terrainRadius < sample.waterRadius;
 
-      if (distToTerrain <= bridgeThreshold && !isOverWater) continue;
+      if (distToTerrain <= TRACK_BRIDGE_THRESHOLD && !isOverWater) continue;
 
       const targetRadius = isOverWater ? sample.waterRadius : sample.terrainRadius;
-      const height = sample.position.length() - targetRadius;
+      const height = sample.position.length() - targetRadius - TRACK_SURFACE_OFFSET;
       if (height <= 0) continue;
 
       const normal = sample.position.clone().normalize();
@@ -222,7 +223,7 @@ export class TrackPreviewVisuals {
       const rings = closed ? samples.length - 1 : samples.length;
       const isTunnelRing = samples.map(
         (s) =>
-          s.position.length() - s.terrainRadius < TUNNEL_TERRAIN_THRESHOLD ||
+          s.position.length() - s.terrainRadius < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
           s.position.length() < s.waterRadius,
       );
 

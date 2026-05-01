@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { EditorConfig } from "../../types.ts";
 import type { TrackState } from "./TrackTypes.ts";
+import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
 
 export interface TrackCarveSample {
   position: THREE.Vector3;
@@ -23,10 +24,8 @@ export type TrackRadiusSampler = (nx: number, ny: number, nz: number) => number;
 
 export const MAX_TUNNEL_SHADER_SEGMENTS = 64;
 
-const TRACK_SURFACE_OFFSET = 0.18;
 const TUNNEL_SIDE_CLEARANCE = 3;
 const TUNNEL_FLOOR_CLEARANCE = 1.5;
-const TUNNEL_TERRAIN_THRESHOLD = -0.5;
 const TUNNEL_WATER_THRESHOLD = -0.1;
 const MIN_ALONG_INFLUENCE = 3;
 
@@ -80,7 +79,7 @@ export function buildTrackCarveSamples(
       const position = positions[i]!;
       const centerRadius = position.length();
       const isTunnel =
-        centerRadius - terrainRadii[i]! < TUNNEL_TERRAIN_THRESHOLD ||
+        centerRadius - terrainRadii[i]! < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
         centerRadius - waterRadius < TUNNEL_WATER_THRESHOLD;
       if (!isTunnel) continue;
 
@@ -144,6 +143,132 @@ export function getTrackCarvedRadius(
   }
 
   return carvedRadius;
+}
+
+// -- Surface track samples (non-tunnel, near-ground sections) ----------------
+
+export interface TrackSurfaceSample {
+  position: THREE.Vector3;
+  tangent: THREE.Vector3;
+  side: THREE.Vector3;
+  centerRadius: number;
+  halfWidth: number;
+  influenceAlong: number;
+}
+
+/**
+ * Build samples for track sections that are usable as free-movement surfaces.
+ * Tunnel carving can lower surrounding terrain, but the track ribbon itself
+ * remains a playable floor.
+ */
+export function buildTrackSurfaceSamples(
+  tracks: readonly TrackState[],
+  config: EditorConfig,
+  getRadiusAtNormal: TrackRadiusSampler,
+): TrackSurfaceSample[] {
+  const samples: TrackSurfaceSample[] = [];
+
+  for (const track of tracks) {
+    if (track.points.length < 2) continue;
+
+    const controls = track.points.map((point) => {
+      if (point.position) return new THREE.Vector3(...point.position);
+      const normal = new THREE.Vector3(...point.normal).normalize();
+      const radius = getRadiusAtNormal(normal.x, normal.y, normal.z);
+      return normal.multiplyScalar(radius + TRACK_SURFACE_OFFSET);
+    });
+
+    const closed = track.closed && controls.length >= 3;
+    if ((!closed && controls.length < 2) || (closed && controls.length < 3)) continue;
+
+    const curve = new THREE.CatmullRomCurve3(controls, closed, "centripetal");
+    const divisions = Math.max(
+      2,
+      track.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
+    );
+
+    const positions: THREE.Vector3[] = [];
+    const widths: number[] = [];
+    const banks: number[] = [];
+    const terrainRadii: number[] = [];
+
+    for (let i = 0; i <= divisions; i++) {
+      const t = i / divisions;
+      const position = curve.getPoint(t);
+      const normal = position.clone().normalize();
+      const scalars = interpolatePointScalars(track, t, closed);
+      positions.push(position);
+      widths.push(scalars.width);
+      banks.push(scalars.bank);
+      terrainRadii.push(getRadiusAtNormal(normal.x, normal.y, normal.z));
+    }
+
+    const rings = closed ? positions.length - 1 : positions.length;
+
+    for (let i = 0; i < rings; i++) {
+      const position = positions[i]!;
+      const centerRadius = position.length();
+      const prev = closed ? positions[(i - 1 + rings) % rings]! : positions[Math.max(0, i - 1)]!;
+      const next = closed ? positions[(i + 1) % rings]! : positions[Math.min(rings - 1, i + 1)]!;
+      const surfaceNormal = position.clone().normalize();
+      const tangent = next.clone().sub(prev);
+      tangent.addScaledVector(surfaceNormal, -tangent.dot(surfaceNormal));
+      if (tangent.lengthSq() < 1e-8) continue;
+      tangent.normalize();
+
+      const bankRad = ((banks[i] ?? track.bank) * Math.PI) / 180;
+      const side = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
+      side.applyAxisAngle(tangent, bankRad);
+
+      const halfWidth = (widths[i] ?? track.width) * 0.5;
+      const influenceAlong = Math.max(MIN_ALONG_INFLUENCE, next.distanceTo(prev) * 0.8);
+
+      samples.push({ position, tangent, side, centerRadius, halfWidth, influenceAlong });
+    }
+  }
+
+  return samples;
+}
+
+/**
+ * Raise the terrain radius in areas covered by surface track ribbons.
+ * Returns the maximum of the base radius and the ribbon surface height,
+ * with a smooth falloff at the ribbon edges.
+ */
+export function getTrackRaisedRadius(
+  nx: number,
+  ny: number,
+  nz: number,
+  radius: number,
+  samples: readonly TrackSurfaceSample[],
+): number {
+  if (samples.length === 0) return radius;
+
+  const normal = new THREE.Vector3(nx, ny, nz).normalize();
+  let raisedRadius = radius;
+
+  for (const sample of samples) {
+    const pointAtTrackRadius = normal.clone().multiplyScalar(sample.centerRadius);
+    const offset = pointAtTrackRadius.sub(sample.position);
+    const signedLateral = offset.dot(sample.side);
+    const lateral = Math.abs(signedLateral);
+    const along = Math.abs(offset.dot(sample.tangent));
+    const lateralT = lateral / sample.halfWidth;
+    const alongT = along / sample.influenceAlong;
+
+    const edgeT = Math.sqrt(lateralT * lateralT + alongT * alongT);
+    if (edgeT >= 1) continue;
+
+    const falloff = smoothstep(0.72, 1, edgeT);
+    const bankedSurfaceRadius = sample.position
+      .clone()
+      .addScaledVector(sample.side, signedLateral)
+      .length();
+    const target = THREE.MathUtils.lerp(bankedSurfaceRadius, radius, falloff);
+    raisedRadius = Math.max(raisedRadius, target);
+  }
+
+  return raisedRadius;
 }
 
 export function buildTrackCutterSegments(

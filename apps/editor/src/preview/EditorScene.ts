@@ -19,9 +19,12 @@ import { TrackPreviewVisuals } from "../tools/tracks/TrackPreviewVisuals.ts";
 import {
   buildTrackCutterSegments,
   buildTrackCarveSamples,
+  buildTrackSurfaceSamples,
   getTrackCarvedRadius,
+  getTrackRaisedRadius,
   MAX_TUNNEL_SHADER_SEGMENTS,
   type TrackCarveSample,
+  type TrackSurfaceSample,
   type TrackCutterSegment,
 } from "../tools/tracks/trackCarving.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
@@ -79,6 +82,7 @@ export class EditorScene {
   private readonly spawnRaycaster = new THREE.Raycaster();
   private tracks: TrackState[];
   private trackCarveSamples: TrackCarveSample[] = [];
+  private trackSurfaceSamples: TrackSurfaceSample[] = [];
   private previewSpawn: PreviewSpawnState;
   private spawnPlacementActive = false;
   private isSpaceHeld = false;
@@ -440,12 +444,18 @@ export class EditorScene {
   }
 
   private rebuildTrackCarveSamples(): void {
+    const getRadiusAtNormal = (nx: number, ny: number, nz: number) =>
+      getTerrainRadius(nx, ny, nz, this.currentConfig) +
+      this.brushTool.getDisplacementAtNormal(nx, ny, nz);
     this.trackCarveSamples = buildTrackCarveSamples(
       this.tracks,
       this.currentConfig,
-      (nx, ny, nz) =>
-        getTerrainRadius(nx, ny, nz, this.currentConfig) +
-        this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+      getRadiusAtNormal,
+    );
+    this.trackSurfaceSamples = buildTrackSurfaceSamples(
+      this.tracks,
+      this.currentConfig,
+      getRadiusAtNormal,
     );
   }
 
@@ -490,7 +500,10 @@ export class EditorScene {
   ): number {
     const baseRadius =
       getTerrainRadius(nx, ny, nz, config) + this.brushTool.getDisplacementAtNormal(nx, ny, nz);
-    return getTrackCarvedRadius(nx, ny, nz, baseRadius, this.trackCarveSamples);
+    const carvedRadius = getTrackCarvedRadius(nx, ny, nz, baseRadius, this.trackCarveSamples);
+    // Track ribbons are playable floors. Apply them after tunnel carving so tunnel
+    // entrances stay hollow around the track without dropping the player to water.
+    return getTrackRaisedRadius(nx, ny, nz, carvedRadius, this.trackSurfaceSamples);
   }
 
   private createSpawnMarker(): void {

@@ -1,0 +1,3 @@
+export const TRACK_SURFACE_OFFSET = 0.18;
+export const TRACK_BRIDGE_THRESHOLD = 1.5;
+export const TRACK_TUNNEL_TERRAIN_THRESHOLD = -0.5;

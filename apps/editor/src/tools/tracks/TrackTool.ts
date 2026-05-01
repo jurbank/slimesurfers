@@ -5,6 +5,11 @@ import type { PerformanceMetricGroup } from "../../types.ts";
 import { Gizmo } from "../Gizmo.ts";
 import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
 import type { EditorConfig } from "../../types.ts";
+import {
+  TRACK_BRIDGE_THRESHOLD,
+  TRACK_SURFACE_OFFSET,
+  TRACK_TUNNEL_TERRAIN_THRESHOLD,
+} from "./trackConstants.ts";
 
 export interface TrackConnectOptions {
   canvas: HTMLCanvasElement;
@@ -27,7 +32,6 @@ interface TrackSample {
   waterRadius: number;
 }
 
-const TRACK_SURFACE_OFFSET = 0.18;
 const HANDLE_RADIUS = 1.25;
 const HANDLE_PICK_RADIUS = 0.12;
 
@@ -626,7 +630,6 @@ export class TrackTool {
 
     const bridgeData: { matrix: THREE.Matrix4 }[] = [];
     const pillarSpacing = 4;
-    const bridgeThreshold = 1.5;
     const waterLevel = this.config?.terrain.waterLevel ?? 0;
     const planetRadius = this.config?.planet.radius ?? 120;
     const waterRadius = planetRadius + waterLevel;
@@ -637,9 +640,9 @@ export class TrackTool {
       const isOverWater =
         sample.position.length() > waterRadius + 0.1 && sample.terrainRadius < waterRadius;
 
-      if (distToTerrain > bridgeThreshold || isOverWater) {
+      if (distToTerrain > TRACK_BRIDGE_THRESHOLD || isOverWater) {
         const targetRadius = isOverWater ? waterRadius : sample.terrainRadius;
-        const height = sample.position.length() - targetRadius;
+        const height = sample.position.length() - targetRadius - TRACK_SURFACE_OFFSET;
         if (height <= 0) continue;
 
         const normal = sample.position.clone().normalize();
@@ -683,7 +686,6 @@ export class TrackTool {
       return;
     }
 
-    const tunnelThreshold = -0.5;
     const closed = this.state.track.closed && this.state.track.points.length >= 3;
     const rings = closed ? samples.length - 1 : samples.length;
 
@@ -692,7 +694,7 @@ export class TrackTool {
 
     const isTunnelRing = samples.map(
       (s) =>
-        s.position.length() - s.terrainRadius < tunnelThreshold ||
+        s.position.length() - s.terrainRadius < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
         s.position.length() < s.waterRadius,
     );
 
