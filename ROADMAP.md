@@ -5,9 +5,11 @@
 The project is currently aiming for:
 
 - server-authoritative online play
+- single-player/local play on the same simulation and content path where practical
 - territory control as the primary score and win condition
 - room-based online matches with future scale across many rooms/processes
 - clean package boundaries between `content`, `protocol`, `simulation`, `client`, and `server`
+- an editor-to-production content path where authored maps preview and ship through the same runtime map data
 
 This file should track what still needs work, not repeat setup that is already done.
 
@@ -20,6 +22,8 @@ The repo already has the main package split in place:
 - `packages/simulation` for simulation state and deterministic systems
 - `apps/game/server` for Colyseus room hosting
 - `apps/game/client` for rendering, input, and netcode
+- `packages/client-runtime` for browser runtime pieces shared by live play and editor preview
+- `apps/editor` for map authoring, runtime-map export, and local preview hosting
 
 The current architecture direction is still:
 
@@ -48,6 +52,7 @@ The current architecture direction is still:
 - making FFA clean now without blocking future team-based modes
 - expanding tests from basic simulation coverage to real architectural safety nets
 - shifting from foundation-only work into gameplay feature implementation on top of the current server-authoritative base
+- defining the editor runtime map contract so edited planets/scenarios can move into gameplay cleanly
 
 ### Not Done Yet
 
@@ -166,18 +171,46 @@ Exit criteria:
 - new gameplay work is landing regularly
 - architecture cleanup happens in support of shipped features instead of replacing them
 
+### 7. Make editor-authored maps production-shaped
+
+Goal:
+
+- make it easy to create a planet/scenario in the editor, preview it, validate it, and load it in gameplay without hand translation
+
+Focus:
+
+- define versioned `RuntimeMapData`
+- add validation for planets, terrain, spawns, rails, gameplay props, pickups, objectives, and content version
+- export editor state through a deterministic runtime-map adapter
+- make local preview initialize from runtime map data instead of editor internals
+- keep the local runtime suitable for future single-player rather than editor-only
+- keep hosted multiplayer preview as a later step for network-specific testing
+
+Exit criteria:
+
+- a map authored in the editor can be represented as validated runtime map data
+- production match loading and editor preview consume the same map contract
+- single-player can consume the same map contract without a parallel content path
+- preview does not grow editor-only gameplay rules
+- future user-created maps have a clear server-validation boundary
+
 ## What Not To Do
 
 - do not move new gameplay features directly into `MatchRoom`
 - do not treat visual paint stamps as long-term authoritative scoring state
 - do not introduce engine-style abstractions without a concrete current need
 - do not blur the boundaries between protocol, simulation, and client presentation
+- do not let editor preview become a second implementation of movement, combat, paint, scoring, rails, or spawning
+- do not build single-player as a separate implementation of match simulation
+- do not export editor-only save JSON as if it were production content
 - do not assume room scale is safe without measurement
 
 ## Near-Term Task Order
 
-1. Start implementing the next concrete gameplay feature on the current server-authoritative foundation.
-2. Tighten FFA mode ownership and content boundaries as feature work makes requirements clearer.
-3. Continue shrinking remaining mixed responsibility in `MatchRoom` only where gameplay changes expose friction.
-4. Confirm the final schema-vs-message split through real feature needs and client/server usage.
-5. Add operational visibility and protection around the systems most likely to drift under real match load.
+1. Define `RuntimeMapData`, validation, and the editor-state-to-runtime-map adapter.
+2. Make editor preview initialize from validated runtime map data and shared simulation/client-runtime seams.
+3. Start implementing the next concrete gameplay feature on the current server-authoritative foundation.
+4. Tighten FFA mode ownership and content boundaries as feature work makes requirements clearer.
+5. Continue shrinking remaining mixed responsibility in `MatchRoom` only where gameplay changes expose friction.
+6. Confirm the final schema-vs-message split through real feature needs and client/server usage.
+7. Add operational visibility and protection around the systems most likely to drift under real match load.

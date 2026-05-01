@@ -4,17 +4,19 @@ This document is the fast-path reference for movement work. Use it before changi
 
 Related docs:
 
-- [COMBAT.md](/C:/Projects/j/slimesurfers/packages/simulation/combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
-- [ARCHITECTURE.md](/C:/Projects/j/slimesurfers/ARCHITECTURE.md) for core game/system architecture
-- [CAMERA.md](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/CAMERA.md) for camera related
+- [COMBAT.md](../combat/COMBAT.md) for projectile fire, damage, respawn, and paint-impact rules that consume `aimDir` and affect `state.rot`.
+- [ARCHITECTURE.md](../../../ARCHITECTURE.md) for core game/system architecture
+- [EDITOR_ARCHITECTURE.md](../../../apps/editor/EDITOR_ARCHITECTURE.md) for editor preview and runtime map direction
+- [CAMERA.md](../../../apps/game/client/src/systems/CAMERA.md) for camera related
 
 ## Ownership
 
-- Authoritative player movement lives in [simulatedMovement.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.ts).
-- The server drives that movement from [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts).
-- The client reuses the same `stepPlayer` function for local prediction in [runtimeState.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/network/runtimeState.ts).
-- Client input intent and aim direction come from [inputSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/inputSystem.ts).
-- Rendering code in [player.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/player.ts) and [remotePlayer.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/remotePlayer.ts) only displays movement state. It does not decide movement.
+- Authoritative player movement lives in [simulatedMovement.ts](./simulatedMovement.ts).
+- The server drives that movement from [matchSimulation.ts](../match/matchSimulation.ts).
+- The client reuses the same `stepPlayer` function for local prediction in [runtimeState.ts](../../../apps/game/client/src/network/runtimeState.ts).
+- The editor preview may reuse `stepPlayer` for local authoring feedback, but it should feed it validated runtime map data and simulation-safe providers rather than editor tool state.
+- Client input intent and aim direction come from [inputSystem.ts](../../../apps/game/client/src/systems/inputSystem.ts).
+- Rendering code in [player.ts](../../../apps/game/client/src/entities/player/player.ts) and [remotePlayer.ts](../../../apps/game/client/src/entities/player/remotePlayer.ts) only displays movement state. It does not decide movement.
 
 ## Source Of Truth
 
@@ -22,6 +24,7 @@ Related docs:
 - The client may predict movement locally, but must reconcile back to authoritative snapshots.
 - Shared movement math must stay deterministic enough for server and client to both call `stepPlayer` with the same config and input stream.
 - Movement tuning belongs in `GAME_CONFIG`, not in client-only code or room orchestration.
+- Map-specific movement inputs, such as planet lists, terrain providers, rails, and spawn positions, should come from validated runtime map data.
 
 ## Tick Flow
 
@@ -29,7 +32,7 @@ Related docs:
 2. The client sends `InputMessage` packets with `seq`, `keys`, `aimDir`, and `dt`.
 3. The server queues those inputs in `MatchSimulation.recordInput`.
 4. On each server tick, `MatchSimulation.tick` advances each player with `stepPlayer`.
-5. The same input stream may trigger `tryFireProjectile` after movement stepping. See [COMBAT.md](/C:/Projects/j/slimesurfers/packages/simulation/combat/COMBAT.md).
+5. The same input stream may trigger `tryFireProjectile` after movement stepping. See [COMBAT.md](../combat/COMBAT.md).
 6. The server publishes authoritative snapshots containing movement state and `inputSeq`.
 7. The client applies the snapshot in `ClientRuntimeState.reconcileLocalPlayer`.
 8. The client discards acknowledged inputs and replays any remaining pending inputs through `stepPlayer`.
@@ -69,6 +72,22 @@ Movement parameters dynamically adjust based on the surface grid underneath the 
 - **Enemy Slime:** - Normal movement speed is reduced. Ski mode remains available and preserves momentum, but the player stays visible and only gets passive slime recharge.
 - **Prediction:** The client predicts these movement modifiers using its locally replicated slime grid. If the server's authoritative slime grid differs from the client's (e.g., due to a recent un-replicated projectile splash), the client's predicted velocity will be wrong and will be corrected during the next snapshot reconciliation.
 
+### Terrain And Runtime Maps
+
+`stepPlayer` can consume a simulation-safe `TerrainSurfaceProvider` so movement can run on both
+default procedural planets and editor-authored terrain.
+
+Rules:
+
+- the provider must be deterministic for the same runtime map, config, planet id, and surface normal
+- provider inputs and outputs must be plain data, not Three.js geometry or editor objects
+- the renderer and simulation should sample the same authored terrain source
+- production, local preview, and tests should build providers from validated runtime map data
+- missing or unknown planet ids should fail closed instead of silently using unrelated terrain
+
+This is the main seam that allows an edited planet to preview like gameplay and then move into
+production without rewriting movement rules.
+
 ### Airborne
 
 - A player is airborne when `planetId === ""`.
@@ -93,20 +112,23 @@ Movement parameters dynamically adjust based on the surface grid underneath the 
 - **Rotation convention**: `state.rot` encodes a full player orientation where local +Y = outward surface normal, local +Z = forward facing direction. It is built by `quatFromAxes(right, surfaceNormal, forward)` and forward is recovered as `applyQuat({x:0, y:0, z:1}, state.rot)`.
 - `InputSystem._localRotation` and `state.rot` share the same forward/up convention but are updated independently. They should be approximately aligned during normal play but can diverge after a server correction.
 - **Surface lookups must be deterministic:** `stepPlayer` requires read-only access to the current planet's slime/paint grid. Do not pass asynchronous or rendering-dependent data into the movement step to determine surface state.
+- **Terrain providers are gameplay inputs:** any provider used by preview must be compatible with
+  hosted gameplay and testable headlessly. Do not make editor preview depend on a different terrain
+  collision path than production.
 
 ## First Files To Inspect
 
 For most movement bugs, read these in order:
 
-1. [simulatedMovement.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.ts)
-2. [matchSimulation.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.ts)
-3. [runtimeState.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/network/runtimeState.ts)
-4. [inputSystem.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/systems/inputSystem.ts)
+1. [simulatedMovement.ts](./simulatedMovement.ts)
+2. [matchSimulation.ts](../match/matchSimulation.ts)
+3. [runtimeState.ts](../../../apps/game/client/src/network/runtimeState.ts)
+4. [inputSystem.ts](../../../apps/game/client/src/systems/inputSystem.ts)
 
 If the issue is visual-only after state looks correct, then inspect:
 
-1. [player.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/player.ts)
-2. [remotePlayer.ts](/C:/Projects/j/slimesurfers/apps/game/client/src/entities/player/remotePlayer.ts)
+1. [player.ts](../../../apps/game/client/src/entities/player/player.ts)
+2. [remotePlayer.ts](../../../apps/game/client/src/entities/player/remotePlayer.ts)
 
 ## Bug Triage
 
@@ -128,13 +150,15 @@ Classify the issue before editing:
 - Treating `aimDir` as world-forward without reprojecting onto the local surface.
 - Replaying already acknowledged inputs and creating prediction drift.
 - Letting room orchestration absorb simulation rules that belong in `stepPlayer`.
+- Letting `PlayerPreviewController` or editor tools become an alternate movement implementation.
+- Feeding editor sculpt/track state directly into movement instead of converting it to runtime map data and simulation-safe providers.
 - `InputSystem._localRotation` not being reset after reconciliation: if the server corrects `state.rot` significantly (e.g. after respawn), the aim basis can be out of phase with the player's actual surface orientation until the player moves the mouse.
 - Remote quaternion interpolation uses component-wise lerp, not slerp. For small angular deltas between snapshots this is fine, but large corrections (e.g. teleport or respawn) can produce a briefly un-normalized quaternion before the next snapshot arrives.
 
 ## Tests
 
-- Movement unit tests live in [simulatedMovement.test.ts](/C:/Projects/j/slimesurfers/packages/simulation/movement/simulatedMovement.test.ts).
-- Match-level integration coverage lives in [matchSimulation.test.ts](/C:/Projects/j/slimesurfers/packages/simulation/match/matchSimulation.test.ts).
+- Movement unit tests live in [simulatedMovement.test.ts](./simulatedMovement.test.ts).
+- Match-level integration coverage lives in [matchSimulation.test.ts](../match/matchSimulation.test.ts).
 
 Useful commands:
 
