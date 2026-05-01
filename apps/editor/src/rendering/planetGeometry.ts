@@ -84,8 +84,10 @@ export function buildWaterGeometry(
     const y = posAttr.getY(i);
     const z = posAttr.getZ(i);
     const len = Math.sqrt(x * x + y * y + z * z);
-    waterDepths[i] =
-      config.terrain.waterLevel - getTerrainHeight(x / len, y / len, z / len, config);
+    const nx = x / len;
+    const ny = y / len;
+    const nz = z / len;
+    waterDepths[i] = config.terrain.waterLevel - getTerrainHeight(nx, ny, nz, config);
   }
 
   geometry.setAttribute("waterDepth", new THREE.Float32BufferAttribute(waterDepths, 1));

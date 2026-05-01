@@ -15,8 +15,23 @@ import { createMetricGroup } from "../performance/geometryStats.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
 import { TrackTool } from "../tools/tracks/TrackTool.ts";
+import { TrackPreviewVisuals } from "../tools/tracks/TrackPreviewVisuals.ts";
+import {
+  buildTrackCutterSegments,
+  buildTrackCarveSamples,
+  getTrackCarvedRadius,
+  MAX_TUNNEL_SHADER_SEGMENTS,
+  type TrackCarveSample,
+  type TrackCutterSegment,
+} from "../tools/tracks/trackCarving.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
-import type { BrushState, EditorConfig, PerformanceStats, PropBrushState } from "../types.ts";
+import type {
+  BrushState,
+  EditorConfig,
+  PerformanceStats,
+  PreviewSpawnState,
+  PropBrushState,
+} from "../types.ts";
 import { PlayerPreviewController } from "./PlayerPreviewController.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
@@ -29,6 +44,7 @@ function hexToVec3(hex: number): THREE.Vector3 {
 
 export class EditorScene {
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly canvas: HTMLCanvasElement;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
@@ -47,9 +63,24 @@ export class EditorScene {
   private readonly brushTool: BrushTool;
   private readonly propPaintTool: PropPaintTool;
   private readonly trackTool: TrackTool;
+  private readonly trackPreviewVisuals: TrackPreviewVisuals;
   private readonly baseTerrainProvider: TerrainSurfaceProvider;
   private readonly previewTerrainProvider: TerrainSurfaceProvider;
   private readonly playerPreview: PlayerPreviewController;
+  private readonly spawnMarker = new THREE.Group();
+  private readonly spawnMarkerMaterial = new THREE.MeshBasicMaterial({
+    color: 0x22d3ee,
+    depthTest: false,
+  });
+  private readonly spawnMarkerAccentMaterial = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    depthTest: false,
+  });
+  private readonly spawnRaycaster = new THREE.Raycaster();
+  private tracks: TrackState[];
+  private trackCarveSamples: TrackCarveSample[] = [];
+  private previewSpawn: PreviewSpawnState;
+  private spawnPlacementActive = false;
   private isSpaceHeld = false;
   private isPreviewActive = false;
   private lastFrameTime = 0;
@@ -59,11 +90,17 @@ export class EditorScene {
     width: number,
     height: number,
     config: EditorConfig,
+    tracks: TrackState[],
+    previewSpawn: PreviewSpawnState,
     onTrackChange: (track: TrackState) => void,
     onTrackPointSelectionChange: (pointId: string | null) => void,
+    private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
   ) {
+    this.canvas = canvas;
     this.currentConfig = config;
+    this.tracks = tracks;
+    this.previewSpawn = previewSpawn;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -98,9 +135,8 @@ export class EditorScene {
     };
     this.previewTerrainProvider = {
       getHeight: (nx, ny, nz, cfg) =>
-        getTerrainHeight(nx, ny, nz, cfg) + this.brushTool.getDisplacementAtNormal(nx, ny, nz),
-      getRadius: (nx, ny, nz, cfg) =>
-        getTerrainRadius(nx, ny, nz, cfg) + this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+        this.getPreviewTerrainRadius(nx, ny, nz, cfg) - cfg.planet.radius,
+      getRadius: (nx, ny, nz, cfg) => this.getPreviewTerrainRadius(nx, ny, nz, cfg),
     };
     this.playerPreview = new PlayerPreviewController(
       canvas,
@@ -109,10 +145,19 @@ export class EditorScene {
       config,
       this.previewTerrainProvider,
     );
+    this.trackPreviewVisuals = new TrackPreviewVisuals(
+      this.scene,
+      config,
+      tracks,
+      (nx, ny, nz) =>
+        getTerrainRadius(nx, ny, nz, this.currentConfig) +
+        this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+    );
 
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
 
+    this.rebuildTrackCarveSamples();
     const planetGeo = buildPlanetGeometry(config, this.brushTool.getDisplacements());
     this.planetMaterial = createPlanetMaterial({
       paintMask: null,
@@ -125,6 +170,8 @@ export class EditorScene {
     const outlineMesh = new THREE.Mesh(planetGeo, this.outlineMaterial);
     this.planetMeshes = [terrainMesh, outlineMesh];
     this.scene.add(terrainMesh, outlineMesh);
+    this.createSpawnMarker();
+    this.updateSpawnMarker();
 
     if (GAME_CONFIG.shaders.atmosphere.enabled) {
       this.atmosphereMaterial = createAtmosphereMaterial();
@@ -145,6 +192,7 @@ export class EditorScene {
 
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
+    canvas.addEventListener("pointerdown", this.onSpawnPointerDown, true);
 
     // Phase 2: connect brush tool now that the scene and meshes exist
     this.brushTool.connect({
@@ -178,6 +226,7 @@ export class EditorScene {
     });
 
     this.updateUniforms(config);
+    this.playerPreview.setSpawn(previewSpawn);
     this.start();
   }
 
@@ -196,13 +245,41 @@ export class EditorScene {
     this.trackTool.setTrackToolState(state);
   }
 
+  setSpawnPlacementActive(active: boolean): void {
+    this.spawnPlacementActive = active && !this.isPreviewActive;
+    if (this.spawnPlacementActive) {
+      this.brushTool.setBrushState(null);
+      this.propPaintTool.setBrushState(null);
+      this.trackTool.setTrackToolState(null);
+      this.canvas.style.cursor = "crosshair";
+    } else if (!this.isPreviewActive) {
+      this.canvas.style.cursor = "";
+    }
+  }
+
+  setPreviewSpawn(spawn: PreviewSpawnState): void {
+    this.previewSpawn = spawn;
+    this.playerPreview.setSpawn(spawn);
+    this.updateSpawnMarker();
+  }
+
+  setTracks(tracks: TrackState[]): void {
+    this.tracks = tracks;
+    this.rebuildTrackCarveSamples();
+    this.updateTunnelUniforms();
+    this.trackPreviewVisuals.setTracks(tracks);
+    this.playerPreview.setConfig(this.currentConfig);
+  }
+
   setPreviewActive(active: boolean): void {
     if (this.isPreviewActive === active) return;
     this.isPreviewActive = active;
     this.controls.enabled = !active;
+    this.setSpawnPlacementActive(false);
     this.brushTool.setBrushState(null);
     this.propPaintTool.setBrushState(null);
     if (active) this.trackTool.setTrackToolState(null);
+    this.trackPreviewVisuals.setActive(active);
     this.playerPreview.setActive(active);
   }
 
@@ -211,16 +288,19 @@ export class EditorScene {
     this.brushTool.syncDetail(config);
     this.playerPreview.setConfig(config);
     this.rebuildPlanetMeshes();
+    this.trackPreviewVisuals.setConfig(config);
     this.rebuildWater(config);
     this.updateUniforms(config);
   }
 
   rebuildWater(config: EditorConfig): void {
     if (!this.waterMesh) return;
+    this.rebuildTrackCarveSamples();
     const waterRadius = config.planet.radius + config.terrain.waterLevel;
     const newGeo = buildWaterGeometry(waterRadius, config);
     this.waterMesh.geometry.dispose();
     this.waterMesh.geometry = newGeo;
+    this.updateTunnelUniforms();
   }
 
   updateUniforms(config: EditorConfig): void {
@@ -275,6 +355,9 @@ export class EditorScene {
       au.fresnelPower.value = config.shaders.atmosphere.fresnelPower;
       au.falloffPower.value = config.shaders.atmosphere.falloffPower;
     }
+
+    this.updateTunnelUniforms();
+    this.updateSpawnMarker();
   }
 
   resetCamera(): void {
@@ -333,21 +416,121 @@ export class EditorScene {
     this.brushTool.dispose();
     this.propPaintTool.dispose();
     this.trackTool.dispose();
+    this.trackPreviewVisuals.dispose();
     this.playerPreview.dispose();
+    this.disposeSpawnMarker();
     this.disposeEditorSceneResources();
     this.renderer.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
+    this.canvas.removeEventListener("pointerdown", this.onSpawnPointerDown, true);
   }
 
   private rebuildPlanetMeshes(): void {
+    this.rebuildTrackCarveSamples();
     const newGeo = buildPlanetGeometry(this.currentConfig, this.brushTool.getDisplacements());
     const oldGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
     for (const mesh of this.planetMeshes) {
       mesh.geometry = newGeo;
     }
     oldGeometries.forEach((geometry) => geometry.dispose());
+    this.updateTunnelUniforms();
+    this.trackPreviewVisuals.setConfig(this.currentConfig);
     this.trackTool.syncSurface();
+  }
+
+  private rebuildTrackCarveSamples(): void {
+    this.trackCarveSamples = buildTrackCarveSamples(
+      this.tracks,
+      this.currentConfig,
+      (nx, ny, nz) =>
+        getTerrainRadius(nx, ny, nz, this.currentConfig) +
+        this.brushTool.getDisplacementAtNormal(nx, ny, nz),
+    );
+  }
+
+  private updateTunnelUniforms(): void {
+    const segments = buildTrackCutterSegments(this.trackCarveSamples).slice(
+      0,
+      MAX_TUNNEL_SHADER_SEGMENTS,
+    );
+    this.writeTunnelUniforms(this.planetMaterial, segments);
+    this.writeTunnelUniforms(this.outlineMaterial, segments);
+    if (this.waterMaterial) this.writeTunnelUniforms(this.waterMaterial, segments);
+  }
+
+  private writeTunnelUniforms(
+    material: THREE.ShaderMaterial,
+    segments: readonly TrackCutterSegment[],
+  ): void {
+    const starts = material.uniforms.tunnelStarts.value as THREE.Vector3[];
+    const ends = material.uniforms.tunnelEnds.value as THREE.Vector3[];
+    const radii = material.uniforms.tunnelRadii.value as Float32Array;
+
+    material.uniforms.tunnelSegmentCount.value = segments.length;
+    for (let i = 0; i < MAX_TUNNEL_SHADER_SEGMENTS; i++) {
+      const segment = segments[i];
+      if (segment) {
+        starts[i]!.copy(segment.start);
+        ends[i]!.copy(segment.end);
+        radii[i] = segment.radius;
+      } else {
+        starts[i]!.set(0, 0, 0);
+        ends[i]!.set(0, 0, 0);
+        radii[i] = 0;
+      }
+    }
+  }
+
+  private getPreviewTerrainRadius(
+    nx: number,
+    ny: number,
+    nz: number,
+    config: Parameters<TerrainSurfaceProvider["getRadius"]>[3],
+  ): number {
+    const baseRadius =
+      getTerrainRadius(nx, ny, nz, config) + this.brushTool.getDisplacementAtNormal(nx, ny, nz);
+    return getTrackCarvedRadius(nx, ny, nz, baseRadius, this.trackCarveSamples);
+  }
+
+  private createSpawnMarker(): void {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.12, 8, 32),
+      this.spawnMarkerMaterial,
+    );
+    ring.renderOrder = 20;
+    const arrow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.75, 2.2, 16),
+      this.spawnMarkerAccentMaterial,
+    );
+    arrow.position.y = 2.2;
+    arrow.renderOrder = 21;
+    this.spawnMarker.add(ring, arrow);
+    this.scene.add(this.spawnMarker);
+  }
+
+  private updateSpawnMarker(): void {
+    const normal = new THREE.Vector3(...this.previewSpawn.normal);
+    if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
+    normal.normalize();
+    const radius = this.previewTerrainProvider.getRadius(
+      normal.x,
+      normal.y,
+      normal.z,
+      this.currentConfig,
+      "planet-0",
+    );
+    this.spawnMarker.position.copy(normal).multiplyScalar(radius + 1.3);
+    this.spawnMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  }
+
+  private disposeSpawnMarker(): void {
+    this.scene.remove(this.spawnMarker);
+    this.spawnMarker.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose();
+    });
+    this.spawnMarkerMaterial.dispose();
+    this.spawnMarkerAccentMaterial.dispose();
   }
 
   private getMaterialStats(): {
@@ -415,6 +598,23 @@ export class EditorScene {
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     if (e.code === "Space") this.isSpaceHeld = false;
+  };
+
+  private readonly onSpawnPointerDown = (e: PointerEvent): void => {
+    if (!this.spawnPlacementActive || this.isPreviewActive || e.button !== 0) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this.spawnRaycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    const hit = this.spawnRaycaster.intersectObject(this.planetMeshes[0])[0];
+    if (!hit) return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const normal = hit.point.clone().normalize();
+    const spawn: PreviewSpawnState = { normal: [normal.x, normal.y, normal.z] };
+    this.setPreviewSpawn(spawn);
+    this.onPreviewSpawnChange(spawn);
   };
 
   private start(): void {

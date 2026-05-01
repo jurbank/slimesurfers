@@ -1,21 +1,27 @@
 import { useEffect, useRef } from "react";
-import type { EditorConfig, PerformanceStats } from "../types.ts";
+import type { EditorConfig, PerformanceStats, PreviewSpawnState } from "../types.ts";
 import type { TrackState } from "../tools/tracks/TrackTypes.ts";
 import { EditorScene } from "./EditorScene.ts";
 
 interface PlanetPreviewProps {
   initialConfig: EditorConfig;
+  initialTracks: TrackState[];
+  initialPreviewSpawn: PreviewSpawnState;
   onScene: (scene: EditorScene) => void;
   onTrackChange: (track: TrackState) => void;
   onTrackPointSelectionChange: (pointId: string | null) => void;
+  onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
 }
 
 export function PlanetPreview({
   initialConfig,
+  initialTracks,
+  initialPreviewSpawn,
   onScene,
   onTrackChange,
   onTrackPointSelectionChange,
+  onPreviewSpawnChange,
   onPerformanceStats,
 }: PlanetPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,8 +38,11 @@ export function PlanetPreview({
       width || container.clientWidth,
       height || container.clientHeight,
       initialConfig,
+      initialTracks,
+      initialPreviewSpawn,
       onTrackChange,
       onTrackPointSelectionChange,
+      onPreviewSpawnChange,
       onPerformanceStats,
     );
     onScene(scene);

@@ -11,7 +11,7 @@ import {
 } from "@splat/simulation/movement/simulatedMovement.ts";
 import type { TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
-import type { EditorConfig } from "../types.ts";
+import type { EditorConfig, PreviewSpawnState } from "../types.ts";
 
 const PLANETS: PlanetData[] = [
   {
@@ -81,6 +81,7 @@ export class PlayerPreviewController {
   private readonly forward = new THREE.Vector3(0, 0, 1);
   private readonly playerPos = new THREE.Vector3();
   private readonly tempQuat = new THREE.Quaternion();
+  private spawn: PreviewSpawnState = { normal: [0, 1, 0] };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -111,6 +112,10 @@ export class PlayerPreviewController {
       radius: config.planet.radius,
     };
     if (this.active) this.snapPlayerToSurface();
+  }
+
+  setSpawn(spawn: PreviewSpawnState): void {
+    this.spawn = spawn;
   }
 
   setActive(active: boolean): void {
@@ -184,7 +189,9 @@ export class PlayerPreviewController {
   }
 
   private createPlayerState(): PlayerPhysics {
-    const normal = new THREE.Vector3(0, 1, 0);
+    const normal = new THREE.Vector3(...this.spawn.normal);
+    if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
+    normal.normalize();
     const radius = this.terrainProvider.getRadius(
       normal.x,
       normal.y,

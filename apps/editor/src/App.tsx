@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
+import { SpawnsPanel } from "./panels/SpawnsPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
 import { TracksPanel } from "./panels/TracksPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
@@ -18,6 +19,7 @@ import {
   type BrushState,
   type EditorConfig,
   type PerformanceStats,
+  type PreviewSpawnState,
   type PropBrushState,
 } from "./types.ts";
 
@@ -43,12 +45,14 @@ interface EditorSaveState {
     tracks: TrackState[];
   };
   activeTrackId: string;
+  previewSpawn?: PreviewSpawnState;
 }
 
 interface InitialEditorState {
   config: EditorConfig;
   tracks: TrackState[];
   activeTrackId: string;
+  previewSpawn: PreviewSpawnState;
 }
 
 export function App() {
@@ -57,6 +61,8 @@ export function App() {
   const [config, setConfig] = useState<EditorConfig>(initialState.config);
   const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
   const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
+  const [previewSpawn, setPreviewSpawn] = useState<PreviewSpawnState>(initialState.previewSpawn);
+  const [spawnPlacementActive, setSpawnPlacementActive] = useState(false);
   const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
@@ -64,6 +70,7 @@ export function App() {
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
+  const previewSpawnRef = useRef<PreviewSpawnState>(previewSpawn);
   const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
   const previewActiveRef = useRef(false);
   const sceneRef = useRef<EditorScene | null>(null);
@@ -71,6 +78,8 @@ export function App() {
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
+    scene.setTracks(tracksRef.current);
+    scene.setPreviewSpawn(previewSpawnRef.current);
     scene.setPreviewActive(previewActiveRef.current);
     const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
     if (activeTrack) {
@@ -96,6 +105,7 @@ export function App() {
       track.id === nextTrack.id ? nextTrack : track,
     );
     tracksRef.current = nextTracks;
+    sceneRef.current?.setTracks(nextTracks);
     setTracks(nextTracks);
   }, []);
 
@@ -108,9 +118,27 @@ export function App() {
     setSelectedTrackPointId(pointId);
   }, []);
 
+  const handlePreviewSpawnChange = useCallback((spawn: PreviewSpawnState) => {
+    setSaveStatus("idle");
+    previewSpawnRef.current = spawn;
+    setPreviewSpawn(spawn);
+  }, []);
+
+  const handleSpawnPlacementActiveChange = useCallback((active: boolean) => {
+    setSpawnPlacementActive(active);
+    sceneRef.current?.setSpawnPlacementActive(active);
+  }, []);
+
+  const resetPreviewSpawn = useCallback(() => {
+    const spawn: PreviewSpawnState = { normal: [0, 1, 0] };
+    handlePreviewSpawnChange(spawn);
+    sceneRef.current?.setPreviewSpawn(spawn);
+  }, [handlePreviewSpawnChange]);
+
   const togglePreview = useCallback(() => {
     const next = !previewActiveRef.current;
     previewActiveRef.current = next;
+    if (next) setSpawnPlacementActive(false);
     setPreviewActive(next);
     sceneRef.current?.setPreviewActive(next);
   }, []);
@@ -137,6 +165,7 @@ export function App() {
       tracksRef.current = nextTracks;
       activeTrackIdRef.current = nextActiveTrackId;
       selectedTrackPointIdRef.current = nextSelectedPointId;
+      sceneRef.current?.setTracks(nextTracks);
       setTracks(nextTracks);
       setActiveTrackId(nextActiveTrackId);
       setSelectedTrackPointId(nextSelectedPointId);
@@ -185,7 +214,12 @@ export function App() {
   }
 
   function handleSaveLocal() {
-    const saved = saveEditorState(configRef.current, tracksRef.current, activeTrackIdRef.current);
+    const saved = saveEditorState(
+      configRef.current,
+      tracksRef.current,
+      activeTrackIdRef.current,
+      previewSpawnRef.current,
+    );
     setSaveStatus(saved ? "saved" : "error");
   }
 
@@ -212,6 +246,10 @@ export function App() {
               onClick={() => {
                 if (id !== "terrain") sceneRef.current?.setBrushState(null);
                 if (id !== "props") sceneRef.current?.setPropBrushState(null);
+                if (id !== "spawns") {
+                  setSpawnPlacementActive(false);
+                  sceneRef.current?.setSpawnPlacementActive(false);
+                }
                 if (id !== "tracks") {
                   const activeTrack = tracksRef.current.find(
                     (track) => track.id === activeTrackIdRef.current,
@@ -239,9 +277,12 @@ export function App() {
       <main className="flex-1 relative bg-zinc-950 min-w-0">
         <PlanetPreview
           initialConfig={config}
+          initialTracks={tracks}
+          initialPreviewSpawn={previewSpawn}
           onScene={handleScene}
           onTrackChange={handleTrackChange}
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
+          onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
@@ -403,11 +444,20 @@ export function App() {
               onPointSelectionChange={handleTrackPointSelectionChange}
             />
           )}
-          {activePanel === "spawns" && <p className="text-xs text-zinc-600 mt-2">Coming soon</p>}
+          {activePanel === "spawns" && (
+            <SpawnsPanel
+              spawn={previewSpawn}
+              placementActive={spawnPlacementActive}
+              onPlacementActiveChange={handleSpawnPlacementActiveChange}
+              onReset={resetPreviewSpawn}
+            />
+          )}
         </div>
         <div className="p-4 border-t border-zinc-700">
           <button
-            onClick={() => exportConfig(configRef.current, tracksRef.current)}
+            onClick={() =>
+              exportConfig(configRef.current, tracksRef.current, previewSpawnRef.current)
+            }
             className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
           >
             Export Config
@@ -418,13 +468,14 @@ export function App() {
   );
 }
 
-function exportConfig(config: EditorConfig, tracks: TrackState[]) {
+function exportConfig(config: EditorConfig, tracks: TrackState[], previewSpawn: PreviewSpawnState) {
   const payload = {
     ...config,
     tracks: {
       version: 1,
       tracks,
     },
+    previewSpawn,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
@@ -444,6 +495,7 @@ function createInitialEditorState(): InitialEditorState {
       config: saved.config,
       tracks: saved.tracks.tracks,
       activeTrackId: saved.activeTrackId,
+      previewSpawn: saved.previewSpawn ?? { normal: [0, 1, 0] },
     };
   }
 
@@ -452,6 +504,7 @@ function createInitialEditorState(): InitialEditorState {
     config: defaultEditorConfig(),
     tracks: [track],
     activeTrackId: track.id,
+    previewSpawn: { normal: [0, 1, 0] },
   };
 }
 
@@ -459,6 +512,7 @@ function createEditorSaveState(
   config: EditorConfig,
   tracks: TrackState[],
   activeTrackId: string,
+  previewSpawn: PreviewSpawnState,
 ): EditorSaveState {
   return {
     version: 1,
@@ -469,6 +523,7 @@ function createEditorSaveState(
       tracks,
     },
     activeTrackId,
+    previewSpawn,
   };
 }
 
@@ -476,11 +531,12 @@ function saveEditorState(
   config: EditorConfig,
   tracks: TrackState[],
   activeTrackId: string,
+  previewSpawn: PreviewSpawnState,
 ): boolean {
   try {
     localStorage.setItem(
       LOCAL_SAVE_KEY,
-      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId)),
+      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId, previewSpawn)),
     );
     return true;
   } catch {

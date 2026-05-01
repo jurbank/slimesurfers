@@ -25,6 +25,10 @@ export interface PropBrushState {
   scale: number;
 }
 
+export interface PreviewSpawnState {
+  normal: [number, number, number];
+}
+
 export interface EditorConfig {
   planet: { radius: number };
   terrain: {
