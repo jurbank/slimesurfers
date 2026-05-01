@@ -1,103 +1,43 @@
 import * as THREE from "three";
+import { PlayerSurfState } from "@splat/simulation/match/simState.ts";
 import {
-  DEFAULT_WEAPON_ID,
-  getWeaponDefinition,
-  type WeaponId,
-} from "@splat/content/combat/weaponDefs.ts";
-import { PlayerMovementState, PlayerSurfState } from "@splat/simulation/match/simState.ts";
-import { createPlayerMesh, type PlayerFaceRig, type PlayerPoseRig } from "./playerMesh.ts";
-import {
-  resetPlayerDeathParticles,
-  updatePlayerDeathParticles,
-  type PlayerDeathParticles,
-} from "./playerDeath.ts";
-import { PlayerTrickChargeEffect } from "./playerTrickChargeEffect.ts";
-import { PlayerTrickAnimator } from "./playerTrickAnimator.ts";
+  isPlayerEffectivelySubmerged,
+  PlayerVisualRig,
+  type PlayerVisualState,
+} from "./playerVisualRig.ts";
 import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
-import { cloneNormalizedWeaponModel, disposeWeaponModel } from "../../assets/weaponModels.ts";
 
 const SKI_ROTATION_LERP_SPEED = 7;
 const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
 const OPACITY_FADE_IN_SPEED = 6; // ~0.35s to fully reveal
 const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
 const HELD_WEAPON_MODEL_SIZE = 0.95;
-const HELD_WEAPON_MODEL_ROTATION_X = -Math.PI / 2;
-const HELD_WEAPON_MODEL_ROTATION_Y = Math.PI;
-const HEAVY_MACHINE_GUN_WEAPON_ID: WeaponId = "heavyMachineGun";
 
-interface PlayerTransformState {
-  pos: { x: number; y: number; z: number };
-  vel?: { x: number; y: number; z: number };
-  rot: { x: number; y: number; z: number; w: number };
-  movementState: number;
-  surfState: number;
-  isCarving: boolean;
-  isShooting: boolean;
-  equippedWeaponId: WeaponId;
+interface PlayerTransformState extends PlayerVisualState {
   disposableShotsRemaining: number;
   slimeLevel: number;
-  isOnFriendlyPaint: boolean;
 }
 
 /** The local player's mesh — driven by server state, camera follows this. */
 export class LocalPlayer {
   readonly mesh: THREE.Group;
-  private readonly liveMesh: THREE.Group;
-  private readonly deadMesh: THREE.Group;
-  private readonly deathParticles: PlayerDeathParticles;
-  private readonly face: PlayerFaceRig;
-  private readonly poseRig: PlayerPoseRig;
-  private readonly weaponMesh: THREE.Group;
-  private readonly weaponFallbackMesh: THREE.Mesh;
-  private readonly snowboardMesh: THREE.Group;
-  private readonly outlineMesh: THREE.Group;
-  private readonly jsrOutline: THREE.Group;
-  private readonly disturbanceMesh: THREE.Mesh;
-  private readonly trickChargeEffect: PlayerTrickChargeEffect;
+  private readonly visual: PlayerVisualRig;
   private readonly slimeRechargeGauge: SlimeRechargeGauge;
-  private readonly materials: THREE.Material[] = [];
-  private readonly weaponModelMaterials: THREE.Material[] = [];
-  private readonly inverseMeshQuat = new THREE.Quaternion();
-  private readonly localAimDir = new THREE.Vector3();
-  private readonly weaponForward = new THREE.Vector3(0, 0, 1);
-  private readonly weaponBaseQuat = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(Math.PI / 2, Math.PI / 18, 0),
-  );
-  private readonly aimQuat = new THREE.Quaternion();
   private readonly skiVisualRotation = new THREE.Quaternion();
   private readonly skiTargetRotation = new THREE.Quaternion();
-  private readonly trickAnimator = new PlayerTrickAnimator();
   private skiLaunchTimer = 0;
   private currentOpacity = 1;
   private submersionTimer = 0;
-  private wasDead = false;
-  private deathAge = 0;
-  private currentWeaponModelPath = "";
-  private weaponModelRoot?: THREE.Object3D;
-  private disposed = false;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0) {
-    const rig = createPlayerMesh(slimeColor, patternId);
-    this.mesh = rig.group;
-    this.liveMesh = rig.liveMesh;
-    this.deadMesh = rig.deadMesh;
-    this.deathParticles = rig.deathParticles;
-    this.face = rig.face;
-    this.poseRig = rig.poseRig;
-    this.weaponMesh = rig.weaponMesh;
-    this.weaponFallbackMesh = rig.weaponFallbackMesh;
-    this.snowboardMesh = rig.snowboardMesh;
-    this.outlineMesh = rig.outlineMesh;
-    this.jsrOutline = rig.jsrOutline;
-    this.disturbanceMesh = rig.disturbanceMesh;
-    this.trickChargeEffect = new PlayerTrickChargeEffect(
-      rig.trickChargeAura,
-      rig.slimeMaterials,
-      slimeColor,
-    );
+    this.visual = new PlayerVisualRig(slimeColor, patternId, {
+      weaponModelSize: HELD_WEAPON_MODEL_SIZE,
+      trackOpacityMaterials: true,
+      aimWeapon: true,
+    });
+    this.mesh = this.visual.group;
     this.slimeRechargeGauge = new SlimeRechargeGauge(slimeColor);
     this.mesh.add(this.slimeRechargeGauge.sprite);
-    this.registerMaterials(this.liveMesh);
     scene.add(this.mesh);
   }
 
@@ -125,58 +65,26 @@ export class LocalPlayer {
       this.mesh.quaternion.copy(this.skiVisualRotation);
     }
 
-    const isDead = state.movementState === PlayerMovementState.Dead;
-    if (isDead) {
-      if (!this.wasDead) {
-        this.deathAge = 0;
-        resetPlayerDeathParticles(this.deathParticles);
-      } else {
-        this.deathAge += dt;
-      }
-      updatePlayerDeathParticles(this.deathParticles, this.deathAge);
-      this.liveMesh.visible = false;
-      this.deadMesh.visible = true;
-      this.weaponMesh.visible = false;
-      this.snowboardMesh.visible = false;
-      this.outlineMesh.visible = false;
-      this.jsrOutline.visible = false;
-      this.disturbanceMesh.visible = false;
-      this.mesh.scale.set(1, 1, 1);
+    if (this.visual.updateDeath(state, dt)) {
       this.currentOpacity = 1;
       this.submersionTimer = 0;
-      this.setOpacity(1);
+      this.visual.setOpacity(1);
       this.slimeRechargeGauge.update(state, dt, dryFirePulseSeq, gaugeActivityPulseSeq);
-      this.wasDead = true;
       return;
     }
 
-    this.wasDead = false;
-    this.deathAge = 0;
-    this.liveMesh.visible = true;
-    this.deadMesh.visible = false;
-    this.jsrOutline.visible = true;
-    this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
-    this.liveMesh.scale.set(1, 1, 1);
-    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
-    this.trickChargeEffect.update(state, dt);
-    this.face.setExpression(state.isShooting ? "spewing" : "normal");
-    this.updateWeapon(state.equippedWeaponId, aimDir);
+    this.visual.updateAlivePose(state, dt);
+    this.visual.updateWeapon(state.equippedWeaponId, aimDir);
 
-    if (state.isCarving) {
-      this.liveMesh.scale.set(1.12, 0.68, 1.08);
-    } else if (this.skiLaunchTimer > 0) {
+    if (!state.isCarving && this.skiLaunchTimer > 0) {
       this.skiLaunchTimer = Math.max(0, this.skiLaunchTimer - dt);
       const t = this.skiLaunchTimer / 0.4;
       const stretch = 1 + Math.sin(t * Math.PI) * 0.6;
       const squash = 1 / Math.sqrt(stretch);
-      this.liveMesh.scale.set(squash, stretch, squash);
+      this.visual.liveMesh.scale.set(squash, stretch, squash);
     }
 
-    const airborne = state.movementState === PlayerMovementState.Airborne;
-    const effectivelySubmerged =
-      (state.isOnFriendlyPaint && !airborne && !state.isShooting) ||
-      state.surfState === PlayerSurfState.SurfmingHidden;
-
+    const effectivelySubmerged = isPlayerEffectivelySubmerged(state);
     if (effectivelySubmerged) {
       this.submersionTimer += dt;
     } else {
@@ -188,25 +96,11 @@ export class LocalPlayer {
     this.currentOpacity += (targetOpacity - this.currentOpacity) * Math.min(1, fadeSpeed * dt);
     if (this.currentOpacity > 0.995) this.currentOpacity = 1;
     if (this.currentOpacity < 0.005) this.currentOpacity = 0;
-    this.setOpacity(this.currentOpacity);
+    this.visual.setOpacity(this.currentOpacity);
 
-    this.outlineMesh.visible = effectivelySubmerged;
+    this.visual.outlineMesh.visible = effectivelySubmerged;
     this.mesh.scale.set(1, 1, 1);
-
-    const isMoving =
-      state.movementState === PlayerMovementState.Moving ||
-      state.surfState === PlayerSurfState.SurfmingMoving;
-    if (effectivelySubmerged && isMoving) {
-      const t = performance.now() * 0.001;
-      const pulse = Math.sin(t * 3) * 0.5 + 0.5;
-      const mat = this.disturbanceMesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = 0.25 + pulse * 0.4;
-      this.disturbanceMesh.scale.setScalar(0.75 + pulse * 0.5);
-      this.disturbanceMesh.visible = true;
-    } else {
-      this.disturbanceMesh.visible = false;
-    }
-
+    this.visual.updateDisturbance(state, false);
     this.slimeRechargeGauge.update(state, dt, dryFirePulseSeq, gaugeActivityPulseSeq);
   }
 
@@ -215,118 +109,12 @@ export class LocalPlayer {
   }
 
   triggerTrick(trickId: string, combo?: number): void {
-    this.trickAnimator.trigger(trickId);
-    this.trickChargeEffect.registerTrick(combo);
+    this.visual.triggerTrick(trickId, combo);
   }
 
   dispose(scene: THREE.Scene): void {
-    this.disposed = true;
-    if (this.weaponModelRoot) {
-      this.unregisterWeaponModelMaterials();
-      disposeWeaponModel(this.weaponModelRoot);
-    }
+    this.visual.dispose();
     scene.remove(this.mesh);
     this.slimeRechargeGauge.dispose();
-  }
-
-  private setOpacity(opacity: number): void {
-    const transparent = opacity < 1;
-    for (const material of this.materials) {
-      if (material instanceof THREE.ShaderMaterial) {
-        if ("opacity" in material.uniforms) material.uniforms.opacity.value = opacity;
-      } else if ("opacity" in material) {
-        (material as THREE.Material & { opacity: number }).opacity = opacity;
-      } else {
-        continue;
-      }
-      if (material.transparent !== transparent) {
-        material.transparent = transparent;
-        material.needsUpdate = true;
-      }
-    }
-  }
-
-  private updateWeapon(weaponId: WeaponId, aimDir?: THREE.Vector3): void {
-    const visible = weaponId !== DEFAULT_WEAPON_ID;
-    this.weaponMesh.visible = visible;
-    if (!visible) return;
-
-    const weapon = getWeaponDefinition(weaponId);
-    this.syncWeaponModel(weaponId, weapon.pickupModelPath);
-    const material = this.weaponFallbackMesh.material;
-    if (material instanceof THREE.MeshLambertMaterial) {
-      material.color.setHex(weapon.pickupColor);
-      material.emissive.setHex(weapon.pickupColor);
-    }
-
-    if (!aimDir || aimDir.lengthSq() < 1e-6) {
-      this.weaponMesh.quaternion.copy(this.weaponBaseQuat);
-      return;
-    }
-
-    this.inverseMeshQuat.copy(this.mesh.quaternion).invert();
-    this.localAimDir.copy(aimDir).normalize().applyQuaternion(this.inverseMeshQuat).normalize();
-    this.aimQuat.setFromUnitVectors(this.weaponForward, this.localAimDir);
-    this.weaponMesh.quaternion.copy(this.aimQuat).multiply(this.weaponBaseQuat);
-  }
-
-  private syncWeaponModel(weaponId: WeaponId, modelPath: string): void {
-    if (this.currentWeaponModelPath === modelPath) return;
-    this.currentWeaponModelPath = modelPath;
-    this.weaponFallbackMesh.visible = true;
-    if (this.weaponModelRoot) {
-      this.weaponMesh.remove(this.weaponModelRoot);
-      this.unregisterWeaponModelMaterials();
-      disposeWeaponModel(this.weaponModelRoot);
-      this.weaponModelRoot = undefined;
-    }
-    if (typeof window === "undefined") return;
-
-    void cloneNormalizedWeaponModel(modelPath, HELD_WEAPON_MODEL_SIZE)
-      .then((model) => {
-        if (this.disposed) {
-          disposeWeaponModel(model);
-          return;
-        }
-        if (this.currentWeaponModelPath !== modelPath) {
-          disposeWeaponModel(model);
-          return;
-        }
-        this.weaponFallbackMesh.visible = false;
-        model.rotation.x = HELD_WEAPON_MODEL_ROTATION_X;
-        model.rotation.y =
-          weaponId === HEAVY_MACHINE_GUN_WEAPON_ID ? 0 : HELD_WEAPON_MODEL_ROTATION_Y;
-        this.weaponModelRoot = model;
-        this.weaponMesh.add(model);
-        this.weaponModelMaterials.push(...this.registerMaterials(model));
-        this.setOpacity(this.currentOpacity);
-      })
-      .catch(() => {
-        if (this.disposed) return;
-        if (this.currentWeaponModelPath === modelPath) this.weaponFallbackMesh.visible = true;
-      });
-  }
-
-  private registerMaterials(root: THREE.Object3D): THREE.Material[] {
-    const registered: THREE.Material[] = [];
-    root.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      if (Array.isArray(child.material)) {
-        this.materials.push(...child.material);
-        registered.push(...child.material);
-      } else {
-        this.materials.push(child.material);
-        registered.push(child.material);
-      }
-    });
-    return registered;
-  }
-
-  private unregisterWeaponModelMaterials(): void {
-    for (const material of this.weaponModelMaterials) {
-      const index = this.materials.indexOf(material);
-      if (index >= 0) this.materials.splice(index, 1);
-    }
-    this.weaponModelMaterials.length = 0;
   }
 }
