@@ -29,4 +29,7 @@ it("renders newly observed projectiles from their inferred spawn point", () => {
   expect(scene.children[0]?.position.x).toBeCloseTo(0, 5);
   expect(scene.children[0]?.position.y).toBeCloseTo(1, 5);
   expect(scene.children[0]?.position.z).toBeCloseTo(2, 5);
+  const projectileGroup = scene.children[0] as THREE.Group | undefined;
+  expect(projectileGroup?.children.length).toBeGreaterThan(1);
+  expect(projectileGroup?.children[0]?.position.length()).toBeGreaterThan(0);
 });

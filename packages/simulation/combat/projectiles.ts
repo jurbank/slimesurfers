@@ -426,6 +426,19 @@ function getNearestPlanet(point: Vec3Data, planets: PlanetData[]): PlanetData | 
   return nearestPlanet;
 }
 
+function applyProjectileGravity(
+  projectile: SimProjectileState,
+  gravity: number | undefined,
+  dtSeconds: number,
+  planets: PlanetData[],
+): void {
+  if (!gravity || gravity <= 0 || dtSeconds <= 0) return;
+  const planet = getNearestPlanet(projectile.pos, planets);
+  if (!planet) return;
+  const gravityDir = normalize(sub(planet.center, projectile.pos));
+  assign(projectile.vel, add(projectile.vel, scale(gravityDir, gravity * dtSeconds)));
+}
+
 function getPlayerPlanet(player: SimPlayerState, planets: PlanetData[]): PlanetData | undefined {
   return (
     planets.find((planet) => planet.id === player.planetId) ?? getNearestPlanet(player.pos, planets)
@@ -871,6 +884,7 @@ export function tickProjectiles(
       }
     }
 
+    applyProjectileGravity(projectile, weapon.projectileGravity, projectileDtMs / 1000, planets);
     projectile.pos = add(projectile.pos, scale(projectile.vel, projectileDtMs / 1000));
     if (projectile.lifeMs === 0) {
       removedIds.push(projectileId);

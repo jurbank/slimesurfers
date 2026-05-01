@@ -103,9 +103,11 @@ export class SoundSystem {
       return;
     }
     if (sound.category !== "sfx") return;
+    const volume = (options.volume ?? 1.0) * sound.volume;
+    if (volume <= 0) return;
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
-    gain.gain.value = (options.volume ?? 1.0) * sound.volume;
+    gain.gain.value = volume;
     gain.connect(this.masterGain.sfx!);
     const source = ctx.createBufferSource();
     source.buffer = sound.buffer;
@@ -131,9 +133,11 @@ export class SoundSystem {
       return;
     }
     if (sound.category !== "sfx") return;
+    const volume = (options.volume ?? 1.0) * sound.volume;
+    if (volume <= 0) return;
     const ctx = this.ensureContext();
     const gain = ctx.createGain();
-    gain.gain.value = (options.volume ?? 1.0) * sound.volume;
+    gain.gain.value = volume;
     const panner = ctx.createPanner();
 
     panner.panningModel = "HRTF";
