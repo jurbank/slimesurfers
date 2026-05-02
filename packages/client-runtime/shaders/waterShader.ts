@@ -56,10 +56,6 @@ export const waterFragmentShader = `
   uniform float shimmerScale;
   uniform float shimmerSpeed;
   uniform float opacity;
-  uniform int tunnelSegmentCount;
-  uniform vec3 tunnelStarts[64];
-  uniform vec3 tunnelEnds[64];
-  uniform float tunnelRadii[64];
 
   varying vec3 vNormal;
   varying vec3 vWorldPosition;
@@ -92,26 +88,7 @@ export const waterFragmentShader = `
     return normalize(baseNormal + tangent * ripple.x + bitangent * ripple.y);
   }
 
-  bool isInsideTunnel(vec3 pos) {
-    for (int i = 0; i < 64; i++) {
-      if (i >= tunnelSegmentCount) break;
-
-      vec3 a = tunnelStarts[i];
-      vec3 b = tunnelEnds[i];
-      vec3 ab = b - a;
-      float lenSq = dot(ab, ab);
-      if (lenSq < 0.0001) continue;
-
-      float t = clamp(dot(pos - a, ab) / lenSq, 0.0, 1.0);
-      vec3 closest = a + ab * t;
-      if (distance(pos, closest) < tunnelRadii[i]) return true;
-    }
-    return false;
-  }
-
   void main() {
-    if (isInsideTunnel(vWorldPosition)) discard;
-
     vec3 waterNormal = rippleNormal(normalize(vNormal));
     float fresnel = pow(1.0 - max(dot(vViewDir, waterNormal), 0.0), fresnelPower);
 

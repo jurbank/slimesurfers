@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { atmosphereVertexShader, atmosphereFragmentShader } from "./atmosphereShader.ts";
+import {
+  atmosphereVertexShader,
+  atmosphereFragmentShader,
+} from "@splat/client-runtime/shaders/atmosphereShader.ts";
 
 export function createAtmosphereMaterial(): THREE.ShaderMaterial {
   const cfg = GAME_CONFIG.shaders.atmosphere;

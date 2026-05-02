@@ -17,15 +17,12 @@ import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
 import { TrackTool } from "../tools/tracks/TrackTool.ts";
 import { TrackPreviewVisuals } from "../tools/tracks/TrackPreviewVisuals.ts";
 import {
-  buildTrackCutterSegments,
   buildTrackCarveSamples,
   buildTrackSurfaceSamples,
   getTrackCarvedRadius,
   getTrackRaisedRadius,
-  MAX_TUNNEL_SHADER_SEGMENTS,
   type TrackCarveSample,
   type TrackSurfaceSample,
-  type TrackCutterSegment,
 } from "../tools/tracks/trackCarving.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
 import type {
@@ -270,7 +267,6 @@ export class EditorScene {
   setTracks(tracks: TrackState[]): void {
     this.tracks = tracks;
     this.rebuildTrackCarveSamples();
-    this.updateTunnelUniforms();
     this.trackPreviewVisuals.setTracks(tracks);
     this.playerPreview.setConfig(this.currentConfig);
   }
@@ -304,7 +300,6 @@ export class EditorScene {
     const newGeo = buildWaterGeometry(waterRadius, config);
     this.waterMesh.geometry.dispose();
     this.waterMesh.geometry = newGeo;
-    this.updateTunnelUniforms();
   }
 
   updateUniforms(config: EditorConfig): void {
@@ -360,7 +355,6 @@ export class EditorScene {
       au.falloffPower.value = config.shaders.atmosphere.falloffPower;
     }
 
-    this.updateTunnelUniforms();
     this.updateSpawnMarker();
   }
 
@@ -438,7 +432,6 @@ export class EditorScene {
       mesh.geometry = newGeo;
     }
     oldGeometries.forEach((geometry) => geometry.dispose());
-    this.updateTunnelUniforms();
     this.trackPreviewVisuals.setConfig(this.currentConfig);
     this.trackTool.syncSurface();
   }
@@ -457,39 +450,6 @@ export class EditorScene {
       this.currentConfig,
       getRadiusAtNormal,
     );
-  }
-
-  private updateTunnelUniforms(): void {
-    const segments = buildTrackCutterSegments(this.trackCarveSamples).slice(
-      0,
-      MAX_TUNNEL_SHADER_SEGMENTS,
-    );
-    this.writeTunnelUniforms(this.planetMaterial, segments);
-    this.writeTunnelUniforms(this.outlineMaterial, segments);
-    if (this.waterMaterial) this.writeTunnelUniforms(this.waterMaterial, segments);
-  }
-
-  private writeTunnelUniforms(
-    material: THREE.ShaderMaterial,
-    segments: readonly TrackCutterSegment[],
-  ): void {
-    const starts = material.uniforms.tunnelStarts.value as THREE.Vector3[];
-    const ends = material.uniforms.tunnelEnds.value as THREE.Vector3[];
-    const radii = material.uniforms.tunnelRadii.value as Float32Array;
-
-    material.uniforms.tunnelSegmentCount.value = segments.length;
-    for (let i = 0; i < MAX_TUNNEL_SHADER_SEGMENTS; i++) {
-      const segment = segments[i];
-      if (segment) {
-        starts[i]!.copy(segment.start);
-        ends[i]!.copy(segment.end);
-        radii[i] = segment.radius;
-      } else {
-        starts[i]!.set(0, 0, 0);
-        ends[i]!.set(0, 0, 0);
-        radii[i] = 0;
-      }
-    }
   }
 
   private getPreviewTerrainRadius(

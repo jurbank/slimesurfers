@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { MAX_TUNNEL_SHADER_SEGMENTS } from "../tools/tracks/trackCarving.ts";
-import { waterVertexShader, waterFragmentShader } from "./waterShader.ts";
+import {
+  waterVertexShader,
+  waterFragmentShader,
+} from "@splat/client-runtime/shaders/waterShader.ts";
 
 export function createWaterMaterial(): THREE.ShaderMaterial {
   const cfg = GAME_CONFIG.shaders.water;
@@ -40,14 +42,6 @@ export function createWaterMaterial(): THREE.ShaderMaterial {
       celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
       celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
       celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
-      tunnelSegmentCount: { value: 0 },
-      tunnelStarts: {
-        value: Array.from({ length: MAX_TUNNEL_SHADER_SEGMENTS }, () => new THREE.Vector3()),
-      },
-      tunnelEnds: {
-        value: Array.from({ length: MAX_TUNNEL_SHADER_SEGMENTS }, () => new THREE.Vector3()),
-      },
-      tunnelRadii: { value: new Float32Array(MAX_TUNNEL_SHADER_SEGMENTS) },
     },
     vertexShader: waterVertexShader,
     fragmentShader: waterFragmentShader,

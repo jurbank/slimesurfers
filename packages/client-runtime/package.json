@@ -3,7 +3,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./systems/cameraSystem.ts": "./systems/cameraSystem.ts"
+    "./systems/cameraSystem.ts": "./systems/cameraSystem.ts",
+    "./shaders/atmosphereShader.ts": "./shaders/atmosphereShader.ts",
+    "./shaders/celShader.ts": "./shaders/celShader.ts",
+    "./shaders/outlineShader.ts": "./shaders/outlineShader.ts",
+    "./shaders/planetShader.ts": "./shaders/planetShader.ts",
+    "./shaders/waterShader.ts": "./shaders/waterShader.ts"
   },
   "dependencies": {
     "@types/three": "catalog:",

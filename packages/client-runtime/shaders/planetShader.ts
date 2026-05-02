@@ -38,7 +38,6 @@ export const planetFragmentShader = `
   uniform float slimeEdgeWetness;
   uniform float slimePoolDarkening;
 
-  // Biome uniforms
   uniform vec3 planetCenter;
   uniform float planetRadius;
   uniform float waterLevel;
@@ -51,6 +50,13 @@ export const planetFragmentShader = `
   uniform vec3 snowColor;
   uniform vec3 waterDeepColor;
 
+  uniform vec3 sunDirection;
+  uniform float sunIntensity;
+  uniform float ambientIntensity;
+  uniform vec3 rimColor;
+  uniform float rimStrength;
+  uniform float rimPower;
+
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vLocalNormal;
@@ -58,7 +64,6 @@ export const planetFragmentShader = `
   varying vec3 vSmoothNormal;
   varying vec3 vWorldPosition;
 
-  // 3D noise for seamless surface variation
   float hash(vec3 p) {
     p = fract(p * 0.3183099 + 0.1);
     p *= 17.0;
@@ -89,18 +94,14 @@ export const planetFragmentShader = `
     float mask = paintData.a;
     vec3 paintColor = paintData.rgb;
 
-    // Calculate displacement for smooth biome blending
     float dist = length(vWorldPosition - planetCenter);
     float displacement = dist - planetRadius;
 
-    // Variation noise for biomes
     float varNoise = noise(vSmoothLocalNormal * 4.0);
     vec3 sand = sandColor * (0.9 + varNoise * 0.15);
     vec3 grass = grassColor * (0.85 + varNoise * 0.25);
     vec3 rock = rockColor * (0.9 + varNoise * 0.1);
-    
-    // Smooth transitions between biomes
-    // Coastline is the most important one to be smooth
+
     float beachT = smoothstep(waterLevel - 0.1, waterLevel + 0.1, displacement);
     float grassT = smoothstep(waterLevel + sandBand - 0.2, waterLevel + sandBand + 0.2, displacement);
     float rockT = smoothstep(rockLevel - 0.5, rockLevel + 0.5, displacement);
@@ -125,27 +126,20 @@ export const planetFragmentShader = `
 
     vec3 smoothPaintNormal = normalize(vSmoothNormal);
     vec3 slimyNormal = paintNormal(smoothPaintNormal, smoothLocalNormal, flowA, flowB);
-    vec3 lightDir = normalize(vec3(200.0, 300.0, 100.0));
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    float terrainDiff = max(dot(vSmoothNormal, lightDir), 0.0);
-    float paintDiff = max(dot(slimyNormal, lightDir), 0.0);
 
-    // Apply cel shading
+    float terrainDiff = max(dot(vSmoothNormal, sunDirection), 0.0) * sunIntensity;
+    float paintDiff = max(dot(slimyNormal, sunDirection), 0.0) * sunIntensity;
+
     terrainDiff = getCelLighting(terrainDiff);
     paintDiff = getCelLighting(paintDiff);
 
-    float specular = pow(
-      max(dot(reflect(-lightDir, slimyNormal), viewDir), 0.0),
-      slimeSpecularPower
-    );
-    float clearCoat = pow(
-      max(dot(reflect(-lightDir, smoothPaintNormal), viewDir), 0.0),
-      slimeSpecularPower * 1.8
-    );
+    float specular = pow(max(dot(reflect(-sunDirection, slimyNormal), viewDir), 0.0), slimeSpecularPower);
+    float clearCoat = pow(max(dot(reflect(-sunDirection, smoothPaintNormal), viewDir), 0.0), slimeSpecularPower * 1.8);
     float fresnel = pow(1.0 - max(dot(viewDir, slimyNormal), 0.0), 3.0);
     float edgeFresnel = pow(1.0 - max(dot(viewDir, smoothPaintNormal), 0.0), 5.0);
 
-    vec3 ambient = vec3(0.5);
+    vec3 ambient = vec3(ambientIntensity);
 
     vec3 pooledColor = paintColor * (1.0 - slimePoolDarkening);
     vec3 goopBase = mix(pooledColor, paintColor * 0.96, 0.35 + goopMix * 0.12);
@@ -156,7 +150,7 @@ export const planetFragmentShader = `
       + vec3(clearCoat * slimeShineStrength * 0.65)
       + paintColor * fresnel * slimeFresnelStrength
       + wetEdgeTint * edgeFresnel * edgeBand * slimeEdgeWetness * 0.9;
-    
+
     vec3 shadedTerrain = biomeColor * (terrainDiff + ambient);
     shadedTerrain *= getHatching(gl_FragCoord.xy / 1000.0, terrainDiff);
 
@@ -165,9 +159,12 @@ export const planetFragmentShader = `
 
     shadedPaint = mix(shadedPaint, shadedPaint + wetEdgeTint * 0.08, edgeBand);
     shadedPaint *= 1.0 - pooledCenter * slimePoolDarkening * 0.18;
+
     vec3 finalColor = mix(shadedTerrain, shadedPaint, mask * paintBlendStrength);
+
+    float rimDot = 1.0 - max(dot(viewDir, normalize(vSmoothNormal)), 0.0);
+    finalColor += rimColor * pow(rimDot, rimPower) * rimStrength;
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
-
 `;

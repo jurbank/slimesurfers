@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { waterVertexShader, waterFragmentShader } from "../shaders/waterShader.ts";
+import {
+  waterVertexShader,
+  waterFragmentShader,
+} from "@splat/client-runtime/shaders/waterShader.ts";
 
 export function createWaterMaterial(): THREE.ShaderMaterial {
   const cfg = GAME_CONFIG.shaders.water;

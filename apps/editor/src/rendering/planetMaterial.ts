@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { MAX_TUNNEL_SHADER_SEGMENTS } from "../tools/tracks/trackCarving.ts";
-import { planetVertexShader, planetFragmentShader } from "./planetShader.ts";
+import {
+  planetVertexShader,
+  planetFragmentShader,
+} from "@splat/client-runtime/shaders/planetShader.ts";
 
 export interface PlanetMaterialOptions {
   paintMask: THREE.Texture | null;
@@ -47,14 +49,6 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       rimColor: { value: new THREE.Color(0x8ab4ff) },
       rimStrength: { value: 0.4 },
       rimPower: { value: 3.0 },
-      tunnelSegmentCount: { value: 0 },
-      tunnelStarts: {
-        value: Array.from({ length: MAX_TUNNEL_SHADER_SEGMENTS }, () => new THREE.Vector3()),
-      },
-      tunnelEnds: {
-        value: Array.from({ length: MAX_TUNNEL_SHADER_SEGMENTS }, () => new THREE.Vector3()),
-      },
-      tunnelRadii: { value: new Float32Array(MAX_TUNNEL_SHADER_SEGMENTS) },
     },
     vertexShader: planetVertexShader,
     fragmentShader: planetFragmentShader,

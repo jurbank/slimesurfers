@@ -1,4 +1,4 @@
-import { celCommonChunks } from "./celShader.ts";
+import { celCommonChunks } from "@splat/client-runtime/shaders/celShader.ts";
 
 export const slimeVertexShader = `
   varying vec2 vUv;

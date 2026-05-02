@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { planetVertexShader, planetFragmentShader } from "../shaders/planetShader.ts";
+import {
+  planetVertexShader,
+  planetFragmentShader,
+} from "@splat/client-runtime/shaders/planetShader.ts";
 
 export interface PlanetMaterialOptions {
   paintMask: THREE.Texture | null;
@@ -40,6 +43,12 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
       celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
       celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
+      sunDirection: { value: new THREE.Vector3(0.535, 0.802, 0.267) },
+      sunIntensity: { value: 1.0 },
+      ambientIntensity: { value: 0.5 },
+      rimColor: { value: new THREE.Color(0x8ab4ff) },
+      rimStrength: { value: 0.4 },
+      rimPower: { value: 3.0 },
     },
     vertexShader: planetVertexShader,
     fragmentShader: planetFragmentShader,

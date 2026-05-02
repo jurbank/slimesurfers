@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { outlineVertexShader, outlineFragmentShader } from "../shaders/outlineShader.ts";
+import {
+  outlineVertexShader,
+  outlineFragmentShader,
+} from "@splat/client-runtime/shaders/outlineShader.ts";
 
 export function createOutlineMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
