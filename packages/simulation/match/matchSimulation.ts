@@ -9,14 +9,17 @@ import {
   getPaintStampChordRadius,
   getPlanetSurfaceChordRadius,
   getPaintTerritoryDimensions,
-  PLANET_POSITIONS,
   resolveBotBehaviorProfile,
   resolveBotEmoteFrequency,
   resolveBotEmoteTemperament,
   type BotBehaviorProfile,
 } from "@splat/content/config/gameConfig.ts";
 import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
-import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
+import {
+  DEV_MAP,
+  type RuntimeMapData,
+  type RuntimeMapPlanet,
+} from "@splat/content/map/runtimeMapData.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -85,16 +88,20 @@ const ALLOWED_INPUT_KEYS =
   InputKey.Submerge;
 const MAX_LOCKED_TARGET_ID_LENGTH = 128;
 
-const PLANETS: PlanetData[] = PLANET_POSITIONS.map((p) => ({
-  id: p.id,
-  center: { x: p.x, y: p.y, z: p.z },
-  radius: GAME_CONFIG.planet.radius,
-}));
+function buildPlanets(map: RuntimeMapData): PlanetData[] {
+  return map.planets.map((p) => ({
+    id: p.id,
+    center: { x: p.center.x, y: p.center.y, z: p.center.z },
+    radius: p.radius,
+  }));
+}
 
-const RAILS: ComputedRail[] = RAIL_DEFS.map((def) => {
-  const planet = PLANET_POSITIONS.find((p) => p.id === def.planetId) ?? PLANET_POSITIONS[0]!;
-  return buildComputedRail(def, { x: planet.x, y: planet.y, z: planet.z }, GAME_CONFIG);
-});
+function buildRails(map: RuntimeMapData): ComputedRail[] {
+  return map.rails.map((def) => {
+    const planet = map.planets.find((p) => p.id === def.planetId) ?? map.planets[0]!;
+    return buildComputedRail(def, planet.center, GAME_CONFIG);
+  });
+}
 
 // Used when no client input has arrived for a player this tick.
 const IDLE_INPUT: InputMessage = {
@@ -258,14 +265,15 @@ function createSimMatchState(
   seedPaint: boolean,
   lobbyEnabled: boolean,
   weaponPickupLayout: WeaponPickupLayout,
+  planetDefs: RuntimeMapPlanet[],
+  rails: ComputedRail[],
 ): SimMatchState {
   const simState: SimMatchState = {
     players: new Map(),
-    planets: new Map(
-      PLANET_POSITIONS.map((planet) => [planet.id, createSimPlanetState(planet.id)]),
-    ),
+    planetDefs,
+    planets: new Map(planetDefs.map((planet) => [planet.id, createSimPlanetState(planet.id)])),
     railStates: new Map(
-      RAILS.map((rail, idx) => [
+      rails.map((rail, idx) => [
         idx,
         {
           railId: idx,
@@ -274,8 +282,8 @@ function createSimMatchState(
       ]),
     ),
     projectiles: new Map(),
-    pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout),
-    healthPickups: createHealthPickups(GAME_CONFIG),
+    pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout, planetDefs),
+    healthPickups: createHealthPickups(GAME_CONFIG, planetDefs),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
     matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
@@ -304,6 +312,7 @@ function createSimPlayer(
   paletteIndex: number,
   mode: GameModeDefinition,
   existingPlayers: Iterable<SimPlayerState>,
+  planetDefs: RuntimeMapPlanet[],
   botOptions?: {
     profile?: Partial<BotBehaviorProfile>;
     emoteTemperament?: BotEmoteTemperament;
@@ -319,9 +328,9 @@ function createSimPlayer(
     existingPlayers,
     { playerIndex, teamId: slot.teamId },
     sessionId,
+    planetDefs,
   );
-  const planetPos =
-    PLANET_POSITIONS.find((planet) => planet.id === spawn.planetId) ?? PLANET_POSITIONS[0]!;
+  const planetPos = planetDefs.find((planet) => planet.id === spawn.planetId) ?? planetDefs[0]!;
   const cleanedName = cleanName(name, generateGuestPlayerName(playerIndex));
   const resolvedName = isBot && !cleanedName.endsWith(" Bot") ? `${cleanedName} Bot` : cleanedName;
 
@@ -390,6 +399,8 @@ function createSimPlayer(
 
 export class MatchSimulation {
   readonly mode: GameModeDefinition;
+  private readonly planets: PlanetData[];
+  private readonly rails: ComputedRail[];
   private readonly simState: SimMatchState;
   private readonly inputQueues = new Map<string, InputMessage[]>();
   private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
@@ -400,13 +411,21 @@ export class MatchSimulation {
   private tickCount = 0;
   private killSeq = 0;
 
-  constructor(mode: GameModeDefinition = FFA_MODE, options: MatchSimulationOptions = {}) {
+  constructor(
+    mode: GameModeDefinition = FFA_MODE,
+    map: RuntimeMapData = DEV_MAP,
+    options: MatchSimulationOptions = {},
+  ) {
     this.mode = mode;
+    this.planets = buildPlanets(map);
+    this.rails = buildRails(map);
     this.simState = createSimMatchState(
       mode,
       options.seedTestPaint ?? false,
       options.lobbyEnabled ?? false,
       options.weaponPickupLayout ?? "map",
+      map.planets,
+      this.rails,
     );
   }
 
@@ -516,6 +535,7 @@ export class MatchSimulation {
       paletteIndex,
       this.mode,
       this.simState.players.values(),
+      this.simState.planetDefs,
       undefined,
       assignedSlot,
     );
@@ -546,6 +566,7 @@ export class MatchSimulation {
       paletteIndex,
       this.mode,
       this.simState.players.values(),
+      this.simState.planetDefs,
       botOptions,
       assignedSlot,
     );
@@ -618,7 +639,7 @@ export class MatchSimulation {
 
   private maybeStampRailCorridor(player: SimPlayerState, prevGrindId: number): void {
     if (player.grindRailId === -1 || player.grindRailId !== prevGrindId) return;
-    const rail = RAILS[player.grindRailId];
+    const rail = this.rails[player.grindRailId];
     const planetState = this.simState.planets.get(rail?.planetId ?? "");
     const railState = this.simState.railStates.get(player.grindRailId);
     if (!rail || !planetState || !railState) return;
@@ -736,7 +757,15 @@ export class MatchSimulation {
         for (const input of queue) {
           const wasTrickActive = isTrickMovementState(player.movementState);
           const prevGrindId = player.grindRailId;
-          stepPlayer(player, input, inputDtSec, PLANETS, GAME_CONFIG, this.simState.planets, RAILS);
+          stepPlayer(
+            player,
+            input,
+            inputDtSec,
+            this.planets,
+            GAME_CONFIG,
+            this.simState.planets,
+            this.rails,
+          );
           this.maybeStampRailCorridor(player, prevGrindId);
           if (isTrickMovementState(player.movementState)) {
             const tricks = processAirTricks(
@@ -764,7 +793,7 @@ export class MatchSimulation {
               player,
               input,
               actionNowMs,
-              PLANETS,
+              this.planets,
               GAME_CONFIG,
               (event) => this.recordKillEvent(event),
             )) {
@@ -775,7 +804,7 @@ export class MatchSimulation {
               player,
               input,
               actionNowMs,
-              PLANETS,
+              this.planets,
               GAME_CONFIG,
               (event) => this.recordKillEvent(event),
             )) {
@@ -795,10 +824,10 @@ export class MatchSimulation {
           player,
           IDLE_INPUT,
           serverDtSec,
-          PLANETS,
+          this.planets,
           GAME_CONFIG,
           this.simState.planets,
-          RAILS,
+          this.rails,
         );
         this.maybeStampRailCorridor(player, prevGrindId);
         if (isTrickMovementState(player.movementState)) {
@@ -830,7 +859,7 @@ export class MatchSimulation {
     const paintStamps = tickProjectiles(
       this.simState,
       dtMs,
-      PLANETS,
+      this.planets,
       GAME_CONFIG,
       (player) =>
         selectSpawnSurface(
@@ -841,6 +870,7 @@ export class MatchSimulation {
             teamId: player.teamId,
           },
           player.sessionId,
+          this.simState.planetDefs,
         ),
       (event) => this.recordKillEvent(event),
     );

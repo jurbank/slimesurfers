@@ -1,5 +1,5 @@
-import { PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
 import { describe, expect, it } from "vite-plus/test";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { stepPlayer, type PlanetData, type PlayerPhysics } from "./simulatedMovement.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import {
@@ -17,7 +17,7 @@ import {
 const TEST_PLANETS: PlanetData[] = [
   {
     id: "planet-0",
-    center: { x: PLANET_POSITIONS[0]!.x, y: PLANET_POSITIONS[0]!.y, z: PLANET_POSITIONS[0]!.z },
+    center: { ...DEV_MAP.planets[0]!.center },
     radius: 50,
   },
 ];

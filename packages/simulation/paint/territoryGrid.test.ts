@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
-import {
-  GAME_CONFIG,
-  getPaintTerritoryDimensions,
-  PLANET_POSITIONS,
-} from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { createStampBuckets } from "./paintDetection.ts";
 import {
@@ -74,6 +71,7 @@ function createSimState(): SimMatchState {
       ["session-1", createPlayer("session-1", 0, 0x00e5ff)],
       ["session-2", createPlayer("session-2", 1, 0xff6200)],
     ]),
+    planetDefs: DEV_MAP.planets,
     planets: new Map(),
     railStates: new Map(),
     projectiles: new Map(),
@@ -101,12 +99,12 @@ function surfacePointForCell(row: number, col: number): { x: number; y: number; 
     y: Math.cos(theta),
     z: sinTheta * Math.sin(phi),
   };
-  const planet = PLANET_POSITIONS[0]!;
+  const planet = DEV_MAP.planets[0]!;
 
   return {
-    x: planet.x + normal.x * GAME_CONFIG.planet.radius,
-    y: planet.y + normal.y * GAME_CONFIG.planet.radius,
-    z: planet.z + normal.z * GAME_CONFIG.planet.radius,
+    x: planet.center.x + normal.x * GAME_CONFIG.planet.radius,
+    y: planet.center.y + normal.y * GAME_CONFIG.planet.radius,
+    z: planet.center.z + normal.z * GAME_CONFIG.planet.radius,
   };
 }
 

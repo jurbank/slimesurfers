@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  GAME_CONFIG,
-  getPaintTerritoryDimensions,
-  PLANET_POSITIONS,
-} from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import { createStampBuckets } from "./paintDetection.ts";
@@ -15,6 +12,7 @@ import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts"
 function createSimState(): SimMatchState {
   return {
     players: new Map(),
+    planetDefs: DEV_MAP.planets,
     planets: new Map(),
     railStates: new Map(),
     projectiles: new Map(),
@@ -75,8 +73,12 @@ describe("stampPaint", () => {
   it("increments paintSeq monotonically and emits stamp payloads for valid impacts", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
-    const planet = PLANET_POSITIONS[0]!;
-    const impactPos = { x: planet.x, y: planet.y + GAME_CONFIG.planet.radius, z: planet.z };
+    const planet = DEV_MAP.planets[0]!;
+    const impactPos = {
+      x: planet.center.x,
+      y: planet.center.y + GAME_CONFIG.planet.radius,
+      z: planet.center.z,
+    };
 
     const first = applyPaintImpact(simState, planetState, {
       planetId: "planet-0",
@@ -122,7 +124,7 @@ describe("stampPaint", () => {
   it("allows impacts in shallow water", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
-    const planet = PLANET_POSITIONS[0]!;
+    const planet = DEV_MAP.planets[0]!;
     const normal = findTerrainNormal((height) => {
       const depth = GAME_CONFIG.terrain.waterLevel - height;
       return depth > 0 && depth <= GAME_CONFIG.terrain.sandBand;
@@ -132,9 +134,9 @@ describe("stampPaint", () => {
     const stamp = applyPaintImpact(simState, planetState, {
       planetId: "planet-0",
       pos: {
-        x: planet.x + normal.x * radius,
-        y: planet.y + normal.y * radius,
-        z: planet.z + normal.z * radius,
+        x: planet.center.x + normal.x * radius,
+        y: planet.center.y + normal.y * radius,
+        z: planet.center.z + normal.z * radius,
       },
       paintGroupId: 0,
       slimeColor: 0x00e5ff,
@@ -150,7 +152,7 @@ describe("stampPaint", () => {
   it("ignores impacts in deep water without mutating territory or paint sequence", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
-    const planet = PLANET_POSITIONS[0]!;
+    const planet = DEV_MAP.planets[0]!;
     const normal = findTerrainNormal(
       (height) => GAME_CONFIG.terrain.waterLevel - height > GAME_CONFIG.terrain.sandBand,
     );
@@ -159,9 +161,9 @@ describe("stampPaint", () => {
     const stamp = applyPaintImpact(simState, planetState, {
       planetId: "planet-0",
       pos: {
-        x: planet.x + normal.x * radius,
-        y: planet.y + normal.y * radius,
-        z: planet.z + normal.z * radius,
+        x: planet.center.x + normal.x * radius,
+        y: planet.center.y + normal.y * radius,
+        z: planet.center.z + normal.z * radius,
       },
       paintGroupId: 0,
       slimeColor: 0x00e5ff,

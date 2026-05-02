@@ -6,7 +6,6 @@ import {
   type SimPlayerState,
 } from "../match/simState.ts";
 import {
-  PLANET_POSITIONS,
   GAME_CONFIG,
   resolveBotBehaviorProfile,
   type BotBehaviorProfile,
@@ -135,15 +134,18 @@ function getRandomPointOnSphere(radius: number): { x: number; y: number; z: numb
   };
 }
 
-function getBotWanderTarget(bot: SimPlayerState): { x: number; y: number; z: number } {
+function getBotWanderTarget(
+  bot: SimPlayerState,
+  simState: SimMatchState,
+): { x: number; y: number; z: number } {
   const normal = getRandomPointOnSphere(1);
   const planet =
-    PLANET_POSITIONS.find((entry) => entry.id === bot.planetId) ?? PLANET_POSITIONS[0]!;
+    simState.planetDefs.find((entry) => entry.id === bot.planetId) ?? simState.planetDefs[0]!;
   const radius = GAME_CONFIG.planet.radius + 5;
   return {
-    x: planet.x + normal.x * radius,
-    y: planet.y + normal.y * radius,
-    z: planet.z + normal.z * radius,
+    x: planet.center.x + normal.x * radius,
+    y: planet.center.y + normal.y * radius,
+    z: planet.center.z + normal.z * radius,
   };
 }
 
@@ -171,17 +173,18 @@ function getCellWorldPosition(
   col: number,
   rows: number,
   cols: number,
+  simState: SimMatchState,
 ): { x: number; y: number; z: number } | null {
   const planet =
-    PLANET_POSITIONS.find((entry) => entry.id === planetId) ?? PLANET_POSITIONS[0] ?? null;
+    simState.planetDefs.find((entry) => entry.id === planetId) ?? simState.planetDefs[0] ?? null;
   if (!planet) return null;
 
   const normal = getCellNormal(row, col, rows, cols);
   const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
   return {
-    x: planet.x + normal.x * radius,
-    y: planet.y + normal.y * radius,
-    z: planet.z + normal.z * radius,
+    x: planet.center.x + normal.x * radius,
+    y: planet.center.y + normal.y * radius,
+    z: planet.center.z + normal.z * radius,
   };
 }
 
@@ -218,6 +221,7 @@ function choosePaintTarget(
         col,
         planetState.territoryRows,
         planetState.territoryCols,
+        simState,
       );
       if (!pos) continue;
 
@@ -339,15 +343,16 @@ export function generateBotInput(
   // 3. Territory / movement target selection
   if (state.state === "refilling") {
     state.targetSessionId = null;
-    state.targetPos = choosePaintTarget(bot, simState, profile, true) ?? getBotWanderTarget(bot);
+    state.targetPos =
+      choosePaintTarget(bot, simState, profile, true) ?? getBotWanderTarget(bot, simState);
   } else if (state.state === "wandering") {
     state.targetSessionId = null;
     state.wanderingTimerMs -= reactionTimeMs;
     if (!state.targetPos || state.wanderingTimerMs <= 0) {
       const prefersRoaming = bias.surf > bias.territory && Math.random() < bias.surf;
       state.targetPos = prefersRoaming
-        ? getBotWanderTarget(bot)
-        : (choosePaintTarget(bot, simState, profile, false) ?? getBotWanderTarget(bot));
+        ? getBotWanderTarget(bot, simState)
+        : (choosePaintTarget(bot, simState, profile, false) ?? getBotWanderTarget(bot, simState));
       state.wanderingTimerMs = prefersRoaming
         ? 900 + Math.random() * 1600
         : 1500 + Math.random() * 2500;

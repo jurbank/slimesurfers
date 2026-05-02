@@ -1,15 +1,10 @@
-import { getPaintStampAngularRadius, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { getPaintStampAngularRadius, GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import type { SimMatchState, SimPlanetPaintState, SimTerritoryCell } from "../match/simState.ts";
 import { getTerrainHeight } from "../terrain/planetTerrain.ts";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function getPlanetPosition(planetId: string): { x: number; y: number; z: number } | null {
-  return PLANET_POSITIONS.find((planet) => planet.id === planetId) ?? null;
 }
 
 function getCellNormal(row: number, col: number, rows: number, cols: number) {
@@ -104,13 +99,13 @@ export function applyPaintToTerritoryAtPoint(
   planetState: SimPlanetPaintState,
   radiusMultiplier = 1,
 ): number {
-  const planetPos = getPlanetPosition(paint.planetId);
-  if (!planetPos) return 0;
+  const planetDef = simState.planetDefs.find((p) => p.id === paint.planetId);
+  if (!planetDef) return 0;
 
   const normal = normalize(
-    paint.pos.x - planetPos.x,
-    paint.pos.y - planetPos.y,
-    paint.pos.z - planetPos.z,
+    paint.pos.x - planetDef.center.x,
+    paint.pos.y - planetDef.center.y,
+    paint.pos.z - planetDef.center.z,
   );
   const angularRadius = clamp(getPaintStampAngularRadius() * radiusMultiplier, 0, Math.PI);
   const cosThreshold = Math.cos(angularRadius);

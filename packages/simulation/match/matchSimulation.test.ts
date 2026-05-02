@@ -14,9 +14,8 @@ import {
   getPaintStampChordRadius,
   getPaintTerritoryDimensions,
   getPlayerTargetRadius,
-  PLANET_POSITIONS,
 } from "@splat/content/config/gameConfig.ts";
-import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
@@ -75,21 +74,20 @@ function surfacePointForCell(
 ): { x: number; y: number; z: number } {
   const normal = surfaceNormalForCell(row, col);
   const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
-  const planetIndex = Number(planetId.split("-")[1] ?? 0);
-  const planet = PLANET_POSITIONS[planetIndex]!;
+  const planet = DEV_MAP.planets.find((p) => p.id === planetId) ?? DEV_MAP.planets[0]!;
   return {
-    x: planet.x + normal.x * radius,
-    y: planet.y + normal.y * radius,
-    z: planet.z + normal.z * radius,
+    x: planet.center.x + normal.x * radius,
+    y: planet.center.y + normal.y * radius,
+    z: planet.center.z + normal.z * radius,
   };
 }
 
 function expectedMuzzlePos(player: { pos: { x: number; y: number; z: number }; planetId: string }) {
   const planet =
-    PLANET_POSITIONS.find((entry) => entry.id === player.planetId) ?? PLANET_POSITIONS[0]!;
-  const dx = player.pos.x - planet.x;
-  const dy = player.pos.y - planet.y;
-  const dz = player.pos.z - planet.z;
+    DEV_MAP.planets.find((entry) => entry.id === player.planetId) ?? DEV_MAP.planets[0]!;
+  const dx = player.pos.x - planet.center.x;
+  const dy = player.pos.y - planet.center.y;
+  const dz = player.pos.z - planet.center.z;
   const len = Math.hypot(dx, dy, dz);
   return {
     x: player.pos.x + (dx / len) * GAME_CONFIG.player.projectileMuzzleHeight,
@@ -107,13 +105,13 @@ function paintPlayerSurface(
   const player = simulation.players.get(sessionId);
   if (!player) return;
   const planet = simulation.matchState.planets.get(player.planetId);
-  const planetPos = PLANET_POSITIONS.find((entry) => entry.id === player.planetId);
-  if (!planetPos) return;
+  const planetDef = simulation.matchState.planetDefs.find((entry) => entry.id === player.planetId);
+  if (!planetDef) return;
   if (!planet) return;
 
-  const dx = player.pos.x - planetPos.x;
-  const dy = player.pos.y - planetPos.y;
-  const dz = player.pos.z - planetPos.z;
+  const dx = player.pos.x - planetDef.center.x;
+  const dy = player.pos.y - planetDef.center.y;
+  const dz = player.pos.z - planetDef.center.z;
   const len = Math.hypot(dx, dy, dz);
   if (len < 1e-6) return;
 
@@ -130,11 +128,11 @@ function paintPlayerSurface(
 }
 
 function makeAirborneSkier(player: ReturnType<MatchSimulation["addPlayer"]>): void {
-  const planet = PLANET_POSITIONS[0]!;
+  const planet = DEV_MAP.planets[0]!;
   player.pos = {
-    x: planet.x,
-    y: planet.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 18,
-    z: planet.z,
+    x: planet.center.x,
+    y: planet.center.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 18,
+    z: planet.center.z,
   };
   player.vel = { x: 0, y: 6, z: 0 };
   player.planetId = "";
@@ -147,12 +145,12 @@ function landAirbornePlayer(
   simulation: MatchSimulation,
   player: ReturnType<MatchSimulation["addPlayer"]>,
 ): void {
-  const planet = PLANET_POSITIONS[0]!;
+  const planet = DEV_MAP.planets[0]!;
   const surfaceRadius = getTerrainRadius(0, 1, 0, GAME_CONFIG);
   player.pos = {
-    x: planet.x,
-    y: planet.y + surfaceRadius + GAME_CONFIG.movement.standingHeight + 0.2,
-    z: planet.z,
+    x: planet.center.x,
+    y: planet.center.y + surfaceRadius + GAME_CONFIG.movement.standingHeight + 0.2,
+    z: planet.center.z,
   };
   player.vel = { x: 0, y: -20, z: 0 };
   player.planetId = "";
@@ -162,16 +160,16 @@ function landAirbornePlayer(
 }
 
 function makeGrindingSkier(player: ReturnType<MatchSimulation["addPlayer"]>): void {
-  const railDef = RAIL_DEFS[0]!;
+  const railDef = DEV_MAP.rails[0]!;
   const planet =
-    PLANET_POSITIONS.find((entry) => entry.id === railDef.planetId) ?? PLANET_POSITIONS[0]!;
-  const rail = buildComputedRail(railDef, { x: planet.x, y: planet.y, z: planet.z }, GAME_CONFIG);
+    DEV_MAP.planets.find((entry) => entry.id === railDef.planetId) ?? DEV_MAP.planets[0]!;
+  const rail = buildComputedRail(railDef, planet.center, GAME_CONFIG);
   const railT = rail.totalLength * 0.35;
   const { pos, tangent } = sampleRailAt(rail, railT);
   const up = (() => {
-    const dx = pos.x - planet.x;
-    const dy = pos.y - planet.y;
-    const dz = pos.z - planet.z;
+    const dx = pos.x - planet.center.x;
+    const dy = pos.y - planet.center.y;
+    const dz = pos.z - planet.center.z;
     const len = Math.hypot(dx, dy, dz);
     return { x: dx / len, y: dy / len, z: dz / len };
   })();
@@ -209,7 +207,7 @@ function trickInput(seq: number, pressedKeys: number): InputMessage {
 
 describe("MatchSimulation", () => {
   it("does not leave lobby when only bots are present", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { lobbyEnabled: true });
 
     const bot = simulation.addBot("bot-1");
     simulation.tick(simulation.tickIntervalMs);
@@ -229,11 +227,25 @@ describe("MatchSimulation", () => {
   });
 
   it("can seed large friendly and enemy slime regions for movement testing when enabled", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: true });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: true });
     const planetPaint = simulation.matchState.planets;
 
-    expect(getPaintAtPoint({ x: 0, y: 100, z: 0 }, "planet-0", planetPaint)?.paintGroupId).toBe(0);
-    expect(getPaintAtPoint({ x: 0, y: -100, z: 0 }, "planet-0", planetPaint)?.paintGroupId).toBe(1);
+    expect(
+      getPaintAtPoint(
+        { x: 0, y: 100, z: 0 },
+        "planet-0",
+        planetPaint,
+        simulation.matchState.planetDefs,
+      )?.paintGroupId,
+    ).toBe(0);
+    expect(
+      getPaintAtPoint(
+        { x: 0, y: -100, z: 0 },
+        "planet-0",
+        planetPaint,
+        simulation.matchState.planetDefs,
+      )?.paintGroupId,
+    ).toBe(1);
     expect(simulation.getRecentPaintStamps().map((stamp) => stamp.paintGroupId)).toEqual(
       expect.arrayContaining([0, 1]),
     );
@@ -257,10 +269,10 @@ describe("MatchSimulation", () => {
     const simulation = new MatchSimulation();
     const player = simulation.addPlayer("session-1", "Alpha");
     const planet =
-      PLANET_POSITIONS.find((entry) => entry.id === player.planetId) ?? PLANET_POSITIONS[0]!;
-    const dx = player.pos.x - planet.x;
-    const dy = player.pos.y - planet.y;
-    const dz = player.pos.z - planet.z;
+      DEV_MAP.planets.find((entry) => entry.id === player.planetId) ?? DEV_MAP.planets[0]!;
+    const dx = player.pos.x - planet.center.x;
+    const dy = player.pos.y - planet.center.y;
+    const dz = player.pos.z - planet.center.z;
     const len = Math.hypot(dx, dy, dz);
     const up = { x: dx / len, y: dy / len, z: dz / len };
     const expectedRadius =
@@ -318,7 +330,7 @@ describe("MatchSimulation", () => {
   });
 
   it("spreads new ffa spawns away from existing alive players", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
 
     const first = simulation.addPlayer("session-1", "Alpha");
     const second = simulation.addPlayer("session-2", "Bravo");
@@ -330,7 +342,7 @@ describe("MatchSimulation", () => {
   });
 
   it("keeps team players on team colors and team-local spawn zones", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 1);
     const bravo = simulation.addPlayer("session-2", "Bravo", 0);
@@ -357,7 +369,7 @@ describe("MatchSimulation", () => {
   });
 
   it("ignores requested palette indices in teams mode", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 2);
     const bravo = simulation.addPlayer("session-2", "Bravo", 0);
@@ -369,7 +381,7 @@ describe("MatchSimulation", () => {
   });
 
   it("honors valid requested teams and balances invalid requested teams", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", undefined, 1);
     const bravo = simulation.addPlayer("session-2", "Bravo", undefined, 99);
@@ -381,7 +393,7 @@ describe("MatchSimulation", () => {
   });
 
   it("ignores requested teams in ffa mode", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 0, 1);
 
@@ -390,7 +402,7 @@ describe("MatchSimulation", () => {
   });
 
   it("reports team scores once per paint group instead of once per teammate", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha");
     const bravo = simulation.addPlayer("session-2", "Bravo");
@@ -411,7 +423,7 @@ describe("MatchSimulation", () => {
   });
 
   it("clusters dev spawns for faster combat testing without stacking players", () => {
-    const simulation = new MatchSimulation(DEV_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(DEV_MODE, DEV_MAP, { seedTestPaint: false });
 
     const first = simulation.addPlayer("session-1", "Alpha");
     const second = simulation.addPlayer("session-2", "Bravo");
@@ -425,7 +437,7 @@ describe("MatchSimulation", () => {
   });
 
   it("uses map-distributed weapon pickups by default", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const pickups = Array.from(simulation.matchState.pickups.values());
 
     const highestPairDistance = pickups.reduce((maxDistance, pickup, index) => {
@@ -442,7 +454,7 @@ describe("MatchSimulation", () => {
   });
 
   it("can cluster weapon pickups for fast server-side dev iteration", () => {
-    const simulation = new MatchSimulation(FFA_MODE, {
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, {
       seedTestPaint: false,
       weaponPickupLayout: "cluster",
     });
@@ -707,8 +719,9 @@ describe("MatchSimulation", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const machineGun = getWeaponDefinition(WeaponId.MachineGun);
-    const planet = PLANET_POSITIONS[0]!;
-    const startY = planet.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 30;
+    const planet = DEV_MAP.planets[0]!;
+    const startY =
+      planet.center.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 30;
 
     simulation.matchState.projectiles.set("stream-arc-test", {
       id: "stream-arc-test",
@@ -717,7 +730,7 @@ describe("MatchSimulation", () => {
       paintGroupId: shooter.paintGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
-      pos: { x: planet.x, y: startY, z: planet.z },
+      pos: { x: planet.center.x, y: startY, z: planet.center.z },
       vel: { x: machineGun.projectileSpeed, y: 0, z: 0 },
       planetId: "",
       lifeMs: machineGun.projectileLifetimeMs,
@@ -757,7 +770,7 @@ describe("MatchSimulation", () => {
   });
 
   it("counts down disposable shots and reverts to default weapon when exhausted", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const bazooka = getWeaponDefinition(WeaponId.Bazooka);
     shooter.equippedWeaponId = WeaponId.Bazooka;
@@ -801,7 +814,7 @@ describe("MatchSimulation", () => {
   });
 
   it("creates capped trick paint while airborne in ski mode", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
     player.slimeLevel = GAME_CONFIG.tricks.minSlimeToTrick;
@@ -839,7 +852,7 @@ describe("MatchSimulation", () => {
   });
 
   it("turns advanced air trick sequences into larger landing splats", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
@@ -870,7 +883,7 @@ describe("MatchSimulation", () => {
   });
 
   it("lets grinding players trigger trick combos and carry them until they land", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeGrindingSkier(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
@@ -907,7 +920,7 @@ describe("MatchSimulation", () => {
   });
 
   it("includes rail grinding state in snapshots for client reconciliation", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeGrindingSkier(player);
 
@@ -923,7 +936,7 @@ describe("MatchSimulation", () => {
   });
 
   it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
 
@@ -969,7 +982,7 @@ describe("MatchSimulation", () => {
   });
 
   it("emits named spin trick events from held air rotation", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
 
@@ -993,7 +1006,7 @@ describe("MatchSimulation", () => {
   });
 
   it("emits named flip trick events from held forward and backward air rotation", () => {
-    const frontSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const frontSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const frontPlayer = frontSimulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(frontPlayer);
 
@@ -1010,7 +1023,7 @@ describe("MatchSimulation", () => {
     const frontEvents = frontSimulation.drainTrickEventMessages();
     expect(frontEvents.some((event) => event.trickId === "frontflip")).toBe(true);
 
-    const backSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const backSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const backPlayer = backSimulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(backPlayer);
 
@@ -1212,9 +1225,9 @@ describe("MatchSimulation", () => {
   });
 
   it("recharges slime slowly by default, faster on friendly paint, and fastest while skiing", () => {
-    const neutralSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
-    const paintedSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
-    const skiingSimulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const neutralSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const paintedSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const skiingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
     const painted = paintedSimulation.addPlayer("session-1", "Painted");
@@ -1292,7 +1305,7 @@ describe("MatchSimulation", () => {
   });
 
   it("spins up before a heavy machine gun starts spraying", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
@@ -1342,7 +1355,7 @@ describe("MatchSimulation", () => {
   });
 
   it("lets the heavy machine gun hit a grounded player after spin-up", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
@@ -1386,7 +1399,7 @@ describe("MatchSimulation", () => {
   });
 
   it("reverts a heavy machine gun pickup to Pew Pew after the disposable spray runs out", () => {
-    const simulation = new MatchSimulation(FFA_MODE, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
     shooter.equippedWeaponId = WeaponId.HeavyMachineGun;
@@ -1454,11 +1467,11 @@ describe("MatchSimulation", () => {
     const bazooka = getWeaponDefinition(WeaponId.Bazooka);
     const normal = { x: 0, y: 1, z: 0 };
     const surfaceRadius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
-    const planet = PLANET_POSITIONS[0]!;
+    const planet = DEV_MAP.planets[0]!;
     shooter.pos = {
-      x: planet.x,
-      y: planet.y + surfaceRadius + GAME_CONFIG.movement.collisionRadius,
-      z: planet.z,
+      x: planet.center.x,
+      y: planet.center.y + surfaceRadius + GAME_CONFIG.movement.collisionRadius,
+      z: planet.center.z,
     };
     shooter.vel = { x: 0, y: 0, z: 0 };
     shooter.planetId = planet.id;
@@ -1536,21 +1549,21 @@ describe("MatchSimulation", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const machineGun = getWeaponDefinition(WeaponId.MachineGun);
-    const planet = PLANET_POSITIONS[0]!;
+    const planet = DEV_MAP.planets[0]!;
     const startNormal = { x: 0, y: 1, z: 0 };
     const endAngle = 0.45;
     const endNormal = { x: 0, y: Math.cos(endAngle), z: Math.sin(endAngle) };
     const startRadius = getTerrainRadius(startNormal.x, startNormal.y, startNormal.z, GAME_CONFIG);
     const endRadius = getTerrainRadius(endNormal.x, endNormal.y, endNormal.z, GAME_CONFIG);
     const start = {
-      x: planet.x + startNormal.x * (startRadius + 2),
-      y: planet.y + startNormal.y * (startRadius + 2),
-      z: planet.z + startNormal.z * (startRadius + 2),
+      x: planet.center.x + startNormal.x * (startRadius + 2),
+      y: planet.center.y + startNormal.y * (startRadius + 2),
+      z: planet.center.z + startNormal.z * (startRadius + 2),
     };
     const end = {
-      x: planet.x + endNormal.x * (endRadius + 2),
-      y: planet.y + endNormal.y * (endRadius + 2),
-      z: planet.z + endNormal.z * (endRadius + 2),
+      x: planet.center.x + endNormal.x * (endRadius + 2),
+      y: planet.center.y + endNormal.y * (endRadius + 2),
+      z: planet.center.z + endNormal.z * (endRadius + 2),
     };
     const tickSeconds = simulation.tickIntervalMs / 1000;
 

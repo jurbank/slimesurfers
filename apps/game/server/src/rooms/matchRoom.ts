@@ -6,6 +6,7 @@ import {
   type BotConfigEntry,
 } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import type {
   EmotePostMessage,
   InputMessage,
@@ -76,7 +77,7 @@ function toPublicMatchMode(modeId: string): MatchModeId {
 }
 
 export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetadata }> {
-  private simulation = new MatchSimulation(FFA_MODE, { lobbyEnabled: true });
+  private simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { lobbyEnabled: true });
   private emoteSeq = 0;
   private nextBotId = 0;
   private devClusterSpawns = false;
@@ -88,7 +89,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   onCreate(options: MatchRoomCreateOptions = {}) {
     this.devClusterSpawns =
       process.env.NODE_ENV !== "production" && options.devClusterSpawns === true;
-    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), {
+    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), DEV_MAP, {
       lobbyEnabled: true,
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
       weaponPickupLayout: resolveWeaponPickupLayout(),

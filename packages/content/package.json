@@ -11,7 +11,8 @@
     "./modes/gameModes.ts": "./modes/gameModes.ts",
     "./tricks/airTrickDefs.ts": "./tricks/airTrickDefs.ts",
     "./utils/guestPlayerNames.ts": "./utils/guestPlayerNames.ts",
-    "./utils/profanity.ts": "./utils/profanity.ts"
+    "./utils/profanity.ts": "./utils/profanity.ts",
+    "./map/runtimeMapData.ts": "./map/runtimeMapData.ts"
   },
   "dependencies": {
     "@splat/protocol": "workspace:*"

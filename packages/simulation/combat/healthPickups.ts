@@ -1,4 +1,4 @@
-import { PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 import {
   PlayerMovementState,
   type SimMatchState,
@@ -49,11 +49,13 @@ function distanceSquared(
   return dx * dx + dy * dy + dz * dz;
 }
 
-export function createHealthPickups(cfg: HealthPickupConfig): Map<string, SimHealthPickupState> {
+export function createHealthPickups(
+  cfg: HealthPickupConfig,
+  planetDefs: RuntimeMapPlanet[],
+): Map<string, SimHealthPickupState> {
   return new Map(
     HEALTH_PICKUP_SPAWNS.map((spawn) => {
-      const planet =
-        PLANET_POSITIONS.find((entry) => entry.id === spawn.planetId) ?? PLANET_POSITIONS[0]!;
+      const planet = planetDefs.find((entry) => entry.id === spawn.planetId) ?? planetDefs[0]!;
       const normal = normalize(spawn.normal.x, spawn.normal.y, spawn.normal.z);
       const terrainRadius = getTerrainRadius(normal.x, normal.y, normal.z, cfg);
       return [
@@ -63,9 +65,9 @@ export function createHealthPickups(cfg: HealthPickupConfig): Map<string, SimHea
           planetId: spawn.planetId,
           normal,
           pos: {
-            x: planet.x + normal.x * (terrainRadius + cfg.pickups.hoverHeight),
-            y: planet.y + normal.y * (terrainRadius + cfg.pickups.hoverHeight),
-            z: planet.z + normal.z * (terrainRadius + cfg.pickups.hoverHeight),
+            x: planet.center.x + normal.x * (terrainRadius + cfg.pickups.hoverHeight),
+            y: planet.center.y + normal.y * (terrainRadius + cfg.pickups.hoverHeight),
+            z: planet.center.z + normal.z * (terrainRadius + cfg.pickups.hoverHeight),
           },
           respawnTimer: 0,
           respawnDurationSeconds: HEALTH_PICKUP_RESPAWN_SECONDS,

@@ -326,7 +326,7 @@ function stepOnSurface(
   }
 
   const oldNormal = normalize(sub(state.pos, planet.center));
-  const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint);
+  const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint, planets);
   const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
   state.isOnFriendlyPaint = onFriendlyPaint;
   const onEnemyPaint = paint !== null && !onFriendlyPaint;

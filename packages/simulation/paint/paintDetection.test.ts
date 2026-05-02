@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import {
   appendPaintStamp,
   createStampBuckets,
@@ -56,6 +57,8 @@ describe("paintDetection", () => {
       patternId: 0,
     });
 
-    expect(getPaintAtPoint({ x: -251, y: 0, z: 0 }, "planet-0", planets)?.paintGroupId).toBe(1);
+    expect(
+      getPaintAtPoint({ x: -251, y: 0, z: 0 }, "planet-0", planets, DEV_MAP.planets)?.paintGroupId,
+    ).toBe(1);
   });
 });

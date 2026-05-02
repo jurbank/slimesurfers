@@ -3,7 +3,8 @@ import type {
   SpawnAnchorDefinition,
   SpawnPolicy,
 } from "@splat/content/modes/gameModes.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { NO_TEAM_ID, PlayerMovementState, type SimPlayerState, type SimVec3 } from "./simState.ts";
 
@@ -66,15 +67,19 @@ function circularDistance(a: number, b: number, count: number): number {
   return Math.min(raw, count - raw);
 }
 
-function getSurfacePosition(planetId: string, normal: SimVec3): SimVec3 {
-  const planet = PLANET_POSITIONS.find((entry) => entry.id === planetId) ?? PLANET_POSITIONS[0]!;
+function getSurfacePosition(
+  planetId: string,
+  normal: SimVec3,
+  planetDefs: RuntimeMapPlanet[],
+): SimVec3 {
+  const planet = planetDefs.find((entry) => entry.id === planetId) ?? planetDefs[0]!;
   const radius =
     getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG) +
     GAME_CONFIG.movement.standingHeight;
   return {
-    x: planet.x + normal.x * radius,
-    y: planet.y + normal.y * radius,
-    z: planet.z + normal.z * radius,
+    x: planet.center.x + normal.x * radius,
+    y: planet.center.y + normal.y * radius,
+    z: planet.center.z + normal.z * radius,
   };
 }
 
@@ -98,9 +103,9 @@ function applyDeterministicJitter(normal: SimVec3, seed: number, distance: numbe
   );
 }
 
-function buildFfaCandidates(): SpawnCandidate[] {
+function buildFfaCandidates(planetDefs: RuntimeMapPlanet[]): SpawnCandidate[] {
   const candidates: SpawnCandidate[] = [];
-  for (const planet of PLANET_POSITIONS) {
+  for (const planet of planetDefs) {
     for (const ring of FFA_SPAWN_RINGS) {
       for (let index = 0; index < ring.count; index++) {
         const azimuth = ring.azimuthOffset + (index / ring.count) * Math.PI * 2;
@@ -183,8 +188,12 @@ function pickByScore(
   return bestCandidate;
 }
 
-function selectFfaSpawn(alivePlayers: readonly SimPlayerState[], seed: number): SpawnCandidate {
-  const candidates = buildFfaCandidates().map((candidate, index) => ({
+function selectFfaSpawn(
+  alivePlayers: readonly SimPlayerState[],
+  seed: number,
+  planetDefs: RuntimeMapPlanet[],
+): SpawnCandidate {
+  const candidates = buildFfaCandidates(planetDefs).map((candidate, index) => ({
     planetId: candidate.planetId,
     normal: applyDeterministicJitter(candidate.normal, seed + index + 1, FFA_JITTER_DISTANCE),
   }));
@@ -192,7 +201,7 @@ function selectFfaSpawn(alivePlayers: readonly SimPlayerState[], seed: number): 
   return pickByScore(
     candidates,
     (candidate) => {
-      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal);
+      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal, planetDefs);
       const minDistance = getMinDistance(surfacePos, alivePlayers, () => true);
       return Number.isFinite(minDistance) ? minDistance : 0;
     },
@@ -205,6 +214,7 @@ function selectTeamSpawn(
   alivePlayers: readonly SimPlayerState[],
   request: SpawnRequest,
   seed: number,
+  planetDefs: RuntimeMapPlanet[],
 ): SpawnCandidate {
   const teamAnchor =
     policy.teamAnchors[request.teamId % policy.teamAnchors.length] ?? policy.teamAnchors[0]!;
@@ -213,7 +223,7 @@ function selectTeamSpawn(
   return pickByScore(
     candidates,
     (candidate) => {
-      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal);
+      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal, planetDefs);
       const enemyDistance = getMinDistance(
         surfacePos,
         alivePlayers,
@@ -238,13 +248,14 @@ function selectClusterSpawn(
   policy: Extract<SpawnPolicy, { kind: "cluster" }>,
   alivePlayers: readonly SimPlayerState[],
   seed: number,
+  planetDefs: RuntimeMapPlanet[],
 ): SpawnCandidate {
   const candidates = buildAnchoredCandidates(policy.anchor, policy.radius, seed);
   const preferredIndex = ((seed % candidates.length) + candidates.length) % candidates.length;
   return pickByScore(
     candidates,
     (candidate) => {
-      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal);
+      const surfacePos = getSurfacePosition(candidate.planetId, candidate.normal, planetDefs);
       const minDistance = getMinDistance(surfacePos, alivePlayers, () => true);
       if (!Number.isFinite(minDistance)) return 0;
       if (minDistance < STACKING_DISTANCE) return -1000 - minDistance;
@@ -258,7 +269,8 @@ export function selectSpawnSurface(
   mode: GameModeDefinition,
   players: Iterable<SimPlayerState>,
   request: SpawnRequest,
-  excludeSessionId?: string,
+  excludeSessionId: string | undefined,
+  planetDefs: RuntimeMapPlanet[],
 ): SpawnSelection {
   const alivePlayers = getAlivePlayers(players, excludeSessionId);
   if (alivePlayers.length === 0) {
@@ -273,21 +285,25 @@ export function selectSpawnSurface(
     return {
       planetId,
       normal,
-      surfacePos: getSurfacePosition(planetId, normal),
+      surfacePos: getSurfacePosition(planetId, normal, planetDefs),
     };
   }
 
   const seed = request.playerIndex + (request.teamId === NO_TEAM_ID ? 0 : request.teamId * 97);
   const selectedCandidate =
     mode.spawnPolicy.kind === "ffa-spread"
-      ? selectFfaSpawn(alivePlayers, seed)
+      ? selectFfaSpawn(alivePlayers, seed, planetDefs)
       : mode.spawnPolicy.kind === "team-zones"
-        ? selectTeamSpawn(mode.spawnPolicy, alivePlayers, request, seed)
-        : selectClusterSpawn(mode.spawnPolicy, alivePlayers, seed);
+        ? selectTeamSpawn(mode.spawnPolicy, alivePlayers, request, seed, planetDefs)
+        : selectClusterSpawn(mode.spawnPolicy, alivePlayers, seed, planetDefs);
 
   return {
     planetId: selectedCandidate.planetId,
     normal: selectedCandidate.normal,
-    surfacePos: getSurfacePosition(selectedCandidate.planetId, selectedCandidate.normal),
+    surfacePos: getSurfacePosition(
+      selectedCandidate.planetId,
+      selectedCandidate.normal,
+      planetDefs,
+    ),
   };
 }

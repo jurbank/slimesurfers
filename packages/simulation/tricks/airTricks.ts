@@ -1,4 +1,4 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import {
   AIR_TRICK_DEFS,
   getAirTrickDefinition,
@@ -64,14 +64,14 @@ function resetAirTrickState(player: SimPlayerState): void {
   player.airTrickPaintMultiplier = 1;
 }
 
-function nearestPlanet(player: SimPlayerState) {
-  let nearest = PLANET_POSITIONS[0] ?? null;
+function nearestPlanet(player: SimPlayerState, simState: SimMatchState) {
+  let nearest = simState.planetDefs[0] ?? null;
   let nearestDist = Infinity;
-  for (const planet of PLANET_POSITIONS) {
+  for (const planet of simState.planetDefs) {
     const dist = Math.hypot(
-      player.pos.x - planet.x,
-      player.pos.y - planet.y,
-      player.pos.z - planet.z,
+      player.pos.x - planet.center.x,
+      player.pos.y - planet.center.y,
+      player.pos.z - planet.center.z,
     );
     if (dist < nearestDist) {
       nearest = planet;
@@ -84,16 +84,16 @@ function nearestPlanet(player: SimPlayerState) {
 function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): PaintStampMessage[] {
   if (player.airTrickCombo <= 0) return [];
 
-  const planet = nearestPlanet(player);
+  const planet = nearestPlanet(player, simState);
   if (!planet) return [];
 
   const planetState = simState.planets.get(planet.id);
   if (!planetState) return [];
 
   const baseNormal = normalize({
-    x: player.pos.x - planet.x,
-    y: player.pos.y - planet.y,
-    z: player.pos.z - planet.z,
+    x: player.pos.x - planet.center.x,
+    y: player.pos.y - planet.center.y,
+    z: player.pos.z - planet.center.z,
   });
   const radiusMultiplier = Math.min(
     GAME_CONFIG.tricks.maxRadiusMultiplier,
@@ -107,9 +107,9 @@ function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): Pain
   const stamp = applyPaintImpact(simState, planetState, {
     planetId: planet.id,
     pos: {
-      x: planet.x + baseNormal.x * radius,
-      y: planet.y + baseNormal.y * radius,
-      z: planet.z + baseNormal.z * radius,
+      x: planet.center.x + baseNormal.x * radius,
+      y: planet.center.y + baseNormal.y * radius,
+      z: planet.center.z + baseNormal.z * radius,
     },
     paintGroupId: player.paintGroupId,
     slimeColor: player.slimeColor,

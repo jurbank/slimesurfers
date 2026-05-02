@@ -394,7 +394,7 @@ function getSlimeRechargeRate(
     return cfg.slime.passiveRechargePerSecond;
   }
 
-  const paint = getPaintAtPoint(player.pos, player.planetId, simState.planets);
+  const paint = getPaintAtPoint(player.pos, player.planetId, simState.planets, simState.planetDefs);
   const onFriendlyPaint = paint?.paintGroupId === player.paintGroupId;
   if (!onFriendlyPaint) {
     return cfg.slime.passiveRechargePerSecond;

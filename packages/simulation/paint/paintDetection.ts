@@ -1,4 +1,5 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 import type { SimPaintStamp, SimPlanetPaintState, SimVec3 } from "../match/simState.ts";
 
 export interface PaintDetectionResult {
@@ -151,9 +152,10 @@ export function getPaintAtPoint(
   pos: SimVec3,
   planetId: string,
   planets: Map<string, SimPlanetPaintState>,
+  planetDefs: RuntimeMapPlanet[],
 ): PaintDetectionResult | null {
   const planetState = planets.get(planetId);
-  const planetPos = PLANET_POSITIONS.find((p) => p.id === planetId);
+  const planetPos = planetDefs.find((p) => p.id === planetId);
   if (!planetState || !planetPos) return null;
 
   // Convert position to unit normal relative to planet center
@@ -161,7 +163,7 @@ export function getPaintAtPoint(
     x: pNx,
     y: pNy,
     z: pNz,
-  } = normalize(pos.x - planetPos.x, pos.y - planetPos.y, pos.z - planetPos.z);
+  } = normalize(pos.x - planetPos.center.x, pos.y - planetPos.center.y, pos.z - planetPos.center.z);
   const bucket =
     planetState.territoryRows > 0 && planetState.territoryCols > 0
       ? normalToBucket(pNx, pNy, pNz, planetState.territoryRows, planetState.territoryCols)
