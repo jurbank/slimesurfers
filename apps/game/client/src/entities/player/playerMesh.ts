@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { getWeaponDefinition, WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
-import { createOutlineMaterial } from "../../materials/outlineMaterial.ts";
+import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import { createPlayerDeathParticles, type PlayerDeathParticles } from "./playerDeath.ts";
 
 function buildSnowboardGeom(

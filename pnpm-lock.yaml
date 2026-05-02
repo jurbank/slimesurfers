@@ -182,6 +182,9 @@ importers:
 
   packages/client-runtime:
     dependencies:
+      '@splat/content':
+        specifier: workspace:*
+        version: link:../content
       '@types/three':
         specifier: 'catalog:'
         version: 0.183.1

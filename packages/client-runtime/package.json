@@ -8,9 +8,14 @@
     "./shaders/celShader.ts": "./shaders/celShader.ts",
     "./shaders/outlineShader.ts": "./shaders/outlineShader.ts",
     "./shaders/planetShader.ts": "./shaders/planetShader.ts",
-    "./shaders/waterShader.ts": "./shaders/waterShader.ts"
+    "./shaders/waterShader.ts": "./shaders/waterShader.ts",
+    "./materials/atmosphereMaterial.ts": "./materials/atmosphereMaterial.ts",
+    "./materials/outlineMaterial.ts": "./materials/outlineMaterial.ts",
+    "./materials/waterMaterial.ts": "./materials/waterMaterial.ts",
+    "./materials/planetMaterial.ts": "./materials/planetMaterial.ts"
   },
   "dependencies": {
+    "@splat/content": "workspace:*",
     "@types/three": "catalog:",
     "three": "catalog:"
   }

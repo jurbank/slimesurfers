@@ -6,11 +6,11 @@ import {
   getTerrainRadius,
   type TerrainSurfaceProvider,
 } from "@splat/simulation/terrain/planetTerrain.ts";
-import { createAtmosphereMaterial } from "../rendering/atmosphereMaterial.ts";
-import { createOutlineMaterial } from "../rendering/outlineMaterial.ts";
+import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosphereMaterial.ts";
+import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeometry.ts";
-import { createPlanetMaterial } from "../rendering/planetMaterial.ts";
-import { createWaterMaterial } from "../rendering/waterMaterial.ts";
+import { createPlanetMaterial } from "@splat/client-runtime/materials/planetMaterial.ts";
+import { createWaterMaterial } from "@splat/client-runtime/materials/waterMaterial.ts";
 import { createMetricGroup } from "../performance/geometryStats.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";

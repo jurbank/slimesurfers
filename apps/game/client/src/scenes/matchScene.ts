@@ -45,10 +45,10 @@ import { MatchEndOverlay } from "../ui/MatchEndOverlay.ts";
 import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { EmoteMenuOverlay } from "../ui/EmoteMenuOverlay.ts";
 import { HintToast } from "../ui/HintToast.ts";
-import { createPlanetMaterial } from "../materials/planetMaterial.ts";
-import { createAtmosphereMaterial } from "../materials/atmosphereMaterial.ts";
-import { createWaterMaterial } from "../materials/waterMaterial.ts";
-import { createOutlineMaterial } from "../materials/outlineMaterial.ts";
+import { createPlanetMaterial } from "@splat/client-runtime/materials/planetMaterial.ts";
+import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosphereMaterial.ts";
+import { createWaterMaterial } from "@splat/client-runtime/materials/waterMaterial.ts";
+import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import {
   getTerrainHeight,
   getTerrainNormal,
