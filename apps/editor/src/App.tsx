@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
@@ -22,6 +23,7 @@ import {
   type PreviewSpawnState,
   type PropBrushState,
 } from "./types.ts";
+import { editorStateToRuntimeMap } from "./export.ts";
 
 type Panel = "terrain" | "shaders" | "props" | "tracks" | "spawns";
 
@@ -46,6 +48,7 @@ interface EditorSaveState {
   };
   activeTrackId: string;
   previewSpawn?: PreviewSpawnState;
+  mapName?: string;
 }
 
 interface InitialEditorState {
@@ -53,6 +56,7 @@ interface InitialEditorState {
   tracks: TrackState[];
   activeTrackId: string;
   previewSpawn: PreviewSpawnState;
+  mapName: string;
 }
 
 export function App() {
@@ -62,6 +66,7 @@ export function App() {
   const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
   const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
   const [previewSpawn, setPreviewSpawn] = useState<PreviewSpawnState>(initialState.previewSpawn);
+  const [mapName, setMapName] = useState(initialState.mapName);
   const [spawnPlacementActive, setSpawnPlacementActive] = useState(false);
   const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
@@ -219,6 +224,7 @@ export function App() {
       tracksRef.current,
       activeTrackIdRef.current,
       previewSpawnRef.current,
+      mapName,
     );
     setSaveStatus(saved ? "saved" : "error");
   }
@@ -453,14 +459,28 @@ export function App() {
             />
           )}
         </div>
-        <div className="p-4 border-t border-zinc-700">
+        <div className="p-4 border-t border-zinc-700 space-y-2">
+          <input
+            value={mapName}
+            onChange={(e) => setMapName(e.target.value)}
+            placeholder="Map name"
+            className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500"
+          />
+          <button
+            onClick={() =>
+              exportMap(configRef.current, tracksRef.current, previewSpawnRef.current, mapName)
+            }
+            className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
+          >
+            Export Map
+          </button>
           <button
             onClick={() =>
               exportConfig(configRef.current, tracksRef.current, previewSpawnRef.current)
             }
-            className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
+            className="w-full px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-xs transition-colors"
           >
-            Export Config
+            Export Editor Config
           </button>
         </div>
       </aside>
@@ -488,6 +508,27 @@ function exportConfig(config: EditorConfig, tracks: TrackState[], previewSpawn: 
   URL.revokeObjectURL(url);
 }
 
+function exportMap(
+  config: EditorConfig,
+  tracks: TrackState[],
+  previewSpawn: PreviewSpawnState,
+  mapName: string,
+) {
+  const map = editorStateToRuntimeMap(config, tracks, previewSpawn, mapName || "Untitled Map");
+  const result = validateRuntimeMapData(map);
+  if (!result.valid) {
+    alert(`Export failed:\n${result.errors.map((e) => `${e.field}: ${e.message}`).join("\n")}`);
+    return;
+  }
+  const blob = new Blob([JSON.stringify(map, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${map.mapId}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function createInitialEditorState(): InitialEditorState {
   const saved = loadEditorState();
   if (saved) {
@@ -496,6 +537,7 @@ function createInitialEditorState(): InitialEditorState {
       tracks: saved.tracks.tracks,
       activeTrackId: saved.activeTrackId,
       previewSpawn: saved.previewSpawn ?? { normal: [0, 1, 0] },
+      mapName: saved.mapName ?? "My Map",
     };
   }
 
@@ -505,6 +547,7 @@ function createInitialEditorState(): InitialEditorState {
     tracks: [track],
     activeTrackId: track.id,
     previewSpawn: { normal: [0, 1, 0] },
+    mapName: "My Map",
   };
 }
 
@@ -513,6 +556,7 @@ function createEditorSaveState(
   tracks: TrackState[],
   activeTrackId: string,
   previewSpawn: PreviewSpawnState,
+  mapName: string,
 ): EditorSaveState {
   return {
     version: 1,
@@ -524,6 +568,7 @@ function createEditorSaveState(
     },
     activeTrackId,
     previewSpawn,
+    mapName,
   };
 }
 
@@ -532,11 +577,12 @@ function saveEditorState(
   tracks: TrackState[],
   activeTrackId: string,
   previewSpawn: PreviewSpawnState,
+  mapName: string,
 ): boolean {
   try {
     localStorage.setItem(
       LOCAL_SAVE_KEY,
-      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId, previewSpawn)),
+      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId, previewSpawn, mapName)),
     );
     return true;
   } catch {
@@ -578,6 +624,7 @@ function loadEditorState(): EditorSaveState | null {
         tracks: parsed.tracks.tracks,
       },
       activeTrackId,
+      mapName: typeof parsed.mapName === "string" ? parsed.mapName : undefined,
     };
   } catch {
     return null;

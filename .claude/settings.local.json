@@ -42,7 +42,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174)",
       "Bash(kill %1)",
       "Bash(vp add *)",
-      "Bash(vp remove *)"
+      "Bash(vp remove *)",
+      "Bash(xargs ls *)"
     ]
   },
   "enableAllProjectMcpServers": true,

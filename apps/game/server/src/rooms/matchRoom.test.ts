@@ -197,8 +197,9 @@ describe("MatchRoom", () => {
     harness.room.onJoin(alpha.client as never, { name: "Alpha" });
 
     expect(harness.room.state.players.get("session-1")?.name).toBe("Alpha");
-    expect(alpha.sent).toHaveLength(1);
-    expect(alpha.sent[0]?.type).toBe(MessageType.Snapshot);
+    expect(alpha.sent).toHaveLength(2);
+    expect(alpha.sent[0]?.type).toBe(MessageType.MapData);
+    expect(alpha.sent[1]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts).toHaveLength(1);
     expect(harness.broadcasts[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts[0]?.options).toEqual({ except: alpha.client });

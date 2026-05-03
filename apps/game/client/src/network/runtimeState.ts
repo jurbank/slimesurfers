@@ -1,24 +1,17 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
-import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import type { InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
-import type { PlayerSnapshot } from "@splat/protocol/network/serverMessages.ts";
-import { stepPlayer, type PlayerPhysics } from "@splat/simulation/movement/simulatedMovement.ts";
-import { buildComputedRail } from "@splat/simulation/movement/railSpline.ts";
+import type { MapDataMessage, PlayerSnapshot } from "@splat/protocol/network/serverMessages.ts";
+import {
+  stepPlayer,
+  type PlanetData,
+  type PlayerPhysics,
+  type StepConfig,
+} from "@splat/simulation/movement/simulatedMovement.ts";
+import { buildComputedRail, type ComputedRail } from "@splat/simulation/movement/railSpline.ts";
 import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
-
-const PLANETS = PLANET_POSITIONS.map((planet) => ({
-  id: planet.id,
-  center: { x: planet.x, y: planet.y, z: planet.z },
-  radius: GAME_CONFIG.planet.radius,
-}));
-const RAILS = RAIL_DEFS.map((def) => {
-  const planet =
-    PLANET_POSITIONS.find((entry) => entry.id === def.planetId) ?? PLANET_POSITIONS[0]!;
-  return buildComputedRail(def, { x: planet.x, y: planet.y, z: planet.z }, GAME_CONFIG);
-});
 
 const MAX_PENDING_INPUTS = 60;
 
@@ -164,6 +157,32 @@ export class ClientRuntimeState {
   private localPlayer: RuntimePlayerState | null = null;
   private readonly pendingInputs: InputMessage[] = [];
   private readonly remoteSnapshots = new Map<string, BufferedSnapshot[]>();
+  private stepCfg: StepConfig = GAME_CONFIG;
+  private planets: PlanetData[] = [];
+  private computedRails: ComputedRail[] = [];
+
+  setMapData(msg: MapDataMessage): void {
+    this.planets = msg.planets.map((p) => ({
+      id: p.id,
+      center: { x: p.center.x, y: p.center.y, z: p.center.z },
+      radius: p.radius,
+    }));
+    const terrainCfg = {
+      planet: { radius: msg.planets[0]!.radius },
+      terrain: msg.terrain,
+    };
+    this.computedRails = msg.rails.map((def) => {
+      const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0];
+      const center = planet?.center ?? { x: 0, y: 0, z: 0 };
+      return buildComputedRail(def, center, terrainCfg);
+    });
+    this.stepCfg = {
+      planet: terrainCfg.planet,
+      terrain: msg.terrain,
+      movement: GAME_CONFIG.movement,
+      rail: GAME_CONFIG.rail,
+    };
+  }
 
   removePlayer(sessionId: string): void {
     this.remoteSnapshots.delete(sessionId);
@@ -185,7 +204,15 @@ export class ClientRuntimeState {
     if (this.pendingInputs.length > MAX_PENDING_INPUTS) {
       this.pendingInputs.splice(0, this.pendingInputs.length - MAX_PENDING_INPUTS);
     }
-    stepPlayer(this.localPlayer, input, input.dt, PLANETS, GAME_CONFIG, planetPaint, RAILS);
+    stepPlayer(
+      this.localPlayer,
+      input,
+      input.dt,
+      this.planets,
+      this.stepCfg,
+      planetPaint,
+      this.computedRails,
+    );
   }
 
   applySnapshot(
@@ -252,7 +279,15 @@ export class ClientRuntimeState {
 
     this.localPlayer = cloneRuntimeState(authoritative);
     for (const input of this.pendingInputs) {
-      stepPlayer(this.localPlayer, input, input.dt, PLANETS, GAME_CONFIG, planetPaint, RAILS);
+      stepPlayer(
+        this.localPlayer,
+        input,
+        input.dt,
+        this.planets,
+        this.stepCfg,
+        planetPaint,
+        this.computedRails,
+      );
     }
   }
 }

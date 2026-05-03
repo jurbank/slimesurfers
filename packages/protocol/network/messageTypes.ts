@@ -31,6 +31,8 @@ export const MessageType = {
   KillEvents: "killEvents",
   /** Match phase transition (lobby -> countdown -> active -> ended) */
   MatchPhase: "matchPhase",
+  /** Sent once to each client on join; carries the terrain and map configuration */
+  MapData: "mapData",
 } as const;
 
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
@@ -39,6 +41,7 @@ export type {
   KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
+  MapDataMessage,
   MatchPhaseMessage,
   EmoteEventBatchMessage,
   EmoteEventMessage,

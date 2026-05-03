@@ -47,7 +47,7 @@ import {
   createHealthPickups,
   tickHealthPickups,
 } from "../combat/healthPickups.ts";
-import { stepPlayer, type PlanetData } from "../movement/simulatedMovement.ts";
+import { stepPlayer, type PlanetData, type StepConfig } from "../movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
 import { applyPaintImpact } from "../paint/stampPaint.ts";
@@ -96,10 +96,20 @@ function buildPlanets(map: RuntimeMapData): PlanetData[] {
   }));
 }
 
+function buildStepConfig(map: RuntimeMapData): StepConfig {
+  return {
+    planet: { radius: map.planets[0]?.radius ?? GAME_CONFIG.planet.radius },
+    terrain: map.terrain,
+    movement: GAME_CONFIG.movement,
+    rail: GAME_CONFIG.rail,
+  };
+}
+
 function buildRails(map: RuntimeMapData): ComputedRail[] {
+  const cfg = buildStepConfig(map);
   return map.rails.map((def) => {
     const planet = map.planets.find((p) => p.id === def.planetId) ?? map.planets[0]!;
-    return buildComputedRail(def, planet.center, GAME_CONFIG);
+    return buildComputedRail(def, planet.center, cfg);
   });
 }
 
@@ -267,7 +277,9 @@ function createSimMatchState(
   weaponPickupLayout: WeaponPickupLayout,
   planetDefs: RuntimeMapPlanet[],
   rails: ComputedRail[],
+  stepCfg: StepConfig,
 ): SimMatchState {
+  const pickupCfg = { ...GAME_CONFIG, planet: stepCfg.planet, terrain: stepCfg.terrain };
   const simState: SimMatchState = {
     players: new Map(),
     planetDefs,
@@ -282,8 +294,8 @@ function createSimMatchState(
       ]),
     ),
     projectiles: new Map(),
-    pickups: createWeaponPickups(GAME_CONFIG, weaponPickupLayout, planetDefs),
-    healthPickups: createHealthPickups(GAME_CONFIG, planetDefs),
+    pickups: createWeaponPickups(pickupCfg, weaponPickupLayout, planetDefs),
+    healthPickups: createHealthPickups(pickupCfg, planetDefs),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
     matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
     paintSeq: 0,
@@ -401,6 +413,7 @@ export class MatchSimulation {
   readonly mode: GameModeDefinition;
   private readonly planets: PlanetData[];
   private readonly rails: ComputedRail[];
+  private readonly stepCfg: StepConfig;
   private readonly simState: SimMatchState;
   private readonly inputQueues = new Map<string, InputMessage[]>();
   private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
@@ -418,6 +431,7 @@ export class MatchSimulation {
   ) {
     this.mode = mode;
     this.planets = buildPlanets(map);
+    this.stepCfg = buildStepConfig(map);
     this.rails = buildRails(map);
     this.simState = createSimMatchState(
       mode,
@@ -426,6 +440,7 @@ export class MatchSimulation {
       options.weaponPickupLayout ?? "map",
       map.planets,
       this.rails,
+      this.stepCfg,
     );
   }
 
@@ -762,7 +777,7 @@ export class MatchSimulation {
             input,
             inputDtSec,
             this.planets,
-            GAME_CONFIG,
+            this.stepCfg,
             this.simState.planets,
             this.rails,
           );
@@ -825,7 +840,7 @@ export class MatchSimulation {
           IDLE_INPUT,
           serverDtSec,
           this.planets,
-          GAME_CONFIG,
+          this.stepCfg,
           this.simState.planets,
           this.rails,
         );

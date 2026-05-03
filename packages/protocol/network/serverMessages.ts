@@ -193,3 +193,36 @@ export interface MatchPhaseMessage {
   /** Index into GameState.teamColors of the winning team. Only set when phase === Ended and isTeamBased. */
   winningTeamId?: number;
 }
+
+// -- Map data ----------------------------------------------------------------
+
+/** Sent once to each joining client so the client can render the correct map. */
+export interface MapDataMessage {
+  mapId: string;
+  name: string;
+  planets: Array<{
+    id: string;
+    center: { x: number; y: number; z: number };
+    radius: number;
+  }>;
+  terrain: {
+    seed: number;
+    baseAmplitude: number;
+    frequency: number;
+    octaves: number;
+    lacunarity: number;
+    persistence: number;
+    heightSmoothingStrength: number;
+    heightSmoothingSampleAngle: number;
+    waterLevel: number;
+    snowLevel: number;
+    sandBand: number;
+    rockLevel: number;
+  };
+  rails: Array<{
+    id: number;
+    planetId: string;
+    controlPoints: Array<{ nx: number; ny: number; nz: number; heightOffset: number }>;
+    paintCorridorRadius: number;
+  }>;
+}

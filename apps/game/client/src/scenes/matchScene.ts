@@ -12,10 +12,11 @@ import type {
   EmoteEventMessage,
   KillEventMessage,
   LeaderboardMessage,
+  MapDataMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
-import { WeaponAimSystem, nearestPlanetCenter } from "../systems/weaponAimSystem.ts";
+import { WeaponAimSystem } from "../systems/weaponAimSystem.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
 import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
@@ -53,6 +54,7 @@ import {
   getTerrainHeight,
   getTerrainNormal,
   getTerrainRadius,
+  type TerrainConfig,
 } from "@splat/simulation/terrain/planetTerrain.ts";
 
 import {
@@ -118,9 +120,13 @@ export class MatchScene {
   private lastWasAirborne = false;
   private portal: PortalSystem | null = null;
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];
+  private readonly planetMeshes: THREE.Mesh[] = [];
   private readonly planetOutlines: THREE.Mesh[] = [];
   private readonly atmosphereMaterials: THREE.ShaderMaterial[] = [];
   private readonly waterMaterials: THREE.ShaderMaterial[] = [];
+  private readonly waterMeshes: THREE.Mesh[] = [];
+
+  private currentMapCfg: TerrainConfig | null = null;
 
   private onDisconnectCb: (() => void) | null = null;
 
@@ -321,7 +327,7 @@ export class MatchScene {
     const initialAudioEntries = Object.entries(AUDIO).filter(
       ([, asset]) => !asset.context || asset.context === "initial",
     );
-    const totalSteps = initialAudioEntries.length + 2; // audio + sky + planets
+    const totalSteps = initialAudioEntries.length + 2; // audio + sky + portal
     let completedSteps = 0;
 
     const increment = (): void => {
@@ -341,8 +347,7 @@ export class MatchScene {
     this.buildSkyReference();
     increment();
 
-    // 3. Planets
-    this.buildPlanets();
+    // 3. Portal
     if (PORTAL_ENABLED) this.portal = new PortalSystem(this.render.scene, performance.now());
     increment();
   }
@@ -401,8 +406,9 @@ export class MatchScene {
   }
 
   private buildPlanets(): void {
-    const atmosphereRadius = GAME_CONFIG.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
-    const waterRadius = GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.waterLevel;
+    const cfg = this.terrainConfig();
+    const atmosphereRadius = cfg.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
+    const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
 
     for (const p of PLANET_POSITIONS) {
       const paintMask = this.paint.getRenderTarget(p.id);
@@ -412,11 +418,12 @@ export class MatchScene {
         waterRadius,
       });
 
-      const geometry = this.buildTerrainGeometry();
+      const geometry = this.buildTerrainGeometry(cfg);
       const planet = new THREE.Mesh(geometry, planetMaterial);
       planet.position.set(p.x, p.y, p.z);
       this.render.scene.add(planet);
       this.planetMaterials.push(planetMaterial);
+      this.planetMeshes.push(planet);
 
       // JSR Style Planet Outline
       const planetOutline = new THREE.Mesh(geometry, createOutlineMaterial());
@@ -439,11 +446,12 @@ export class MatchScene {
       // Water sphere at sea level
       if (GAME_CONFIG.shaders.water.enabled) {
         const waterMat = createWaterMaterial();
-        const water = new THREE.Mesh(this.buildWaterGeometry(waterRadius), waterMat);
+        const water = new THREE.Mesh(this.buildWaterGeometry(waterRadius, cfg), waterMat);
         water.position.set(p.x, p.y, p.z);
         water.renderOrder = 1;
         this.render.scene.add(water);
         this.waterMaterials.push(waterMat);
+        this.waterMeshes.push(water);
       }
 
       if (GAME_CONFIG.shaders.clouds.enabled) {
@@ -456,13 +464,68 @@ export class MatchScene {
     }
   }
 
+  applyMapData(msg: MapDataMessage): void {
+    const planetRadius = msg.planets[0]!.radius;
+    this.currentMapCfg = {
+      planet: { radius: planetRadius },
+      terrain: msg.terrain,
+    };
+
+    this.runtime.setMapData(msg);
+    this.weaponAim.setMapData(msg);
+    this.rails.setMapData(msg);
+
+    if (this.planetMeshes.length === 0) {
+      this.buildPlanets();
+      return;
+    }
+
+    const cfg = this.currentMapCfg;
+    const waterRadius = planetRadius + msg.terrain.waterLevel;
+    const newTerrainGeo = this.buildTerrainGeometry(cfg);
+
+    for (let i = 0; i < this.planetMeshes.length; i++) {
+      const planet = this.planetMeshes[i];
+      const outline = this.planetOutlines[i];
+      if (planet) {
+        planet.geometry.dispose();
+        planet.geometry = newTerrainGeo;
+      }
+      if (outline) outline.geometry = newTerrainGeo;
+
+      const mat = this.planetMaterials[i];
+      if (mat) {
+        mat.uniforms.waterRadius.value = waterRadius;
+        mat.uniforms.waterLevel.value = msg.terrain.waterLevel;
+        mat.uniforms.sandBand.value = msg.terrain.sandBand;
+        mat.uniforms.snowLevel.value = msg.terrain.snowLevel;
+        mat.uniforms.rockLevel.value = msg.terrain.rockLevel;
+      }
+
+      const water = this.waterMeshes[i];
+      if (water) {
+        water.geometry.dispose();
+        water.geometry = this.buildWaterGeometry(waterRadius, cfg);
+      }
+    }
+  }
+
+  private terrainConfig(): TerrainConfig {
+    return (
+      this.currentMapCfg ?? {
+        planet: { radius: GAME_CONFIG.planet.radius },
+        terrain: GAME_CONFIG.terrain,
+      }
+    );
+  }
+
   /**
    * Build an icosahedron displaced by procedural terrain noise, with
    * per-face flat shading and biome vertex colors.
    */
-  private buildTerrainGeometry(): THREE.BufferGeometry {
+  private buildTerrainGeometry(cfg: TerrainConfig): THREE.BufferGeometry {
     const detail = GAME_CONFIG.terrain.icosahedronDetail;
-    const indexed = new THREE.IcosahedronGeometry(GAME_CONFIG.planet.radius, detail);
+    const indexed = new THREE.IcosahedronGeometry(cfg.planet.radius, detail);
 
     // toNonIndexed gives each triangle its own vertices → flat shading
     const geometry = indexed.toNonIndexed();
@@ -485,9 +548,9 @@ export class MatchScene {
       const ny = y / len;
       const nz = z / len;
 
-      const radius = getTerrainRadius(nx, ny, nz, GAME_CONFIG);
+      const radius = getTerrainRadius(nx, ny, nz, cfg);
       posAttr.setXYZ(i, nx * radius, ny * radius, nz * radius);
-      const terrainNormal = getTerrainNormal(nx, ny, nz, GAME_CONFIG);
+      const terrainNormal = getTerrainNormal(nx, ny, nz, cfg);
       smoothNormals[i * 3] = terrainNormal.nx;
       smoothNormals[i * 3 + 1] = terrainNormal.ny;
       smoothNormals[i * 3 + 2] = terrainNormal.nz;
@@ -527,7 +590,7 @@ export class MatchScene {
     return geometry;
   }
 
-  private buildWaterGeometry(waterRadius: number): THREE.BufferGeometry {
+  private buildWaterGeometry(waterRadius: number, cfg: TerrainConfig): THREE.BufferGeometry {
     const geometry = new THREE.SphereGeometry(waterRadius, 64, 64);
     const posAttr = geometry.getAttribute("position");
     const waterDepths = new Float32Array(posAttr.count);
@@ -540,7 +603,7 @@ export class MatchScene {
       const nx = x / len;
       const ny = y / len;
       const nz = z / len;
-      waterDepths[i] = GAME_CONFIG.terrain.waterLevel - getTerrainHeight(nx, ny, nz, GAME_CONFIG);
+      waterDepths[i] = cfg.terrain.waterLevel - getTerrainHeight(nx, ny, nz, cfg);
     }
 
     geometry.setAttribute("waterDepth", new THREE.Float32BufferAttribute(waterDepths, 1));
@@ -792,6 +855,9 @@ export class MatchScene {
     await this.connection.join(
       { name, colorIndex, playerUuid, matchMode, teamId },
       {
+        onMapData: (msg) => {
+          this.applyMapData(msg);
+        },
         onPlayerInit: (
           sessionId: string,
           name: string,
@@ -1005,7 +1071,7 @@ export class MatchScene {
       }
 
       playerPos.set(localState.pos.x, localState.pos.y, localState.pos.z);
-      const planetCenter = nearestPlanetCenter(playerPos);
+      const planetCenter = this.weaponAim.nearestPlanetCenter(playerPos);
 
       // Update orientation (parallel transport + yaw); return value unused here.
       this.input.computeAimDir(playerPos, planetCenter);
@@ -1173,7 +1239,7 @@ export class MatchScene {
             .get(sessionId)
             ?.update(
               remoteState,
-              nearestPlanetCenter(remotePos),
+              this.weaponAim.nearestPlanetCenter(remotePos),
               this.resolveTeamVisual(sessionId, remoteState.slimeColor, remoteState.patternId)
                 .slimeColor,
             );

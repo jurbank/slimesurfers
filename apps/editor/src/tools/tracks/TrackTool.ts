@@ -479,9 +479,11 @@ export class TrackTool {
   private addPoint(hit: THREE.Intersection): void {
     if (!this.state) return;
     const normal = hit.point.clone().normalize();
+    const p = hit.point;
     const point: TrackPoint = {
       id: `point-${Date.now()}-${Math.round(Math.random() * 10000)}`,
       normal: [normal.x, normal.y, normal.z],
+      position: [p.x, p.y, p.z],
     };
     const nextTrack = { ...this.state.track, points: [...this.state.track.points, point] };
     this.state = { ...this.state, track: nextTrack, selectedPointId: point.id };

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "mapId": "my-map",
+  "name": "My Map",
+  "planets": [
+    {
+      "id": "planet-0",
+      "center": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "radius": 100
+    }
+  ],
+  "terrain": {
+    "seed": 42,
+    "baseAmplitude": 18,
+    "frequency": 1.4,
+    "octaves": 3,
+    "lacunarity": 2.2,
+    "persistence": 0.45,
+    "heightSmoothingStrength": 0.45,
+    "heightSmoothingSampleAngle": 0.035,
+    "waterLevel": -3,
+    "snowLevel": 9,
+    "sandBand": 1.5,
+    "rockLevel": 7
+  },
+  "rails": [],
+  "spawns": {
+    "ffa": {
+      "kind": "ffa-spread"
+    },
+    "teams": {
+      "kind": "ffa-spread"
+    },
+    "dev": {
+      "kind": "cluster",
+      "radius": 7,
+      "anchor": {
+        "planetId": "planet-0",
+        "normal": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        }
+      }
+    }
+  }
+}

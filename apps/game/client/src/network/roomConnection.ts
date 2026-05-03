@@ -14,6 +14,7 @@ import type {
   KillEventBatchMessage,
   KillEventMessage,
   LeaderboardMessage,
+  MapDataMessage,
   MatchPhaseMessage,
   PaintStampBatchMessage,
   PaintStampMessage,
@@ -45,6 +46,7 @@ export interface RoomCallbacks {
   onTrickEvents(events: TrickEventMessage[]): void;
   onEmoteEvents(events: EmoteEventMessage[]): void;
   onKillEvents(events: KillEventMessage[]): void;
+  onMapData(message: MapDataMessage): void;
   onSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void;
   onLeaderboard(message: LeaderboardMessage): void;
   onMatchPhase(phase: MatchPhase, timer: number, winningTeamId?: number): void;
@@ -105,6 +107,10 @@ export class RoomConnection {
       { ...options, devClusterSpawns },
       GameState,
     );
+
+    this.room.onMessage(MessageType.MapData, (message: MapDataMessage) => {
+      callbacks.onMapData(message);
+    });
 
     this.room.onMessage(MessageType.Snapshot, (snapshot: SnapshotMessage) => {
       callbacks.onSnapshot(snapshot, performance.now());

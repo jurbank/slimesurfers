@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Room, type Client } from "@colyseus/core";
 import { BOT_EMOTE_LEXICONS, EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
 import {
@@ -6,7 +7,11 @@ import {
   type BotConfigEntry,
 } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
-import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
+import {
+  DEV_MAP,
+  validateRuntimeMapData,
+  type RuntimeMapData,
+} from "@splat/content/map/runtimeMapData.ts";
 import type {
   EmotePostMessage,
   InputMessage,
@@ -37,6 +42,7 @@ type DepartedEntry = LeaderboardEntry & { playerUuid?: string; isBot?: boolean }
 interface MatchRoomCreateOptions {
   devClusterSpawns?: unknown;
   matchMode?: unknown;
+  mapData?: unknown;
 }
 
 interface LobbyPlayerMetadata {
@@ -76,8 +82,36 @@ function toPublicMatchMode(modeId: string): MatchModeId {
   return modeId === "teams" ? "teams" : "ffa";
 }
 
+function resolveMap(options: MatchRoomCreateOptions): RuntimeMapData {
+  if (options.mapData != null) {
+    const result = validateRuntimeMapData(options.mapData);
+    if (!result.valid) {
+      throw new Error(
+        `Invalid mapData option: ${result.errors.map((e) => `${e.field}: ${e.message}`).join(", ")}`,
+      );
+    }
+    return options.mapData as RuntimeMapData;
+  }
+
+  const mapFile = process.env.MAP_FILE;
+  if (mapFile) {
+    const raw = readFileSync(mapFile, "utf-8");
+    const parsed: unknown = JSON.parse(raw);
+    const result = validateRuntimeMapData(parsed);
+    if (!result.valid) {
+      throw new Error(
+        `Invalid MAP_FILE "${mapFile}": ${result.errors.map((e) => `${e.field}: ${e.message}`).join(", ")}`,
+      );
+    }
+    return parsed as RuntimeMapData;
+  }
+
+  return DEV_MAP;
+}
+
 export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetadata }> {
   private simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { lobbyEnabled: true });
+  private map: RuntimeMapData = DEV_MAP;
   private emoteSeq = 0;
   private nextBotId = 0;
   private devClusterSpawns = false;
@@ -89,7 +123,8 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   onCreate(options: MatchRoomCreateOptions = {}) {
     this.devClusterSpawns =
       process.env.NODE_ENV !== "production" && options.devClusterSpawns === true;
-    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), DEV_MAP, {
+    this.map = resolveMap(options);
+    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), this.map, {
       lobbyEnabled: true,
       seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
       weaponPickupLayout: resolveWeaponPickupLayout(),
@@ -124,6 +159,14 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     if (typeof options.playerUuid === "string" && UUID_RE.test(options.playerUuid)) {
       this.playerUuids.set(client.sessionId, options.playerUuid);
     }
+
+    client.send(MessageType.MapData, {
+      mapId: this.map.mapId,
+      name: this.map.name,
+      planets: this.map.planets,
+      terrain: this.map.terrain,
+      rails: this.map.rails,
+    });
 
     const bootstrap = buildJoinBootstrap(this.simulation);
     if (bootstrap.paintStamps.length > 0) {
