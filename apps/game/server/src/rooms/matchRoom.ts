@@ -82,28 +82,43 @@ function toPublicMatchMode(modeId: string): MatchModeId {
   return modeId === "teams" ? "teams" : "ffa";
 }
 
+function migrateMapData(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) return data;
+  const m = data as Record<string, unknown>;
+  const terrain = m.terrain;
+  if (typeof terrain === "object" && terrain !== null) {
+    const t = terrain as Record<string, unknown>;
+    if (typeof t.icosahedronDetail !== "number") {
+      t.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+    }
+  }
+  return data;
+}
+
 function resolveMap(options: MatchRoomCreateOptions): RuntimeMapData {
   if (options.mapData != null) {
-    const result = validateRuntimeMapData(options.mapData);
+    const migrated = migrateMapData(options.mapData);
+    const result = validateRuntimeMapData(migrated);
     if (!result.valid) {
       throw new Error(
         `Invalid mapData option: ${result.errors.map((e) => `${e.field}: ${e.message}`).join(", ")}`,
       );
     }
-    return options.mapData as RuntimeMapData;
+    return migrated as RuntimeMapData;
   }
 
   const mapFile = process.env.MAP_FILE;
   if (mapFile) {
     const raw = readFileSync(mapFile, "utf-8");
     const parsed: unknown = JSON.parse(raw);
-    const result = validateRuntimeMapData(parsed);
+    const migrated = migrateMapData(parsed);
+    const result = validateRuntimeMapData(migrated);
     if (!result.valid) {
       throw new Error(
         `Invalid MAP_FILE "${mapFile}": ${result.errors.map((e) => `${e.field}: ${e.message}`).join(", ")}`,
       );
     }
-    return parsed as RuntimeMapData;
+    return migrated as RuntimeMapData;
   }
 
   return DEV_MAP;

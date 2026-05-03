@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
 import { stampVertexShader, stampFragmentShader } from "../shaders/stampShader.ts";
 
@@ -76,15 +76,14 @@ export class PaintSystem {
 
     this.brushMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.brushMaterial);
     this.brushScene.add(this.brushMesh);
-
-    for (const p of PLANET_POSITIONS) {
-      this.renderTargets.set(p.id, this.createPaintRenderTarget());
-      this.permanentRenderTargets.set(p.id, this.createPaintRenderTarget());
-    }
   }
 
-  getRenderTarget(planetId: string): THREE.WebGLRenderTarget | undefined {
-    return this.renderTargets.get(planetId);
+  getRenderTarget(planetId: string): THREE.WebGLRenderTarget {
+    if (!this.renderTargets.has(planetId)) {
+      this.renderTargets.set(planetId, this.createPaintRenderTarget());
+      this.permanentRenderTargets.set(planetId, this.createPaintRenderTarget());
+    }
+    return this.renderTargets.get(planetId)!;
   }
 
   getStampHistory(planetId: string): readonly PaintStampMessage[] {

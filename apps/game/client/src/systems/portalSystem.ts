@@ -1,6 +1,9 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { getTerrainHeight, getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
+import {
+  getTerrainHeight,
+  getTerrainRadius,
+  type TerrainConfig,
+} from "@splat/simulation/terrain/planetTerrain.ts";
 
 export const PORTAL_ENABLED = true; // temp, will enable when ready
 
@@ -8,9 +11,9 @@ const PORTAL_URL = "https://vibejam.cc/portal/2026";
 const COLLECT_RADIUS_SQ = 4.5 * 4.5;
 const HOVER_HEIGHT = 1.2;
 
-function findPortalNormal(): THREE.Vector3 {
+function findPortalNormal(cfg: TerrainConfig): THREE.Vector3 {
   const isAboveWater = (nx: number, ny: number, nz: number) =>
-    getTerrainHeight(nx, ny, nz, GAME_CONFIG) > GAME_CONFIG.terrain.waterLevel;
+    getTerrainHeight(nx, ny, nz, cfg) > cfg.terrain.waterLevel;
 
   // Preferred spot, then scan the equator in 16 steps until above water
   const candidates: [number, number, number][] = [[0, 0, 1]];
@@ -57,14 +60,14 @@ export class PortalSystem {
   private readonly createdAtMs: number;
   private triggered = false;
 
-  constructor(scene: THREE.Scene, nowMs: number) {
+  constructor(scene: THREE.Scene, nowMs: number, terrainCfg: TerrainConfig) {
     this.createdAtMs = nowMs;
 
-    const normal = findPortalNormal();
+    const normal = findPortalNormal(terrainCfg);
     const nx = normal.x;
     const ny = normal.y;
     const nz = normal.z;
-    const surfaceR = getTerrainRadius(nx, ny, nz, GAME_CONFIG);
+    const surfaceR = getTerrainRadius(nx, ny, nz, terrainCfg);
     this.position = new THREE.Vector3(
       nx * (surfaceR + HOVER_HEIGHT),
       ny * (surfaceR + HOVER_HEIGHT),

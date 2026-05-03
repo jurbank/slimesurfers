@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
+import { PlanetPanel } from "./panels/PlanetPanel.tsx";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { SpawnsPanel } from "./panels/SpawnsPanel.tsx";
@@ -19,15 +20,17 @@ import {
   GEOMETRY_TERRAIN_KEYS,
   type BrushState,
   type EditorConfig,
+  type EditorPlanet,
   type PerformanceStats,
   type PreviewSpawnState,
   type PropBrushState,
 } from "./types.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
 
-type Panel = "terrain" | "shaders" | "props" | "tracks" | "spawns";
+type Panel = "planets" | "terrain" | "shaders" | "props" | "tracks" | "spawns";
 
 const PANELS: { id: Panel; label: string }[] = [
+  { id: "planets", label: "Planets" },
   { id: "terrain", label: "Terrain" },
   { id: "shaders", label: "Shaders" },
   { id: "props", label: "Props" },
@@ -184,6 +187,19 @@ export function App() {
       sceneRef.current?.rebuildPlanet(configRef.current);
     }, REBUILD_DELAY_MS);
   }, []);
+
+  function handlePlanetsChange(planets: EditorPlanet[]) {
+    setSaveStatus("idle");
+    const prev = configRef.current;
+    const radiusChanged = planets[0]?.radius !== prev.planets[0]?.radius;
+    const next = { ...prev, planets };
+    configRef.current = next;
+    setConfig(next);
+    if (radiusChanged) {
+      sceneRef.current?.rebuildPlanet(next);
+      sceneRef.current?.rebuildWater(next);
+    }
+  }
 
   function handleTerrainChange(terrain: EditorConfig["terrain"]) {
     setSaveStatus("idle");
@@ -426,6 +442,9 @@ export function App() {
           <h2 className="text-sm font-semibold text-zinc-300 capitalize">{activePanel}</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
+          {activePanel === "planets" && (
+            <PlanetPanel config={config} onPlanetsChange={handlePlanetsChange} />
+          )}
           {activePanel === "terrain" && (
             <TerrainPanel
               config={config}
@@ -608,6 +627,15 @@ function loadEditorState(): EditorSaveState | null {
     if (parsed.version !== 1) return null;
     if (!parsed.config || !parsed.tracks || parsed.tracks.version !== 1) return null;
     if (!Array.isArray(parsed.tracks.tracks) || parsed.tracks.tracks.length === 0) return null;
+
+    const cfg = parsed.config as unknown as Record<string, unknown>;
+    if (!Array.isArray(cfg.planets)) {
+      const legacyPlanet = cfg.planet as { radius?: number } | undefined;
+      cfg.planets = [
+        { id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: legacyPlanet?.radius ?? 100 },
+      ];
+      delete cfg.planet;
+    }
 
     const activeTrackId =
       typeof parsed.activeTrackId === "string" &&

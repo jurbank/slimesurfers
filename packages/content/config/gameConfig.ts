@@ -426,18 +426,20 @@ export function getPaintTerritoryDimensions(planetRadius = GAME_CONFIG.planet.ra
   return { rows, cols };
 }
 
-export function getPaintStampAngularRadius(planetRadius = GAME_CONFIG.planet.radius): number {
+export function getPaintStampAngularRadius(
+  planetRadius: number = GAME_CONFIG.planet.radius,
+): number {
   return clamp(GAME_CONFIG.paint.impactStampSurfaceRadius / planetRadius, 0, Math.PI);
 }
 
 export function getPlanetSurfaceChordRadius(
   surfaceRadius: number,
-  planetRadius = GAME_CONFIG.planet.radius,
+  planetRadius: number = GAME_CONFIG.planet.radius,
 ): number {
   return 2 * Math.sin(clamp(surfaceRadius / planetRadius, 0, Math.PI) * 0.5);
 }
 
-export function getPaintStampChordRadius(planetRadius = GAME_CONFIG.planet.radius): number {
+export function getPaintStampChordRadius(planetRadius: number = GAME_CONFIG.planet.radius): number {
   return getPlanetSurfaceChordRadius(GAME_CONFIG.paint.impactStampSurfaceRadius, planetRadius);
 }
 

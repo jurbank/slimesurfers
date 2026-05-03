@@ -6,6 +6,7 @@ type PlanetCloudAnchor = {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+  readonly radius: number;
 };
 
 const CLOUD_TANGENT_HINT_UP = new THREE.Vector3(0, 1, 0);
@@ -61,9 +62,7 @@ export class CloudSystem {
       normal.set(Math.cos(theta) * radial, y, Math.sin(theta) * radial).normalize();
 
       const cloudRadius =
-        GAME_CONFIG.planet.radius +
-        cfg.altitude +
-        (seededRandom(seed + 3) - 0.5) * cfg.altitudeVariation;
+        planet.radius + cfg.altitude + (seededRandom(seed + 3) - 0.5) * cfg.altitudeVariation;
       const width = cfg.minWidth + seededRandom(seed + 4) * (cfg.maxWidth - cfg.minWidth);
       const height = cfg.minHeight + seededRandom(seed + 5) * (cfg.maxHeight - cfg.minHeight);
       const tangentHint =

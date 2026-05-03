@@ -3,15 +3,16 @@ import {
   getTerrainRadius,
   getTerrainNormal,
   getTerrainHeight,
+  type TerrainConfig,
 } from "@splat/simulation/terrain/planetTerrain.ts";
-import type { EditorConfig } from "../types.ts";
 
 export function buildPlanetGeometry(
-  config: EditorConfig,
+  cfg: TerrainConfig,
+  icosahedronDetail: number,
   sculptDisplacements?: Float32Array | null,
 ): THREE.BufferGeometry {
-  const detail = config.terrain.icosahedronDetail;
-  const indexed = new THREE.IcosahedronGeometry(config.planet.radius, detail);
+  const detail = icosahedronDetail;
+  const indexed = new THREE.IcosahedronGeometry(cfg.planet.radius, detail);
   const geometry = indexed.toNonIndexed();
   indexed.dispose();
 
@@ -32,11 +33,10 @@ export function buildPlanetGeometry(
     const nz = z / len;
 
     const radius =
-      getTerrainRadius(nx, ny, nz, config) +
-      (sculptDisplacements ? (sculptDisplacements[i] ?? 0) : 0);
+      getTerrainRadius(nx, ny, nz, cfg) + (sculptDisplacements ? (sculptDisplacements[i] ?? 0) : 0);
     posAttr.setXYZ(i, nx * radius, ny * radius, nz * radius);
 
-    const terrainNormal = getTerrainNormal(nx, ny, nz, config);
+    const terrainNormal = getTerrainNormal(nx, ny, nz, cfg);
     smoothNormals[i * 3] = terrainNormal.nx;
     smoothNormals[i * 3 + 1] = terrainNormal.ny;
     smoothNormals[i * 3 + 2] = terrainNormal.nz;
@@ -71,10 +71,7 @@ export function buildPlanetGeometry(
   return geometry;
 }
 
-export function buildWaterGeometry(
-  waterRadius: number,
-  config: EditorConfig,
-): THREE.BufferGeometry {
+export function buildWaterGeometry(waterRadius: number, cfg: TerrainConfig): THREE.BufferGeometry {
   const geometry = new THREE.SphereGeometry(waterRadius, 64, 64);
   const posAttr = geometry.getAttribute("position");
   const waterDepths = new Float32Array(posAttr.count);
@@ -87,7 +84,7 @@ export function buildWaterGeometry(
     const nx = x / len;
     const ny = y / len;
     const nz = z / len;
-    waterDepths[i] = config.terrain.waterLevel - getTerrainHeight(nx, ny, nz, config);
+    waterDepths[i] = cfg.terrain.waterLevel - getTerrainHeight(nx, ny, nz, cfg);
   }
 
   geometry.setAttribute("waterDepth", new THREE.Float32BufferAttribute(waterDepths, 1));

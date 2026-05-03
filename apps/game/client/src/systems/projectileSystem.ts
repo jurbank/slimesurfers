@@ -4,7 +4,9 @@ import {
   getWeaponDefinition,
   type WeaponId,
 } from "@splat/content/combat/weaponDefs.ts";
-import { GAME_CONFIG, PLANET_POSITIONS } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
+import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 import type { ProjectileSnapshot } from "@splat/protocol/network/serverMessages.ts";
 import { createSlimeMaterial } from "../materials/slimeMaterial.ts";
 
@@ -58,6 +60,7 @@ export interface RemovedProjectile {
 
 export class ProjectileSystem {
   private readonly scene: THREE.Scene;
+  private mapPlanets: RuntimeMapPlanet[] = DEV_MAP.planets;
   private readonly projectiles = new Map<string, ProjectileState>();
   private readonly tempVelocity = new THREE.Vector3();
   private readonly tempForward = new THREE.Vector3();
@@ -74,6 +77,10 @@ export class ProjectileSystem {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+  }
+
+  setMapPlanets(planets: RuntimeMapPlanet[]): void {
+    this.mapPlanets = planets;
   }
 
   syncProjectile(
@@ -361,11 +368,15 @@ export class ProjectileSystem {
   ): THREE.Vector3 {
     if (projectile.weaponId !== DEFAULT_WEAPON_ID) return new THREE.Vector3();
     const planet =
-      PLANET_POSITIONS.find((entry) => entry.id === projectile.planetId) ?? PLANET_POSITIONS[0];
+      this.mapPlanets.find((entry) => entry.id === projectile.planetId) ?? this.mapPlanets[0];
     if (!planet) return new THREE.Vector3();
 
     const spawn = new THREE.Vector3(spawnX, spawnY, spawnZ);
-    const up = new THREE.Vector3(spawnX - planet.x, spawnY - planet.y, spawnZ - planet.z);
+    const up = new THREE.Vector3(
+      spawnX - planet.center.x,
+      spawnY - planet.center.y,
+      spawnZ - planet.center.z,
+    );
     if (up.lengthSq() < 1e-8) return new THREE.Vector3();
     up.normalize();
 

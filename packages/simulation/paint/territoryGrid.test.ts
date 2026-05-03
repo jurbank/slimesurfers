@@ -72,6 +72,7 @@ function createSimState(): SimMatchState {
       ["session-2", createPlayer("session-2", 1, 0xff6200)],
     ]),
     planetDefs: DEV_MAP.planets,
+    mapTerrain: DEV_MAP.terrain,
     planets: new Map(),
     railStates: new Map(),
     projectiles: new Map(),
@@ -102,17 +103,19 @@ function surfacePointForCell(row: number, col: number): { x: number; y: number; 
   const planet = DEV_MAP.planets[0]!;
 
   return {
-    x: planet.center.x + normal.x * GAME_CONFIG.planet.radius,
-    y: planet.center.y + normal.y * GAME_CONFIG.planet.radius,
-    z: planet.center.z + normal.z * GAME_CONFIG.planet.radius,
+    x: planet.center.x + normal.x * planet.radius,
+    y: planet.center.y + normal.y * planet.radius,
+    z: planet.center.z + normal.z * planet.radius,
   };
 }
 
 describe("territoryGrid", () => {
   it("counts only paintable cells toward total territory coverage", () => {
+    const planet = DEV_MAP.planets[0]!;
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.terrain };
     const { rows, cols } = getPaintTerritoryDimensions();
     const totalCells = rows * cols;
-    const paintableCells = countPaintableTerritoryCells(rows, cols);
+    const paintableCells = countPaintableTerritoryCells(rows, cols, terrainCfg);
 
     expect(paintableCells).toBeGreaterThan(0);
     expect(paintableCells).toBeLessThan(totalCells);
@@ -120,7 +123,7 @@ describe("territoryGrid", () => {
     let blockedCellCount = 0;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        if (!isTerritoryCellPaintable(row, col, rows, cols)) {
+        if (!isTerritoryCellPaintable(row, col, rows, cols, terrainCfg)) {
           blockedCellCount++;
         }
       }

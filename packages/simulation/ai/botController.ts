@@ -141,7 +141,7 @@ function getBotWanderTarget(
   const normal = getRandomPointOnSphere(1);
   const planet =
     simState.planetDefs.find((entry) => entry.id === bot.planetId) ?? simState.planetDefs[0]!;
-  const radius = GAME_CONFIG.planet.radius + 5;
+  const radius = planet.radius + 5;
   return {
     x: planet.center.x + normal.x * radius,
     y: planet.center.y + normal.y * radius,
@@ -179,8 +179,9 @@ function getCellWorldPosition(
     simState.planetDefs.find((entry) => entry.id === planetId) ?? simState.planetDefs[0] ?? null;
   if (!planet) return null;
 
+  const terrainCfg = { planet: { radius: planet.radius }, terrain: simState.mapTerrain };
   const normal = getCellNormal(row, col, rows, cols);
-  const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+  const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
   return {
     x: planet.center.x + normal.x * radius,
     y: planet.center.y + normal.y * radius,
@@ -196,6 +197,9 @@ function choosePaintTarget(
 ): { x: number; y: number; z: number } | null {
   const planetState = simState.planets.get(bot.planetId);
   if (!planetState) return null;
+  const planetDef =
+    simState.planetDefs.find((p) => p.id === bot.planetId) ?? simState.planetDefs[0]!;
+  const terrainCfg = { planet: { radius: planetDef.radius }, terrain: simState.mapTerrain };
   const minTravelDistSq = 16;
   const bias = normalizeBiases(profile);
 
@@ -206,7 +210,13 @@ function choosePaintTarget(
   for (let row = 0; row < planetState.territoryRows; row++) {
     for (let col = 0; col < planetState.territoryCols; col++) {
       if (
-        !isTerritoryCellPaintable(row, col, planetState.territoryRows, planetState.territoryCols)
+        !isTerritoryCellPaintable(
+          row,
+          col,
+          planetState.territoryRows,
+          planetState.territoryCols,
+          terrainCfg,
+        )
       ) {
         continue;
       }

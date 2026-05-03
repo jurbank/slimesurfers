@@ -21,8 +21,8 @@ export function editorStateToRuntimeMap(
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ): RuntimeMapData {
-  const planetId = "planet-0";
-  const { radius: planetRadius } = config.planet;
+  const planetId = config.planets[0]?.id ?? "planet-0";
+  const { radius: planetRadius } = config.planets[0] ?? { radius: 100 };
   const [sx, sy, sz] = previewSpawn.normal;
 
   const rails = tracks
@@ -46,7 +46,7 @@ export function editorStateToRuntimeMap(
     version: 1,
     mapId: slugify(mapName),
     name: mapName || "Untitled Map",
-    planets: [{ id: planetId, center: { x: 0, y: 0, z: 0 }, radius: planetRadius }],
+    planets: config.planets.map((p) => ({ id: p.id, center: p.center, radius: p.radius })),
     terrain: {
       seed: config.terrain.seed,
       baseAmplitude: config.terrain.baseAmplitude,
@@ -60,6 +60,7 @@ export function editorStateToRuntimeMap(
       snowLevel: config.terrain.snowLevel,
       sandBand: config.terrain.sandBand,
       rockLevel: config.terrain.rockLevel,
+      icosahedronDetail: config.terrain.icosahedronDetail,
     },
     rails,
     spawns: {

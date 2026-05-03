@@ -25,6 +25,7 @@ import {
   type TrackSurfaceSample,
 } from "../tools/tracks/trackCarving.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
+import { primaryTerrainConfig } from "../types.ts";
 import type {
   BrushState,
   EditorConfig,
@@ -151,15 +152,20 @@ export class EditorScene {
       config,
       tracks,
       (nx, ny, nz) =>
-        getTerrainRadius(nx, ny, nz, this.currentConfig) +
+        getTerrainRadius(nx, ny, nz, primaryTerrainConfig(this.currentConfig)) +
         this.brushTool.getDisplacementAtNormal(nx, ny, nz),
     );
 
-    const waterRadius = config.planet.radius + config.terrain.waterLevel;
-    const atmosphereRadius = config.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
+    const terrainCfg = primaryTerrainConfig(config);
+    const waterRadius = terrainCfg.planet.radius + config.terrain.waterLevel;
+    const atmosphereRadius = terrainCfg.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
 
     this.rebuildTrackCarveSamples();
-    const planetGeo = buildPlanetGeometry(config, this.brushTool.getDisplacements());
+    const planetGeo = buildPlanetGeometry(
+      terrainCfg,
+      config.terrain.icosahedronDetail,
+      this.brushTool.getDisplacements(),
+    );
     this.planetMaterial = createPlanetMaterial({
       paintMask: null,
       planetCenter: new THREE.Vector3(0, 0, 0),
@@ -186,7 +192,10 @@ export class EditorScene {
 
     if (GAME_CONFIG.shaders.water.enabled) {
       this.waterMaterial = createWaterMaterial();
-      this.waterMesh = new THREE.Mesh(buildWaterGeometry(waterRadius, config), this.waterMaterial);
+      this.waterMesh = new THREE.Mesh(
+        buildWaterGeometry(waterRadius, terrainCfg),
+        this.waterMaterial,
+      );
       this.waterMesh.renderOrder = 1;
       this.scene.add(this.waterMesh);
     }
@@ -296,8 +305,9 @@ export class EditorScene {
   rebuildWater(config: EditorConfig): void {
     if (!this.waterMesh) return;
     this.rebuildTrackCarveSamples();
-    const waterRadius = config.planet.radius + config.terrain.waterLevel;
-    const newGeo = buildWaterGeometry(waterRadius, config);
+    const terrainCfg = primaryTerrainConfig(config);
+    const waterRadius = terrainCfg.planet.radius + config.terrain.waterLevel;
+    const newGeo = buildWaterGeometry(waterRadius, terrainCfg);
     this.waterMesh.geometry.dispose();
     this.waterMesh.geometry = newGeo;
   }
@@ -306,7 +316,7 @@ export class EditorScene {
     this.currentConfig = config;
     this.playerPreview.setConfig(config);
     const u = this.planetMaterial.uniforms;
-    const waterRadius = config.planet.radius + config.terrain.waterLevel;
+    const waterRadius = (config.planets[0]?.radius ?? 100) + config.terrain.waterLevel;
 
     u.waterLevel.value = config.terrain.waterLevel;
     u.sandBand.value = config.terrain.sandBand;
@@ -426,7 +436,12 @@ export class EditorScene {
 
   private rebuildPlanetMeshes(): void {
     this.rebuildTrackCarveSamples();
-    const newGeo = buildPlanetGeometry(this.currentConfig, this.brushTool.getDisplacements());
+    const cfg = primaryTerrainConfig(this.currentConfig);
+    const newGeo = buildPlanetGeometry(
+      cfg,
+      this.currentConfig.terrain.icosahedronDetail,
+      this.brushTool.getDisplacements(),
+    );
     const oldGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
     for (const mesh of this.planetMeshes) {
       mesh.geometry = newGeo;
@@ -438,7 +453,7 @@ export class EditorScene {
 
   private rebuildTrackCarveSamples(): void {
     const getRadiusAtNormal = (nx: number, ny: number, nz: number) =>
-      getTerrainRadius(nx, ny, nz, this.currentConfig) +
+      getTerrainRadius(nx, ny, nz, primaryTerrainConfig(this.currentConfig)) +
       this.brushTool.getDisplacementAtNormal(nx, ny, nz);
     this.trackCarveSamples = buildTrackCarveSamples(
       this.tracks,
@@ -490,7 +505,7 @@ export class EditorScene {
       normal.x,
       normal.y,
       normal.z,
-      this.currentConfig,
+      primaryTerrainConfig(this.currentConfig),
       "planet-0",
     );
     this.spawnMarker.position.copy(normal).multiplyScalar(radius + 1.3);

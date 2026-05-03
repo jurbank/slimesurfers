@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import type { TerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
 
 export type BrushMode = "raise" | "lower" | "smooth" | "flatten";
 export type BrushFalloff = "smooth" | "linear" | "sharp";
@@ -29,8 +30,14 @@ export interface PreviewSpawnState {
   normal: [number, number, number];
 }
 
+export interface EditorPlanet {
+  id: string;
+  center: { x: number; y: number; z: number };
+  radius: number;
+}
+
 export interface EditorConfig {
-  planet: { radius: number };
+  planets: EditorPlanet[];
   terrain: {
     // Geometry params — require mesh rebuild
     seed: number;
@@ -111,12 +118,19 @@ function rgbToHex(r: number, g: number, b: number): number {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }
 
+export function primaryTerrainConfig(config: EditorConfig): TerrainConfig {
+  return {
+    planet: { radius: config.planets[0]?.radius ?? 100 },
+    terrain: config.terrain,
+  };
+}
+
 export function defaultEditorConfig(): EditorConfig {
   const g = GAME_CONFIG;
   const [wr, wg, wb] = g.shaders.water.deepColor;
   const [ar, ag, ab] = g.shaders.atmosphere.color;
   return {
-    planet: { radius: g.planet.radius },
+    planets: [{ id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: g.planet.radius }],
     terrain: {
       seed: g.terrain.seed,
       baseAmplitude: g.terrain.baseAmplitude,

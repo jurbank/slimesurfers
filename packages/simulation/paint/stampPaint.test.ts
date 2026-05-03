@@ -13,6 +13,7 @@ function createSimState(): SimMatchState {
   return {
     players: new Map(),
     planetDefs: DEV_MAP.planets,
+    mapTerrain: DEV_MAP.terrain,
     planets: new Map(),
     railStates: new Map(),
     projectiles: new Map(),
@@ -59,7 +60,11 @@ function findTerrainNormal(predicate: (height: number) => boolean): {
         y: Math.cos(theta),
         z: sinTheta * Math.sin(phi),
       };
-      const height = getTerrainHeight(normal.x, normal.y, normal.z, GAME_CONFIG);
+      const terrainCfg = {
+        planet: { radius: DEV_MAP.planets[0]!.radius },
+        terrain: DEV_MAP.terrain,
+      };
+      const height = getTerrainHeight(normal.x, normal.y, normal.z, terrainCfg);
       if (predicate(height)) {
         return normal;
       }
@@ -76,7 +81,7 @@ describe("stampPaint", () => {
     const planet = DEV_MAP.planets[0]!;
     const impactPos = {
       x: planet.center.x,
-      y: planet.center.y + GAME_CONFIG.planet.radius,
+      y: planet.center.y + planet.radius,
       z: planet.center.z,
     };
 
@@ -125,11 +130,12 @@ describe("stampPaint", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.terrain };
     const normal = findTerrainNormal((height) => {
-      const depth = GAME_CONFIG.terrain.waterLevel - height;
-      return depth > 0 && depth <= GAME_CONFIG.terrain.sandBand;
+      const depth = DEV_MAP.terrain.waterLevel - height;
+      return depth > 0 && depth <= DEV_MAP.terrain.sandBand;
     });
-    const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+    const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 
     const stamp = applyPaintImpact(simState, planetState, {
       planetId: "planet-0",
@@ -153,10 +159,11 @@ describe("stampPaint", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.terrain };
     const normal = findTerrainNormal(
-      (height) => GAME_CONFIG.terrain.waterLevel - height > GAME_CONFIG.terrain.sandBand,
+      (height) => DEV_MAP.terrain.waterLevel - height > DEV_MAP.terrain.sandBand,
     );
-    const radius = getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG);
+    const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 
     const stamp = applyPaintImpact(simState, planetState, {
       planetId: "planet-0",

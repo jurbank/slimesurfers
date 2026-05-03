@@ -43,7 +43,9 @@
       "Bash(kill %1)",
       "Bash(vp add *)",
       "Bash(vp remove *)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(sed -n '25,55p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/systems/railSystem.ts)",
+      "Bash(sed -n '355,380p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/systems/projectileSystem.ts)"
     ]
   },
   "enableAllProjectMcpServers": true,

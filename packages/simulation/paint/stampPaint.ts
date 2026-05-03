@@ -1,4 +1,4 @@
-import { GAME_CONFIG, getPaintStampChordRadius } from "@splat/content/config/gameConfig.ts";
+import { getPaintStampChordRadius } from "@splat/content/config/gameConfig.ts";
 import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
 import type { SimMatchState, SimPaintStamp, SimPlanetPaintState } from "../match/simState.ts";
 import { appendPaintStamp } from "./paintDetection.ts";
@@ -31,8 +31,9 @@ export function applyPaintImpact(
     impact.pos.y - planetPos.center.y,
     impact.pos.z - planetPos.center.z,
   );
-  const waterDepth = GAME_CONFIG.terrain.waterLevel - getTerrainHeight(nx, ny, nz, GAME_CONFIG);
-  if (waterDepth > GAME_CONFIG.terrain.sandBand) {
+  const terrainCfg = { planet: { radius: planetPos.radius }, terrain: simState.mapTerrain };
+  const waterDepth = simState.mapTerrain.waterLevel - getTerrainHeight(nx, ny, nz, terrainCfg);
+  if (waterDepth > simState.mapTerrain.sandBand) {
     return null;
   }
 
@@ -49,7 +50,7 @@ export function applyPaintImpact(
     nx,
     ny,
     nz,
-    radius: getPaintStampChordRadius() * impact.radiusMultiplier,
+    radius: getPaintStampChordRadius(planetPos.radius) * impact.radiusMultiplier,
     seq: ++simState.paintSeq,
   };
 

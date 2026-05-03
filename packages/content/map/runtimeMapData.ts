@@ -1,4 +1,3 @@
-import { GAME_CONFIG, PLANET_POSITIONS } from "../config/gameConfig.ts";
 import { RAIL_DEFS, type RailDef } from "../config/railDefs.ts";
 import type { SpawnPolicy } from "../modes/gameModes.ts";
 
@@ -21,6 +20,7 @@ export interface RuntimeMapTerrain {
   snowLevel: number;
   sandBand: number;
   rockLevel: number;
+  icosahedronDetail: number;
 }
 
 export interface RuntimeMapData {
@@ -112,6 +112,7 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
       "snowLevel",
       "sandBand",
       "rockLevel",
+      "icosahedronDetail",
     ] as const;
     for (const field of numericFields) {
       if (typeof t[field] !== "number" || !Number.isFinite(t[field] as number)) {
@@ -248,24 +249,21 @@ export const DEV_MAP: RuntimeMapData = {
   version: 1,
   mapId: "dev",
   name: "Dev Planet",
-  planets: PLANET_POSITIONS.map((p) => ({
-    id: p.id,
-    center: { x: p.x, y: p.y, z: p.z },
-    radius: GAME_CONFIG.planet.radius,
-  })),
+  planets: [{ id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: 100 }],
   terrain: {
-    seed: GAME_CONFIG.terrain.seed,
-    baseAmplitude: GAME_CONFIG.terrain.baseAmplitude,
-    frequency: GAME_CONFIG.terrain.frequency,
-    octaves: GAME_CONFIG.terrain.octaves,
-    lacunarity: GAME_CONFIG.terrain.lacunarity,
-    persistence: GAME_CONFIG.terrain.persistence,
-    heightSmoothingStrength: GAME_CONFIG.terrain.heightSmoothingStrength,
-    heightSmoothingSampleAngle: GAME_CONFIG.terrain.heightSmoothingSampleAngle,
-    waterLevel: GAME_CONFIG.terrain.waterLevel,
-    snowLevel: GAME_CONFIG.terrain.snowLevel,
-    sandBand: GAME_CONFIG.terrain.sandBand,
-    rockLevel: GAME_CONFIG.terrain.rockLevel,
+    seed: 42,
+    baseAmplitude: 54.0,
+    frequency: 1.4,
+    octaves: 3,
+    lacunarity: 2.2,
+    persistence: 0.45,
+    heightSmoothingStrength: 0.45,
+    heightSmoothingSampleAngle: 0.035,
+    waterLevel: -3.0,
+    snowLevel: 9.0,
+    sandBand: 1.5,
+    rockLevel: 7.0,
+    icosahedronDetail: 50,
   },
   rails: RAIL_DEFS,
   spawns: {

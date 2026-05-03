@@ -2,11 +2,9 @@ import * as THREE from "three";
 import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import type { MatchModeId } from "@splat/protocol/network/clientMessages.ts";
-import {
-  GAME_CONFIG,
-  getPaintTerritoryDimensions,
-  PLANET_POSITIONS,
-} from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
+import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
   EmoteEventMessage,
@@ -127,6 +125,7 @@ export class MatchScene {
   private readonly waterMeshes: THREE.Mesh[] = [];
 
   private currentMapCfg: TerrainConfig | null = null;
+  private mapPlanets: RuntimeMapPlanet[] = DEV_MAP.planets;
 
   private onDisconnectCb: (() => void) | null = null;
 
@@ -171,9 +170,9 @@ export class MatchScene {
     }
 
     const positions: number[] = [];
-    for (const p of PLANET_POSITIONS) {
-      const history = this.paint.getStampHistory(p.id);
-      const planetCenter = new THREE.Vector3(p.x, p.y, p.z);
+    for (const planet of this.mapPlanets) {
+      const history = this.paint.getStampHistory(planet.id);
+      const planetCenter = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
 
       for (const s of history) {
         const thresholdDist = getPaintCollisionDistance(s);
@@ -197,7 +196,7 @@ export class MatchScene {
             .multiplyScalar(cosTheta)
             .addScaledVector(tangent, Math.cos(a1) * sinTheta)
             .addScaledVector(bitangent, Math.sin(a1) * sinTheta)
-            .multiplyScalar(GAME_CONFIG.planet.radius + 1.0)
+            .multiplyScalar(planet.radius + 1.0)
             .add(planetCenter);
 
           const p2 = new THREE.Vector3()
@@ -205,7 +204,7 @@ export class MatchScene {
             .multiplyScalar(cosTheta)
             .addScaledVector(tangent, Math.cos(a2) * sinTheta)
             .addScaledVector(bitangent, Math.sin(a2) * sinTheta)
-            .multiplyScalar(GAME_CONFIG.planet.radius + 1.0)
+            .multiplyScalar(planet.radius + 1.0)
             .add(planetCenter);
 
           positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
@@ -298,7 +297,7 @@ export class MatchScene {
       once: true,
     });
     const { rows, cols } = getPaintTerritoryDimensions();
-    for (const p of PLANET_POSITIONS) {
+    for (const p of this.mapPlanets) {
       this.planetPaint.set(p.id, {
         planetId: p.id,
         territoryRows: rows,
@@ -348,7 +347,13 @@ export class MatchScene {
     increment();
 
     // 3. Portal
-    if (PORTAL_ENABLED) this.portal = new PortalSystem(this.render.scene, performance.now());
+    if (PORTAL_ENABLED) {
+      const portalTerrainCfg: TerrainConfig = {
+        planet: { radius: DEV_MAP.planets[0]!.radius },
+        terrain: DEV_MAP.terrain,
+      };
+      this.portal = new PortalSystem(this.render.scene, performance.now(), portalTerrainCfg);
+    }
     increment();
   }
 
@@ -406,28 +411,30 @@ export class MatchScene {
   }
 
   private buildPlanets(): void {
-    const cfg = this.terrainConfig();
-    const atmosphereRadius = cfg.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
-    const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
+    const mapTerrain = this.currentMapCfg?.terrain ?? GAME_CONFIG.terrain;
 
-    for (const p of PLANET_POSITIONS) {
+    for (const p of this.mapPlanets) {
+      const cfg: TerrainConfig = { planet: { radius: p.radius }, terrain: mapTerrain };
+      const waterRadius = p.radius + mapTerrain.waterLevel;
+      const atmosphereRadius = p.radius + GAME_CONFIG.shaders.atmosphere.height;
+      const { x, y, z } = p.center;
+
       const paintMask = this.paint.getRenderTarget(p.id);
       const planetMaterial = createPlanetMaterial({
-        paintMask: paintMask?.texture || null,
-        planetCenter: new THREE.Vector3(p.x, p.y, p.z),
+        paintMask: paintMask.texture,
+        planetCenter: new THREE.Vector3(x, y, z),
         waterRadius,
       });
 
       const geometry = this.buildTerrainGeometry(cfg);
       const planet = new THREE.Mesh(geometry, planetMaterial);
-      planet.position.set(p.x, p.y, p.z);
+      planet.position.set(x, y, z);
       this.render.scene.add(planet);
       this.planetMaterials.push(planetMaterial);
       this.planetMeshes.push(planet);
 
-      // JSR Style Planet Outline
       const planetOutline = new THREE.Mesh(geometry, createOutlineMaterial());
-      planetOutline.position.set(p.x, p.y, p.z);
+      planetOutline.position.set(x, y, z);
       this.render.scene.add(planetOutline);
       this.planetOutlines.push(planetOutline);
 
@@ -437,17 +444,16 @@ export class MatchScene {
           new THREE.SphereGeometry(atmosphereRadius, 48, 48),
           atmosphereMat,
         );
-        atmosphere.position.set(p.x, p.y, p.z);
+        atmosphere.position.set(x, y, z);
         atmosphere.renderOrder = 2;
         this.render.scene.add(atmosphere);
         this.atmosphereMaterials.push(atmosphereMat);
       }
 
-      // Water sphere at sea level
       if (GAME_CONFIG.shaders.water.enabled) {
         const waterMat = createWaterMaterial();
         const water = new THREE.Mesh(this.buildWaterGeometry(waterRadius, cfg), waterMat);
-        water.position.set(p.x, p.y, p.z);
+        water.position.set(x, y, z);
         water.renderOrder = 1;
         this.render.scene.add(water);
         this.waterMaterials.push(waterMat);
@@ -455,36 +461,57 @@ export class MatchScene {
       }
 
       if (GAME_CONFIG.shaders.clouds.enabled) {
-        this.clouds.addPlanetClouds(p);
+        this.clouds.addPlanetClouds({ id: p.id, x, y, z, radius: p.radius });
       }
 
       if (GAME_CONFIG.shaders.props.enabled) {
-        this.props.addPlanetProps(p);
+        this.props.addPlanetProps({ id: p.id, x, y, z });
       }
     }
   }
 
   applyMapData(msg: MapDataMessage): void {
-    const planetRadius = msg.planets[0]!.radius;
+    this.mapPlanets = msg.planets;
     this.currentMapCfg = {
-      planet: { radius: planetRadius },
+      planet: { radius: msg.planets[0]!.radius },
       terrain: msg.terrain,
     };
+
+    const { rows, cols } = getPaintTerritoryDimensions();
+    for (const p of msg.planets) {
+      if (!this.planetPaint.has(p.id)) {
+        this.planetPaint.set(p.id, {
+          planetId: p.id,
+          territoryRows: rows,
+          territoryCols: cols,
+          cells: [],
+          stamps: [],
+          stampBuckets: createStampBuckets(rows, cols),
+        });
+      }
+    }
 
     this.runtime.setMapData(msg);
     this.weaponAim.setMapData(msg);
     this.rails.setMapData(msg);
+    this.projectiles.setMapPlanets(msg.planets);
 
     if (this.planetMeshes.length === 0) {
       this.buildPlanets();
       return;
     }
 
-    const cfg = this.currentMapCfg;
-    const waterRadius = planetRadius + msg.terrain.waterLevel;
-    const newTerrainGeo = this.buildTerrainGeometry(cfg);
-
     for (let i = 0; i < this.planetMeshes.length; i++) {
+      const mapPlanet = this.mapPlanets[i];
+      if (!mapPlanet) continue;
+
+      const planetCfg: TerrainConfig = {
+        planet: { radius: mapPlanet.radius },
+        terrain: msg.terrain,
+      };
+      const waterRadius = mapPlanet.radius + msg.terrain.waterLevel;
+      const newTerrainGeo = this.buildTerrainGeometry(planetCfg);
+
       const planet = this.planetMeshes[i];
       const outline = this.planetOutlines[i];
       if (planet) {
@@ -505,18 +532,9 @@ export class MatchScene {
       const water = this.waterMeshes[i];
       if (water) {
         water.geometry.dispose();
-        water.geometry = this.buildWaterGeometry(waterRadius, cfg);
+        water.geometry = this.buildWaterGeometry(waterRadius, planetCfg);
       }
     }
-  }
-
-  private terrainConfig(): TerrainConfig {
-    return (
-      this.currentMapCfg ?? {
-        planet: { radius: GAME_CONFIG.planet.radius },
-        terrain: GAME_CONFIG.terrain,
-      }
-    );
   }
 
   /**
@@ -524,7 +542,7 @@ export class MatchScene {
    * per-face flat shading and biome vertex colors.
    */
   private buildTerrainGeometry(cfg: TerrainConfig): THREE.BufferGeometry {
-    const detail = GAME_CONFIG.terrain.icosahedronDetail;
+    const detail = cfg.terrain.icosahedronDetail ?? GAME_CONFIG.terrain.icosahedronDetail;
     const indexed = new THREE.IcosahedronGeometry(cfg.planet.radius, detail);
 
     // toNonIndexed gives each triangle its own vertices → flat shading

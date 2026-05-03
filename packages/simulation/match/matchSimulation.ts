@@ -283,6 +283,7 @@ function createSimMatchState(
   const simState: SimMatchState = {
     players: new Map(),
     planetDefs,
+    mapTerrain: stepCfg.terrain,
     planets: new Map(planetDefs.map((planet) => [planet.id, createSimPlanetState(planet.id)])),
     railStates: new Map(
       rails.map((rail, idx) => [

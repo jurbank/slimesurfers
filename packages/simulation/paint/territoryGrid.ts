@@ -1,7 +1,7 @@
-import { getPaintStampAngularRadius, GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { getPaintStampAngularRadius } from "@splat/content/config/gameConfig.ts";
 import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
 import type { SimMatchState, SimPlanetPaintState, SimTerritoryCell } from "../match/simState.ts";
-import { getTerrainHeight } from "../terrain/planetTerrain.ts";
+import { getTerrainHeight, type TerrainConfig } from "../terrain/planetTerrain.ts";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -20,11 +20,15 @@ function getCellNormal(row: number, col: number, rows: number, cols: number) {
   };
 }
 
-function getWaterDepthAtCell(row: number, col: number, rows: number, cols: number): number {
+function getWaterDepthAtCell(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  terrainCfg: TerrainConfig,
+): number {
   const normal = getCellNormal(row, col, rows, cols);
-  return (
-    GAME_CONFIG.terrain.waterLevel - getTerrainHeight(normal.x, normal.y, normal.z, GAME_CONFIG)
-  );
+  return terrainCfg.terrain.waterLevel - getTerrainHeight(normal.x, normal.y, normal.z, terrainCfg);
 }
 
 function dot(
@@ -70,15 +74,20 @@ export function isTerritoryCellPaintable(
   col: number,
   rows: number,
   cols: number,
+  terrainCfg: TerrainConfig,
 ): boolean {
-  return getWaterDepthAtCell(row, col, rows, cols) <= GAME_CONFIG.terrain.sandBand;
+  return getWaterDepthAtCell(row, col, rows, cols, terrainCfg) <= terrainCfg.terrain.sandBand;
 }
 
-export function countPaintableTerritoryCells(rows: number, cols: number): number {
+export function countPaintableTerritoryCells(
+  rows: number,
+  cols: number,
+  terrainCfg: TerrainConfig,
+): number {
   let count = 0;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      if (isTerritoryCellPaintable(row, col, rows, cols)) {
+      if (isTerritoryCellPaintable(row, col, rows, cols, terrainCfg)) {
         count++;
       }
     }
@@ -107,7 +116,11 @@ export function applyPaintToTerritoryAtPoint(
     paint.pos.y - planetDef.center.y,
     paint.pos.z - planetDef.center.z,
   );
-  const angularRadius = clamp(getPaintStampAngularRadius() * radiusMultiplier, 0, Math.PI);
+  const angularRadius = clamp(
+    getPaintStampAngularRadius(planetDef.radius) * radiusMultiplier,
+    0,
+    Math.PI,
+  );
   const cosThreshold = Math.cos(angularRadius);
 
   let changedCells = 0;

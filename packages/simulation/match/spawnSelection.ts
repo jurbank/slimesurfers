@@ -83,7 +83,12 @@ function getSurfacePosition(
   };
 }
 
-function applyDeterministicJitter(normal: SimVec3, seed: number, distance: number): SimVec3 {
+function applyDeterministicJitter(
+  normal: SimVec3,
+  seed: number,
+  distance: number,
+  planetRadius: number,
+): SimVec3 {
   const tangentA = normalize(
     Math.abs(normal.y) > 0.95
       ? cross({ x: 0, y: 0, z: 1 }, normal)
@@ -91,7 +96,7 @@ function applyDeterministicJitter(normal: SimVec3, seed: number, distance: numbe
   );
   const tangentB = normalize(cross(normal, tangentA));
   const jitterAngle = seed * GOLDEN_ANGLE;
-  const jitterMagnitude = ((seed * 0.61803398875) % 1) * (distance / GAME_CONFIG.planet.radius);
+  const jitterMagnitude = ((seed * 0.61803398875) % 1) * (distance / planetRadius);
   return normalize(
     add(
       normal,
@@ -128,6 +133,7 @@ function buildAnchoredCandidates(
   anchor: SpawnAnchorDefinition,
   radius: number,
   seed: number,
+  planetRadius: number,
 ): SpawnCandidate[] {
   const candidates: SpawnCandidate[] = [
     { planetId: anchor.planetId, normal: normalize(anchor.normal) },
@@ -135,7 +141,12 @@ function buildAnchoredCandidates(
   for (let index = 0; index < CLUSTER_SAMPLE_COUNT; index++) {
     candidates.push({
       planetId: anchor.planetId,
-      normal: applyDeterministicJitter(normalize(anchor.normal), seed + index + 1, radius),
+      normal: applyDeterministicJitter(
+        normalize(anchor.normal),
+        seed + index + 1,
+        radius,
+        planetRadius,
+      ),
     });
   }
   return candidates;
@@ -193,10 +204,19 @@ function selectFfaSpawn(
   seed: number,
   planetDefs: RuntimeMapPlanet[],
 ): SpawnCandidate {
-  const candidates = buildFfaCandidates(planetDefs).map((candidate, index) => ({
-    planetId: candidate.planetId,
-    normal: applyDeterministicJitter(candidate.normal, seed + index + 1, FFA_JITTER_DISTANCE),
-  }));
+  const candidates = buildFfaCandidates(planetDefs).map((candidate, index) => {
+    const planetRadius =
+      planetDefs.find((p) => p.id === candidate.planetId)?.radius ?? planetDefs[0]!.radius;
+    return {
+      planetId: candidate.planetId,
+      normal: applyDeterministicJitter(
+        candidate.normal,
+        seed + index + 1,
+        FFA_JITTER_DISTANCE,
+        planetRadius,
+      ),
+    };
+  });
   const preferredIndex = ((seed % candidates.length) + candidates.length) % candidates.length;
   return pickByScore(
     candidates,
@@ -218,7 +238,9 @@ function selectTeamSpawn(
 ): SpawnCandidate {
   const teamAnchor =
     policy.teamAnchors[request.teamId % policy.teamAnchors.length] ?? policy.teamAnchors[0]!;
-  const candidates = buildAnchoredCandidates(teamAnchor, policy.zoneRadius, seed);
+  const planetRadius =
+    planetDefs.find((p) => p.id === teamAnchor.planetId)?.radius ?? planetDefs[0]!.radius;
+  const candidates = buildAnchoredCandidates(teamAnchor, policy.zoneRadius, seed, planetRadius);
   const preferredIndex = ((seed % candidates.length) + candidates.length) % candidates.length;
   return pickByScore(
     candidates,
@@ -250,7 +272,9 @@ function selectClusterSpawn(
   seed: number,
   planetDefs: RuntimeMapPlanet[],
 ): SpawnCandidate {
-  const candidates = buildAnchoredCandidates(policy.anchor, policy.radius, seed);
+  const planetRadius =
+    planetDefs.find((p) => p.id === policy.anchor.planetId)?.radius ?? planetDefs[0]!.radius;
+  const candidates = buildAnchoredCandidates(policy.anchor, policy.radius, seed, planetRadius);
   const preferredIndex = ((seed % candidates.length) + candidates.length) % candidates.length;
   return pickByScore(
     candidates,

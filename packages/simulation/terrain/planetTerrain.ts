@@ -43,6 +43,7 @@ export interface TerrainConfig {
     snowLevel: number;
     sandBand: number;
     rockLevel: number;
+    icosahedronDetail?: number;
   };
 }
 

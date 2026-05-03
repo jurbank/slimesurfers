@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { primaryTerrainConfig } from "../../types.ts";
 import type { EditorConfig } from "../../types.ts";
 import type { TrackPoint, TrackState } from "./TrackTypes.ts";
 import {
@@ -300,7 +301,8 @@ export class TrackPreviewVisuals {
       2,
       track.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
     );
-    const waterRadius = this.config.planet.radius + this.config.terrain.waterLevel;
+    const waterRadius =
+      primaryTerrainConfig(this.config).planet.radius + this.config.terrain.waterLevel;
     const samples: TrackSample[] = [];
 
     for (let i = 0; i <= divisions; i++) {

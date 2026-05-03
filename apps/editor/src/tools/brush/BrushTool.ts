@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
+import { primaryTerrainConfig } from "../../types.ts";
 import type { BrushFalloff, BrushState, EditorConfig } from "../../types.ts";
 
 const BRUSH_COLORS: Record<string, number> = {
@@ -133,7 +134,7 @@ export class BrushTool {
 
   private initSculptBase(config: EditorConfig): void {
     const detail = config.terrain.icosahedronDetail;
-    const indexed = new THREE.IcosahedronGeometry(config.planet.radius, detail);
+    const indexed = new THREE.IcosahedronGeometry(config.planets[0]!.radius, detail);
     const geo = indexed.toNonIndexed();
     indexed.dispose();
 
@@ -154,7 +155,7 @@ export class BrushTool {
       this.sculptBaseNormals[i * 3] = nx;
       this.sculptBaseNormals[i * 3 + 1] = ny;
       this.sculptBaseNormals[i * 3 + 2] = nz;
-      this.sculptBaseHeights[i] = getTerrainRadius(nx, ny, nz, config);
+      this.sculptBaseHeights[i] = getTerrainRadius(nx, ny, nz, primaryTerrainConfig(config));
     }
 
     geo.dispose();

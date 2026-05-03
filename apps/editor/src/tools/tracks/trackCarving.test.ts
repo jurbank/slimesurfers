@@ -9,7 +9,7 @@ import {
 import type { TrackState } from "./TrackTypes.ts";
 
 const TEST_CONFIG: EditorConfig = {
-  planet: { radius: 100 },
+  planets: [{ id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: 100 }],
   terrain: {
     seed: 1,
     baseAmplitude: 0,

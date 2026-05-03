@@ -17,7 +17,7 @@ const PLANETS: PlanetData[] = [
   {
     id: "planet-0",
     center: { x: 0, y: 0, z: 0 },
-    radius: GAME_CONFIG.planet.radius,
+    radius: 100,
   },
 ];
 
@@ -35,7 +35,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function createStepConfig(config: EditorConfig): StepConfig {
   return {
-    planet: { ...config.planet },
+    planet: { radius: config.planets[0]!.radius },
     movement: { ...GAME_CONFIG.movement },
     rail: { ...GAME_CONFIG.rail },
     terrain: { ...config.terrain },
@@ -109,7 +109,7 @@ export class PlayerPreviewController {
     PLANETS[0] = {
       id: "planet-0",
       center: { x: 0, y: 0, z: 0 },
-      radius: config.planet.radius,
+      radius: config.planets[0]!.radius,
     };
     if (this.active) this.snapPlayerToSurface();
   }

@@ -2,6 +2,7 @@ import type { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import type { BotBehaviorProfile } from "@splat/content/config/gameConfig.ts";
 import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
+import type { TerrainConfig } from "../terrain/planetTerrain.ts";
 import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
 
 // Plain simulation types — no framework imports.
@@ -177,6 +178,7 @@ export interface SimPlayerState {
 export interface SimMatchState {
   players: Map<string, SimPlayerState>;
   planetDefs: RuntimeMapPlanet[];
+  mapTerrain: TerrainConfig["terrain"];
   planets: Map<string, SimPlanetPaintState>;
   railStates: Map<number, SimRailPaintState>;
   projectiles: Map<string, SimProjectileState>;
