@@ -204,10 +204,10 @@ function sanitizeInputMessage(value: unknown): InputMessage | null {
   return input;
 }
 
-function createSimPlanetState(planetId: string): SimPlanetPaintState {
-  const { rows, cols } = getPaintTerritoryDimensions();
+function createSimPlanetState(planet: RuntimeMapPlanet): SimPlanetPaintState {
+  const { rows, cols } = getPaintTerritoryDimensions(planet.radius);
   return {
-    planetId,
+    planetId: planet.id,
     territoryRows: rows,
     territoryCols: cols,
     cells: createTerritoryCells(rows, cols),
@@ -219,6 +219,8 @@ function createSimPlanetState(planetId: string): SimPlanetPaintState {
 function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void {
   const planet = simState.planets.get("planet-0");
   if (!planet) return;
+  const planetDef = simState.planetDefs.find((p) => p.id === planet.planetId);
+  if (!planetDef) return;
   const largeSeedSurfaceRadius = 50 * (2 * Math.asin(1.15 * 0.5));
   const mediumSeedSurfaceRadius = 50 * (2 * Math.asin(0.55 * 0.5));
   const seedColors = mode.isTeamBased ? mode.teamColors : GAME_CONFIG.match.ffaColors;
@@ -231,7 +233,7 @@ function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void 
       nx: 0,
       ny: 1,
       nz: 0,
-      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius),
+      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius, planetDef.radius),
       seq: ++simState.paintSeq,
     },
     {
@@ -241,7 +243,7 @@ function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void 
       nx: 0,
       ny: -1,
       nz: 0,
-      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius),
+      radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius, planetDef.radius),
       seq: ++simState.paintSeq,
     },
     {
@@ -251,7 +253,7 @@ function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void 
       nx: 0.55,
       ny: 0.55,
       nz: 0.62,
-      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius),
+      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius, planetDef.radius),
       seq: ++simState.paintSeq,
     },
     {
@@ -261,7 +263,7 @@ function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void 
       nx: -0.5,
       ny: -0.45,
       nz: -0.74,
-      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius),
+      radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius, planetDef.radius),
       seq: ++simState.paintSeq,
     },
   ] as const;
@@ -285,7 +287,7 @@ function createSimMatchState(
     players: new Map(),
     planetDefs,
     mapTerrain: stepCfg.terrain,
-    planets: new Map(planetDefs.map((planet) => [planet.id, createSimPlanetState(planet.id)])),
+    planets: new Map(planetDefs.map((planet) => [planet.id, createSimPlanetState(planet)])),
     railStates: new Map(
       rails.map((rail, idx) => [
         idx,
@@ -672,8 +674,12 @@ export class MatchSimulation {
     const railState = this.simState.railStates.get(player.grindRailId);
     if (!rail || !planetState || !railState) return;
 
+    const planetDef = this.simState.planetDefs.find((p) => p.id === rail.planetId);
+    if (!planetDef) return;
+
     const radiusMultiplier =
-      getPlanetSurfaceChordRadius(rail.paintCorridorRadius) / getPaintStampChordRadius();
+      getPlanetSurfaceChordRadius(rail.paintCorridorRadius, planetDef.radius) /
+      getPaintStampChordRadius(planetDef.radius);
 
     // Use incremental painting between last position and current position
     const startT = player.lastGrindT;

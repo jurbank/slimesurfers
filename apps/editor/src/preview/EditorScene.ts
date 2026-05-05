@@ -442,6 +442,9 @@ export class EditorScene {
       sandBand: planet.terrain.sandBand,
       snowLevel: planet.terrain.snowLevel,
       rockLevel: planet.terrain.rockLevel,
+      colors: planet.colors,
+      cel: this.currentConfig.shaders.cel,
+      lighting: planet.lighting,
     });
 
     const terrainMesh = new THREE.Mesh(planetGeo, planetMaterial);
@@ -451,7 +454,10 @@ export class EditorScene {
     let waterMesh: THREE.Mesh | null = null;
     let waterMaterial: THREE.ShaderMaterial | null = null;
     if (planet.hasWater) {
-      waterMaterial = createWaterMaterial();
+      waterMaterial = createWaterMaterial({
+        deepColor: planet.colors.waterDeep,
+        cel: this.currentConfig.shaders.cel,
+      });
       waterMesh = new THREE.Mesh(buildWaterGeometry(waterRadius, terrainCfg), waterMaterial);
       waterMesh.renderOrder = 1;
       group.add(waterMesh);
@@ -460,7 +466,7 @@ export class EditorScene {
     let atmosphereMesh: THREE.Mesh | null = null;
     let atmosphereMaterial: THREE.ShaderMaterial | null = null;
     if (planet.atmosphere.enabled) {
-      atmosphereMaterial = createAtmosphereMaterial();
+      atmosphereMaterial = createAtmosphereMaterial(planet.atmosphere);
       atmosphereMesh = new THREE.Mesh(
         new THREE.SphereGeometry(atmosphereRadius, 48, 48),
         atmosphereMaterial,
@@ -537,6 +543,7 @@ export class EditorScene {
     u.celHatchScale.value = cel.hatchScale;
 
     if (render.waterMaterial) {
+      render.waterMaterial.uniforms.deepColor.value = hexToVec3(planet.colors.waterDeep);
       render.waterMaterial.uniforms.celBands.value = cel.bands;
       render.waterMaterial.uniforms.celSoftness.value = cel.softness;
       render.waterMaterial.uniforms.celHatchStrength.value = cel.hatchStrength;

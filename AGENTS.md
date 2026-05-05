@@ -90,3 +90,14 @@ For GitHub Actions, consider using [`voidzero-dev/setup-vp`](https://github.com/
 ## Comments
 
 Keep comments minimal
+
+## Editor Change Log
+
+When an agent changes files under `apps/editor`, it must add a concise entry to
+`apps/editor/EDITOR_CHANGELOG.md` in the same turn. Use a dated heading and list:
+
+- changed editor files or feature areas
+- user-visible behavior change
+- validation run, or why validation was skipped
+
+Do not log changes outside `apps/editor` unless they directly support the editor change.

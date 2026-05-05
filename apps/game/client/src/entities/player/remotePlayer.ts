@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { RENDER_CONFIG } from "@splat/content/config/renderConfig.ts";
 import { HealthBar } from "./healthBar.ts";
 import { Nameplate, type TeamRelation } from "./nameplate.ts";
 import {
@@ -92,7 +93,7 @@ export class RemotePlayer {
           v.set(1.0, 0.08, 0.08);
         }
       } else {
-        const [r, g, b] = GAME_CONFIG.shaders.cel.outlineColor;
+        const [r, g, b] = RENDER_CONFIG.celOutline.color;
         v.set(r ?? 0, g ?? 0, b ?? 0);
       }
     });

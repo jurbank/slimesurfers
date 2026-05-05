@@ -200,6 +200,12 @@ export interface MatchPhaseMessage {
 export interface MapDataMessage {
   mapId: string;
   name: string;
+  cel: {
+    bands: number;
+    softness: number;
+    hatchStrength: number;
+    hatchScale: number;
+  };
   planets: Array<{
     id: string;
     center: { x: number; y: number; z: number };

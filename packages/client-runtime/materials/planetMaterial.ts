@@ -4,6 +4,11 @@ import {
   planetVertexShader,
   planetFragmentShader,
 } from "@splat/client-runtime/shaders/planetShader.ts";
+import type {
+  RuntimeMapCel,
+  RuntimeMapColors,
+  RuntimeMapLighting,
+} from "@splat/content/map/runtimeMapData.ts";
 
 export interface PlanetMaterialOptions {
   paintMask: THREE.Texture | null;
@@ -14,9 +19,32 @@ export interface PlanetMaterialOptions {
   sandBand: number;
   snowLevel: number;
   rockLevel: number;
+  colors: RuntimeMapColors;
+  cel: RuntimeMapCel;
+  lighting: RuntimeMapLighting;
+}
+
+function hexToVec3(hex: number): THREE.Vector3 {
+  return new THREE.Vector3(
+    ((hex >> 16) & 0xff) / 255,
+    ((hex >> 8) & 0xff) / 255,
+    (hex & 0xff) / 255,
+  );
+}
+
+function sunDirectionFromLighting(lighting: RuntimeMapLighting): THREE.Vector3 {
+  const azRad = (lighting.sunAzimuth * Math.PI) / 180;
+  const elRad = (lighting.sunElevation * Math.PI) / 180;
+  return new THREE.Vector3(
+    Math.cos(elRad) * Math.sin(azRad),
+    Math.sin(elRad),
+    Math.cos(elRad) * Math.cos(azRad),
+  );
 }
 
 export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.ShaderMaterial {
+  const { colors, cel, lighting } = options;
+
   return new THREE.ShaderMaterial({
     uniforms: {
       paintMask: { value: options.paintMask },
@@ -27,11 +55,11 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       sandBand: { value: options.sandBand },
       snowLevel: { value: options.snowLevel },
       rockLevel: { value: options.rockLevel },
-      waterDeepColor: { value: new THREE.Vector3(...GAME_CONFIG.shaders.water.deepColor) },
-      sandColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.sandColor) },
-      grassColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.grassColor) },
-      rockColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.rockColor) },
-      snowColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.snowColor) },
+      waterDeepColor: { value: hexToVec3(colors.waterDeep) },
+      sandColor: { value: new THREE.Color(colors.sand) },
+      grassColor: { value: new THREE.Color(colors.grass) },
+      rockColor: { value: new THREE.Color(colors.rock) },
+      snowColor: { value: new THREE.Color(colors.snow) },
       time: { value: 0 },
       edgeNoiseScale: { value: GAME_CONFIG.paint.edgeNoiseScale },
       edgeNoiseStrength: { value: GAME_CONFIG.paint.edgeNoiseStrength },
@@ -44,16 +72,16 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       slimeSpecularPower: { value: GAME_CONFIG.paint.slimeSpecularPower },
       slimeEdgeWetness: { value: GAME_CONFIG.paint.slimeEdgeWetness },
       slimePoolDarkening: { value: GAME_CONFIG.paint.slimePoolDarkening },
-      celBands: { value: GAME_CONFIG.shaders.cel.bands },
-      celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
-      celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
-      celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
-      sunDirection: { value: new THREE.Vector3(0.535, 0.802, 0.267) },
-      sunIntensity: { value: 1.0 },
-      ambientIntensity: { value: 0.5 },
-      rimColor: { value: new THREE.Color(0x8ab4ff) },
-      rimStrength: { value: 0.4 },
-      rimPower: { value: 3.0 },
+      celBands: { value: cel.bands },
+      celSoftness: { value: cel.softness },
+      celHatchStrength: { value: cel.hatchStrength },
+      celHatchScale: { value: cel.hatchScale },
+      sunDirection: { value: sunDirectionFromLighting(lighting) },
+      sunIntensity: { value: lighting.sunIntensity },
+      ambientIntensity: { value: lighting.ambientIntensity },
+      rimColor: { value: new THREE.Color(lighting.rimColor) },
+      rimStrength: { value: lighting.rimStrength },
+      rimPower: { value: lighting.rimPower },
     },
     vertexShader: planetVertexShader,
     fragmentShader: planetFragmentShader,

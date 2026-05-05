@@ -3,7 +3,7 @@ import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/we
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import type { MatchModeId } from "@splat/protocol/network/clientMessages.ts";
 import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
-import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
+import { DEFAULT_RUNTIME_PLANET_TERRAIN, DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
   EmoteEventMessage,
@@ -66,6 +66,7 @@ import {
 } from "@splat/simulation/match/simState.ts";
 
 type MapPlanet = MapDataMessage["planets"][number];
+type MapCel = MapDataMessage["cel"];
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -135,6 +136,7 @@ export class MatchScene {
 
   private readonly planetTerrainCfgs = new Map<string, TerrainConfig>();
   private mapPlanets: MapDataMessage["planets"] = DEV_MAP.planets;
+  private mapCel: MapCel = DEV_MAP.cel;
 
   private onDisconnectCb: (() => void) | null = null;
 
@@ -305,8 +307,8 @@ export class MatchScene {
     this.render.renderer.domElement.addEventListener("pointerdown", () => this.sound.resume(), {
       once: true,
     });
-    const { rows, cols } = getPaintTerritoryDimensions();
     for (const p of this.mapPlanets) {
+      const { rows, cols } = getPaintTerritoryDimensions(p.radius);
       this.planetPaint.set(p.id, {
         planetId: p.id,
         territoryRows: rows,
@@ -438,6 +440,10 @@ export class MatchScene {
     uniforms.grassColor.value = new THREE.Color(colors.grass);
     uniforms.rockColor.value = new THREE.Color(colors.rock);
     uniforms.snowColor.value = new THREE.Color(colors.snow);
+    uniforms.celBands.value = this.mapCel.bands;
+    uniforms.celSoftness.value = this.mapCel.softness;
+    uniforms.celHatchStrength.value = this.mapCel.hatchStrength;
+    uniforms.celHatchScale.value = this.mapCel.hatchScale;
 
     const azRad = (lighting.sunAzimuth * Math.PI) / 180;
     const elRad = (lighting.sunElevation * Math.PI) / 180;
@@ -462,6 +468,15 @@ export class MatchScene {
     uniforms.falloffPower.value = planet.atmosphere.falloffPower;
   }
 
+  private applyWaterMaterialConfig(material: THREE.ShaderMaterial, planet: MapPlanet): void {
+    const uniforms = material.uniforms;
+    uniforms.deepColor.value = hexToVec3(planet.colors.waterDeep);
+    uniforms.celBands.value = this.mapCel.bands;
+    uniforms.celSoftness.value = this.mapCel.softness;
+    uniforms.celHatchStrength.value = this.mapCel.hatchStrength;
+    uniforms.celHatchScale.value = this.mapCel.hatchScale;
+  }
+
   private buildPlanets(): void {
     for (const p of this.mapPlanets) {
       const cfg = this.getPlanetTerrainCfg(p.id);
@@ -480,6 +495,9 @@ export class MatchScene {
         sandBand: terrain.sandBand,
         snowLevel: terrain.snowLevel,
         rockLevel: terrain.rockLevel,
+        colors: p.colors,
+        cel: this.mapCel,
+        lighting: p.lighting,
       });
       this.applyPlanetMaterialConfig(planetMaterial, p);
 
@@ -496,7 +514,7 @@ export class MatchScene {
       this.planetOutlines.push(planetOutline);
 
       if (p.atmosphere.enabled) {
-        const atmosphereMat = createAtmosphereMaterial();
+        const atmosphereMat = createAtmosphereMaterial(p.atmosphere);
         this.applyAtmosphereMaterialConfig(atmosphereMat, p);
         const atmosphere = new THREE.Mesh(
           new THREE.SphereGeometry(atmosphereRadius, 48, 48),
@@ -511,7 +529,10 @@ export class MatchScene {
       }
 
       if (p.hasWater) {
-        const waterMat = createWaterMaterial();
+        const waterMat = createWaterMaterial({
+          deepColor: p.colors.waterDeep,
+          cel: this.mapCel,
+        });
         const water = new THREE.Mesh(this.buildWaterGeometry(waterRadius, cfg), waterMat);
         water.position.set(x, y, z);
         water.renderOrder = 1;
@@ -541,12 +562,13 @@ export class MatchScene {
 
   applyMapData(msg: MapDataMessage): void {
     this.mapPlanets = msg.planets;
+    this.mapCel = msg.cel;
     for (const p of msg.planets) {
       this.planetTerrainCfgs.set(p.id, { planet: { radius: p.radius }, terrain: p.terrain });
     }
 
-    const { rows, cols } = getPaintTerritoryDimensions();
     for (const p of msg.planets) {
+      const { rows, cols } = getPaintTerritoryDimensions(p.radius);
       if (!this.planetPaint.has(p.id)) {
         this.planetPaint.set(p.id, {
           planetId: p.id,
@@ -597,6 +619,11 @@ export class MatchScene {
         water.geometry = this.buildWaterGeometry(waterRadius, planetCfg);
       }
 
+      const waterMaterial = this.waterMaterials[i];
+      if (waterMaterial) {
+        this.applyWaterMaterialConfig(waterMaterial, mapPlanet);
+      }
+
       const atmosphere = this.atmosphereMaterials[i];
       if (atmosphere) {
         this.applyAtmosphereMaterialConfig(atmosphere, mapPlanet);
@@ -609,7 +636,8 @@ export class MatchScene {
    * per-face flat shading and biome vertex colors.
    */
   private buildTerrainGeometry(cfg: TerrainConfig): THREE.BufferGeometry {
-    const detail = cfg.terrain.icosahedronDetail ?? GAME_CONFIG.terrain.icosahedronDetail;
+    const detail =
+      cfg.terrain.icosahedronDetail ?? DEFAULT_RUNTIME_PLANET_TERRAIN.icosahedronDetail;
     const indexed = new THREE.IcosahedronGeometry(cfg.planet.radius, detail);
 
     // toNonIndexed gives each triangle its own vertices → flat shading

@@ -1,16 +1,14 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
 } from "@splat/client-runtime/shaders/atmosphereShader.ts";
+import type { RuntimeMapAtmosphere } from "@splat/content/map/runtimeMapData.ts";
 
-export function createAtmosphereMaterial(): THREE.ShaderMaterial {
-  const cfg = GAME_CONFIG.shaders.atmosphere;
-
+export function createAtmosphereMaterial(cfg: RuntimeMapAtmosphere): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
-      atmosphereColor: { value: new THREE.Color(...cfg.color) },
+      atmosphereColor: { value: new THREE.Color(cfg.color) },
       intensity: { value: cfg.intensity },
       opacity: { value: cfg.opacity },
       fresnelPower: { value: cfg.fresnelPower },

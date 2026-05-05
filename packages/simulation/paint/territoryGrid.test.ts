@@ -12,6 +12,8 @@ import {
 } from "./territoryGrid.ts";
 import type { SimMatchState, SimPlayerState } from "../match/simState.ts";
 
+const DEV_PLANET_RADIUS = DEV_MAP.planets[0]!.radius;
+
 function createPlayer(sessionId: string, paintGroupId: number, slimeColor: number): SimPlayerState {
   return {
     sessionId,
@@ -89,7 +91,7 @@ function createSimState(): SimMatchState {
 }
 
 function surfacePointForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const { rows, cols } = getPaintTerritoryDimensions();
+  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -113,7 +115,7 @@ describe("territoryGrid", () => {
   it("counts only paintable cells toward total territory coverage", () => {
     const planet = DEV_MAP.planets[0]!;
     const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.planets[0]!.terrain };
-    const { rows, cols } = getPaintTerritoryDimensions();
+    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
     const totalCells = rows * cols;
     const paintableCells = countPaintableTerritoryCells(rows, cols, terrainCfg);
 
@@ -135,7 +137,7 @@ describe("territoryGrid", () => {
 
   it("claims neutral cells once and does not double-count repainting the same owned area", () => {
     const simState = createSimState();
-    const { rows, cols } = getPaintTerritoryDimensions();
+    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
     const planetState = {
       planetId: "planet-0",
       territoryRows: rows,
@@ -175,7 +177,7 @@ describe("territoryGrid", () => {
 
   it("transfers ownership and score when repainting enemy-controlled territory", () => {
     const simState = createSimState();
-    const { rows, cols } = getPaintTerritoryDimensions();
+    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
     const planetState = {
       planetId: "planet-0",
       territoryRows: rows,

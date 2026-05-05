@@ -8,6 +8,9 @@ import {
 } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import {
+  DEFAULT_RUNTIME_CEL,
+  DEFAULT_RUNTIME_PLANET_RADIUS,
+  DEFAULT_RUNTIME_PLANET_TERRAIN,
   DEV_MAP,
   validateRuntimeMapData,
   type RuntimeMapData,
@@ -97,7 +100,7 @@ function migrateMapData(data: unknown): unknown {
         ? m.radius
         : typeof legacyPlanet.radius === "number"
           ? legacyPlanet.radius
-          : GAME_CONFIG.planet.radius;
+          : DEFAULT_RUNTIME_PLANET_RADIUS;
     const center =
       typeof m.center === "object" && m.center !== null
         ? m.center
@@ -108,7 +111,7 @@ function migrateMapData(data: unknown): unknown {
       typeof m.terrain === "object" && m.terrain !== null ? m.terrain : {}
     ) as Record<string, unknown>;
     if (typeof terrain.icosahedronDetail !== "number") {
-      terrain.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+      terrain.icosahedronDetail = DEFAULT_RUNTIME_PLANET_TERRAIN.icosahedronDetail;
     }
     m.planets = [
       {
@@ -131,7 +134,7 @@ function migrateMapData(data: unknown): unknown {
       if (typeof p.terrain === "object" && p.terrain !== null) {
         const t = p.terrain as Record<string, unknown>;
         if (typeof t.icosahedronDetail !== "number") {
-          t.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+          t.icosahedronDetail = DEFAULT_RUNTIME_PLANET_TERRAIN.icosahedronDetail;
         }
       }
     }
@@ -139,10 +142,10 @@ function migrateMapData(data: unknown): unknown {
 
   if (typeof m.cel !== "object" || m.cel === null) {
     m.cel = {
-      bands: GAME_CONFIG.shaders.cel.bands,
-      softness: GAME_CONFIG.shaders.cel.softness,
-      hatchStrength: GAME_CONFIG.shaders.cel.hatchStrength,
-      hatchScale: GAME_CONFIG.shaders.cel.hatchScale,
+      bands: DEFAULT_RUNTIME_CEL.bands,
+      softness: DEFAULT_RUNTIME_CEL.softness,
+      hatchStrength: DEFAULT_RUNTIME_CEL.hatchStrength,
+      hatchScale: DEFAULT_RUNTIME_CEL.hatchScale,
     };
   }
 
@@ -232,6 +235,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     client.send(MessageType.MapData, {
       mapId: this.map.mapId,
       name: this.map.name,
+      cel: this.map.cel,
       planets: this.map.planets,
       rails: this.map.rails,
     });

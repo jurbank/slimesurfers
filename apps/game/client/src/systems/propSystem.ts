@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { RENDER_CONFIG } from "@splat/content/config/renderConfig.ts";
 import {
   BiomeType,
   getBiome,
@@ -74,7 +74,7 @@ export class PropSystem {
       rocketEnabled: boolean;
     };
   }): void {
-    if (!GAME_CONFIG.shaders.props.enabled) return;
+    if (!RENDER_CONFIG.props.enabled) return;
 
     const group = new THREE.Group();
     group.position.set(planet.x, planet.y, planet.z);

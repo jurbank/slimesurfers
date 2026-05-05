@@ -10,7 +10,7 @@
         "y": 0,
         "z": 0
       },
-      "radius": 82,
+      "radius": 100,
       "terrain": {
         "seed": 42,
         "baseAmplitude": 54,
@@ -66,17 +66,17 @@
         "y": 0,
         "z": 0
       },
-      "radius": 68,
+      "radius": 100,
       "terrain": {
         "seed": 42,
-        "baseAmplitude": 23,
-        "frequency": 1.2,
+        "baseAmplitude": 54,
+        "frequency": 1.6,
         "octaves": 3,
         "lacunarity": 2.2,
         "persistence": 0.45,
         "heightSmoothingStrength": 0.45,
         "heightSmoothingSampleAngle": 0.035,
-        "icosahedronDetail": 15,
+        "icosahedronDetail": 30,
         "waterLevel": -3,
         "sandBand": 1.5,
         "rockLevel": 7,

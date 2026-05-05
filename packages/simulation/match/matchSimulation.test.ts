@@ -27,6 +27,7 @@ import { generateBotInput } from "../ai/botController.ts";
 const MACHINE_GUN_KILL_SHOTS = Math.ceil(
   GAME_CONFIG.player.maxHealth / getWeaponDefinition(WeaponId.MachineGun).directDamage,
 );
+const DEV_PLANET_RADIUS = DEV_MAP.planets[0]!.radius;
 
 function createForwardInput(seq: number): InputMessage {
   return {
@@ -54,7 +55,7 @@ function distanceBetweenPlayers(
 }
 
 function surfaceNormalForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const { rows, cols } = getPaintTerritoryDimensions();
+  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -100,7 +101,7 @@ function paintPlayerSurface(
   simulation: MatchSimulation,
   sessionId: string,
   paintGroupId: number,
-  radius = Math.max(getPaintStampChordRadius(), 0.25),
+  radius = Math.max(getPaintStampChordRadius(DEV_PLANET_RADIUS), 0.25),
 ): void {
   const player = simulation.players.get(sessionId);
   if (!player) return;
@@ -879,7 +880,7 @@ describe("MatchSimulation", () => {
 
     const stamps = simulation.drainPaintStampMessages();
     expect(stamps).toHaveLength(1);
-    expect(stamps[0]?.radius).toBe(getPaintStampChordRadius() * 4.2);
+    expect(stamps[0]?.radius).toBe(getPaintStampChordRadius(DEV_PLANET_RADIUS) * 4.2);
   });
 
   it("lets grinding players trigger trick combos and carry them until they land", () => {

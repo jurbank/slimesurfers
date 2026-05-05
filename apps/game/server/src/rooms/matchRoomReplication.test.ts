@@ -5,6 +5,7 @@ import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import {
   addSimPlayerToRoomState,
   buildJoinBootstrap,
@@ -21,7 +22,7 @@ const MACHINE_GUN_KILL_SHOTS = Math.ceil(
 );
 
 describe("matchRoomReplication", () => {
-  const { rows } = getPaintTerritoryDimensions();
+  const { rows } = getPaintTerritoryDimensions(DEV_MAP.planets[0]!.radius);
 
   it("projects simulation players into room schema state", () => {
     const simulation = new MatchSimulation();

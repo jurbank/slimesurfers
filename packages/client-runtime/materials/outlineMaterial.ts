@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { RENDER_CONFIG } from "@splat/content/config/renderConfig.ts";
 import {
   outlineVertexShader,
   outlineFragmentShader,
@@ -8,8 +8,8 @@ import {
 export function createOutlineMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
-      outlineThickness: { value: GAME_CONFIG.shaders.cel.outlineThickness },
-      outlineColor: { value: new THREE.Vector3(...GAME_CONFIG.shaders.cel.outlineColor) },
+      outlineThickness: { value: RENDER_CONFIG.celOutline.thickness },
+      outlineColor: { value: new THREE.Vector3(...RENDER_CONFIG.celOutline.color) },
     },
     vertexShader: outlineVertexShader,
     fragmentShader: outlineFragmentShader,

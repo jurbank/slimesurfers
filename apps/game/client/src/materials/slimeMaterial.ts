@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { DEFAULT_RUNTIME_CEL } from "@splat/content/map/runtimeMapData.ts";
 import { slimeVertexShader, slimeFragmentShader } from "../shaders/slimeShader.ts";
 
 const TEX_SIZE = 64;
@@ -78,10 +78,10 @@ export function createSlimeMaterial(color: number, patternId: number): THREE.Sha
       emissiveIntensity: { value: 0 },
       hasMap: { value: patternId !== 0 },
       opacity: { value: 1.0 },
-      celBands: { value: GAME_CONFIG.shaders.cel.bands },
-      celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
-      celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
-      celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
+      celBands: { value: DEFAULT_RUNTIME_CEL.bands },
+      celSoftness: { value: DEFAULT_RUNTIME_CEL.softness },
+      celHatchStrength: { value: DEFAULT_RUNTIME_CEL.hatchStrength },
+      celHatchScale: { value: DEFAULT_RUNTIME_CEL.hatchScale },
     },
     vertexShader: slimeVertexShader,
     fragmentShader: slimeFragmentShader,

@@ -232,15 +232,6 @@ export const GAME_CONFIG = {
 
   // -- Shaders (Client Only) --------------------------------------------------
   shaders: {
-    atmosphere: {
-      enabled: true,
-      height: 18.0,
-      color: [0.38, 0.72, 1.0] as const,
-      intensity: 0.85,
-      opacity: 0.42,
-      fresnelPower: 2.4,
-      falloffPower: 1.5,
-    },
     water: {
       enabled: true,
       fresnelPower: 3.0,
@@ -286,28 +277,6 @@ export const GAME_CONFIG = {
       opacity: 0.46,
       driftSpeed: 0.012,
       color: 0xf7fbff,
-    },
-    terrain: {
-      sandColor: 0xd4c078,
-      grassColor: 0x3da33d,
-      rockColor: 0x8a8a7a,
-      snowColor: 0xeef4f8,
-    },
-    cel: {
-      enabled: true,
-      bands: 3.0,
-      softness: 0.02,
-      outlineThickness: 0.06,
-      outlineColor: [0.1, 0.1, 0.1] as const,
-      hatchStrength: 0.15,
-      hatchScale: 5.0,
-    },
-    props: {
-      enabled: true,
-      seed: 12345,
-      treeDensity: 400,
-      cactusDensity: 200,
-      rocketEnabled: true,
     },
   },
 
@@ -411,7 +380,7 @@ export function getPlayerTargetRadius(cfg: PlayerTargetRadiusConfig = GAME_CONFI
   return cfg.movement.collisionRadius * cfg.player.targetRadiusMultiplier;
 }
 
-export function getPaintTerritoryDimensions(planetRadius = GAME_CONFIG.planet.radius): {
+export function getPaintTerritoryDimensions(planetRadius: number): {
   rows: number;
   cols: number;
 } {
@@ -426,26 +395,14 @@ export function getPaintTerritoryDimensions(planetRadius = GAME_CONFIG.planet.ra
   return { rows, cols };
 }
 
-export function getPaintStampAngularRadius(
-  planetRadius: number = GAME_CONFIG.planet.radius,
-): number {
+export function getPaintStampAngularRadius(planetRadius: number): number {
   return clamp(GAME_CONFIG.paint.impactStampSurfaceRadius / planetRadius, 0, Math.PI);
 }
 
-export function getPlanetSurfaceChordRadius(
-  surfaceRadius: number,
-  planetRadius: number = GAME_CONFIG.planet.radius,
-): number {
+export function getPlanetSurfaceChordRadius(surfaceRadius: number, planetRadius: number): number {
   return 2 * Math.sin(clamp(surfaceRadius / planetRadius, 0, Math.PI) * 0.5);
 }
 
-export function getPaintStampChordRadius(planetRadius: number = GAME_CONFIG.planet.radius): number {
+export function getPaintStampChordRadius(planetRadius: number): number {
   return getPlanetSurfaceChordRadius(GAME_CONFIG.paint.impactStampSurfaceRadius, planetRadius);
 }
-
-export const PLANET_POSITIONS = Array.from({ length: GAME_CONFIG.planet.count }, (_, i) => ({
-  id: `planet-${i}`,
-  x: (i - (GAME_CONFIG.planet.count - 1) / 2) * GAME_CONFIG.planet.interPlanetDistance,
-  y: 0,
-  z: 0,
-}));

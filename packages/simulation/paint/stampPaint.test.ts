@@ -9,6 +9,8 @@ import { createTerritoryCells } from "./territoryGrid.ts";
 import type { SimMatchState } from "../match/simState.ts";
 import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
 
+const DEV_PLANET_RADIUS = DEV_MAP.planets[0]!.radius;
+
 function createSimState(): SimMatchState {
   return {
     players: new Map(),
@@ -30,7 +32,7 @@ function createSimState(): SimMatchState {
 }
 
 function createPlanetState() {
-  const { rows, cols } = getPaintTerritoryDimensions();
+  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
   return {
     planetId: "planet-0",
     territoryRows: rows,

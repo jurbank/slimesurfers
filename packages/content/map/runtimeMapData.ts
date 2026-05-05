@@ -395,7 +395,9 @@ function validateSpawnAnchor(
   }
 }
 
-const DEV_PLANET_TERRAIN: RuntimeMapTerrain = {
+export const DEFAULT_RUNTIME_PLANET_RADIUS = 100;
+
+export const DEFAULT_RUNTIME_PLANET_TERRAIN: RuntimeMapTerrain = {
   seed: 42,
   baseAmplitude: 54.0,
   frequency: 1.4,
@@ -411,7 +413,7 @@ const DEV_PLANET_TERRAIN: RuntimeMapTerrain = {
   icosahedronDetail: 50,
 };
 
-const DEV_PLANET_COLORS: RuntimeMapColors = {
+export const DEFAULT_RUNTIME_PLANET_COLORS: RuntimeMapColors = {
   sand: 0xd4c078,
   grass: 0x3da33d,
   rock: 0x8a8a7a,
@@ -419,7 +421,7 @@ const DEV_PLANET_COLORS: RuntimeMapColors = {
   waterDeep: 0x0a3873,
 };
 
-const DEV_PLANET_ATMOSPHERE: RuntimeMapAtmosphere = {
+export const DEFAULT_RUNTIME_PLANET_ATMOSPHERE: RuntimeMapAtmosphere = {
   enabled: true,
   height: 18.0,
   color: 0x61b8ff,
@@ -429,7 +431,7 @@ const DEV_PLANET_ATMOSPHERE: RuntimeMapAtmosphere = {
   falloffPower: 1.5,
 };
 
-const DEV_PLANET_LIGHTING: RuntimeMapLighting = {
+export const DEFAULT_RUNTIME_PLANET_LIGHTING: RuntimeMapLighting = {
   sunAzimuth: 63,
   sunElevation: 53,
   sunIntensity: 1.0,
@@ -439,11 +441,18 @@ const DEV_PLANET_LIGHTING: RuntimeMapLighting = {
   rimPower: 3.0,
 };
 
-const DEV_PLANET_PROPS: RuntimeMapProps = {
+export const DEFAULT_RUNTIME_PLANET_PROPS: RuntimeMapProps = {
   treeDensity: 400,
   cactusDensity: 200,
   seed: 12345,
   rocketEnabled: true,
+};
+
+export const DEFAULT_RUNTIME_CEL: RuntimeMapCel = {
+  bands: 3.0,
+  softness: 0.02,
+  hatchStrength: 0.15,
+  hatchScale: 5.0,
 };
 
 export const DEV_MAP: RuntimeMapData = {
@@ -454,21 +463,16 @@ export const DEV_MAP: RuntimeMapData = {
     {
       id: "planet-0",
       center: { x: 0, y: 0, z: 0 },
-      radius: 100,
-      terrain: DEV_PLANET_TERRAIN,
-      colors: DEV_PLANET_COLORS,
-      atmosphere: DEV_PLANET_ATMOSPHERE,
-      lighting: DEV_PLANET_LIGHTING,
-      props: DEV_PLANET_PROPS,
+      radius: DEFAULT_RUNTIME_PLANET_RADIUS,
+      terrain: DEFAULT_RUNTIME_PLANET_TERRAIN,
+      colors: DEFAULT_RUNTIME_PLANET_COLORS,
+      atmosphere: DEFAULT_RUNTIME_PLANET_ATMOSPHERE,
+      lighting: DEFAULT_RUNTIME_PLANET_LIGHTING,
+      props: DEFAULT_RUNTIME_PLANET_PROPS,
       hasWater: true,
     },
   ],
-  cel: {
-    bands: 3.0,
-    softness: 0.02,
-    hatchStrength: 0.15,
-    hatchScale: 5.0,
-  },
+  cel: DEFAULT_RUNTIME_CEL,
   rails: RAIL_DEFS,
   spawns: {
     ffa: { kind: "ffa-spread" },

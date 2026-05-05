@@ -1,4 +1,12 @@
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import {
+  DEFAULT_RUNTIME_CEL,
+  DEFAULT_RUNTIME_PLANET_ATMOSPHERE,
+  DEFAULT_RUNTIME_PLANET_COLORS,
+  DEFAULT_RUNTIME_PLANET_LIGHTING,
+  DEFAULT_RUNTIME_PLANET_PROPS,
+  DEFAULT_RUNTIME_PLANET_RADIUS,
+  DEFAULT_RUNTIME_PLANET_TERRAIN,
+} from "@splat/content/map/runtimeMapData.ts";
 
 export type BrushMode = "raise" | "lower" | "smooth" | "flatten";
 export type BrushFalloff = "smooth" | "linear" | "sharp";
@@ -120,78 +128,70 @@ export interface PerformanceStats {
   groups: PerformanceMetricGroup[];
 }
 
-function rgbToHex(r: number, g: number, b: number): number {
-  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
-}
-
 export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): EditorPlanet {
-  const g = GAME_CONFIG;
-  const [wr, wg, wb] = g.shaders.water.deepColor;
-  const [ar, ag, ab] = g.shaders.atmosphere.color;
   return {
     id,
     center,
-    radius: g.planet.radius,
+    radius: DEFAULT_RUNTIME_PLANET_RADIUS,
     terrain: {
-      seed: g.terrain.seed,
-      baseAmplitude: g.terrain.baseAmplitude,
-      frequency: g.terrain.frequency,
-      octaves: g.terrain.octaves,
-      lacunarity: g.terrain.lacunarity,
-      persistence: g.terrain.persistence,
-      heightSmoothingStrength: g.terrain.heightSmoothingStrength,
-      heightSmoothingSampleAngle: g.terrain.heightSmoothingSampleAngle,
+      seed: DEFAULT_RUNTIME_PLANET_TERRAIN.seed,
+      baseAmplitude: DEFAULT_RUNTIME_PLANET_TERRAIN.baseAmplitude,
+      frequency: DEFAULT_RUNTIME_PLANET_TERRAIN.frequency,
+      octaves: DEFAULT_RUNTIME_PLANET_TERRAIN.octaves,
+      lacunarity: DEFAULT_RUNTIME_PLANET_TERRAIN.lacunarity,
+      persistence: DEFAULT_RUNTIME_PLANET_TERRAIN.persistence,
+      heightSmoothingStrength: DEFAULT_RUNTIME_PLANET_TERRAIN.heightSmoothingStrength,
+      heightSmoothingSampleAngle: DEFAULT_RUNTIME_PLANET_TERRAIN.heightSmoothingSampleAngle,
       icosahedronDetail: 30,
-      waterLevel: g.terrain.waterLevel,
-      sandBand: g.terrain.sandBand,
-      rockLevel: g.terrain.rockLevel,
-      snowLevel: g.terrain.snowLevel,
+      waterLevel: DEFAULT_RUNTIME_PLANET_TERRAIN.waterLevel,
+      sandBand: DEFAULT_RUNTIME_PLANET_TERRAIN.sandBand,
+      rockLevel: DEFAULT_RUNTIME_PLANET_TERRAIN.rockLevel,
+      snowLevel: DEFAULT_RUNTIME_PLANET_TERRAIN.snowLevel,
     },
     colors: {
-      sand: g.shaders.terrain.sandColor,
-      grass: g.shaders.terrain.grassColor,
-      rock: g.shaders.terrain.rockColor,
-      snow: g.shaders.terrain.snowColor,
-      waterDeep: rgbToHex(wr, wg, wb),
+      sand: DEFAULT_RUNTIME_PLANET_COLORS.sand,
+      grass: DEFAULT_RUNTIME_PLANET_COLORS.grass,
+      rock: DEFAULT_RUNTIME_PLANET_COLORS.rock,
+      snow: DEFAULT_RUNTIME_PLANET_COLORS.snow,
+      waterDeep: DEFAULT_RUNTIME_PLANET_COLORS.waterDeep,
     },
     atmosphere: {
-      enabled: true,
-      height: g.shaders.atmosphere.height,
-      color: rgbToHex(ar, ag, ab),
-      intensity: g.shaders.atmosphere.intensity,
-      opacity: g.shaders.atmosphere.opacity,
-      fresnelPower: g.shaders.atmosphere.fresnelPower,
-      falloffPower: g.shaders.atmosphere.falloffPower,
+      enabled: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.enabled,
+      height: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.height,
+      color: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.color,
+      intensity: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.intensity,
+      opacity: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.opacity,
+      fresnelPower: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.fresnelPower,
+      falloffPower: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.falloffPower,
     },
     lighting: {
-      sunAzimuth: 63,
-      sunElevation: 53,
-      sunIntensity: 1.0,
-      ambientIntensity: 0.5,
-      rimColor: 0x8ab4ff,
-      rimStrength: 0.4,
-      rimPower: 3.0,
+      sunAzimuth: DEFAULT_RUNTIME_PLANET_LIGHTING.sunAzimuth,
+      sunElevation: DEFAULT_RUNTIME_PLANET_LIGHTING.sunElevation,
+      sunIntensity: DEFAULT_RUNTIME_PLANET_LIGHTING.sunIntensity,
+      ambientIntensity: DEFAULT_RUNTIME_PLANET_LIGHTING.ambientIntensity,
+      rimColor: DEFAULT_RUNTIME_PLANET_LIGHTING.rimColor,
+      rimStrength: DEFAULT_RUNTIME_PLANET_LIGHTING.rimStrength,
+      rimPower: DEFAULT_RUNTIME_PLANET_LIGHTING.rimPower,
     },
     props: {
-      treeDensity: g.shaders.props.treeDensity,
-      cactusDensity: g.shaders.props.cactusDensity,
-      seed: g.shaders.props.seed,
-      rocketEnabled: g.shaders.props.rocketEnabled,
+      treeDensity: DEFAULT_RUNTIME_PLANET_PROPS.treeDensity,
+      cactusDensity: DEFAULT_RUNTIME_PLANET_PROPS.cactusDensity,
+      seed: DEFAULT_RUNTIME_PLANET_PROPS.seed,
+      rocketEnabled: DEFAULT_RUNTIME_PLANET_PROPS.rocketEnabled,
     },
     hasWater: true,
   };
 }
 
 export function defaultEditorConfig(): EditorConfig {
-  const g = GAME_CONFIG;
   return {
     planets: [defaultEditorPlanet("planet-0")],
     shaders: {
       cel: {
-        bands: g.shaders.cel.bands,
-        softness: g.shaders.cel.softness,
-        hatchStrength: g.shaders.cel.hatchStrength,
-        hatchScale: g.shaders.cel.hatchScale,
+        bands: DEFAULT_RUNTIME_CEL.bands,
+        softness: DEFAULT_RUNTIME_CEL.softness,
+        hatchStrength: DEFAULT_RUNTIME_CEL.hatchStrength,
+        hatchScale: DEFAULT_RUNTIME_CEL.hatchScale,
       },
     },
   };

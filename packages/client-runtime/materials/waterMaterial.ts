@@ -4,8 +4,22 @@ import {
   waterVertexShader,
   waterFragmentShader,
 } from "@splat/client-runtime/shaders/waterShader.ts";
+import type { RuntimeMapCel } from "@splat/content/map/runtimeMapData.ts";
 
-export function createWaterMaterial(): THREE.ShaderMaterial {
+export interface WaterMaterialOptions {
+  deepColor: number;
+  cel: RuntimeMapCel;
+}
+
+function hexToVec3(hex: number): THREE.Vector3 {
+  return new THREE.Vector3(
+    ((hex >> 16) & 0xff) / 255,
+    ((hex >> 8) & 0xff) / 255,
+    (hex & 0xff) / 255,
+  );
+}
+
+export function createWaterMaterial(options: WaterMaterialOptions): THREE.ShaderMaterial {
   const cfg = GAME_CONFIG.shaders.water;
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -14,7 +28,7 @@ export function createWaterMaterial(): THREE.ShaderMaterial {
       fresnelStrength: { value: cfg.fresnelStrength },
       glowColor: { value: new THREE.Vector3(...cfg.glowColor) },
       glowIntensity: { value: cfg.glowIntensity },
-      deepColor: { value: new THREE.Vector3(...cfg.deepColor) },
+      deepColor: { value: hexToVec3(options.deepColor) },
       surfaceColor: { value: new THREE.Vector3(...cfg.surfaceColor) },
       shallowColor: { value: new THREE.Vector3(...cfg.shallowColor) },
       shallowDepth: { value: cfg.shallowDepth },
@@ -38,10 +52,10 @@ export function createWaterMaterial(): THREE.ShaderMaterial {
       shimmerScale: { value: cfg.shimmerScale },
       shimmerSpeed: { value: cfg.shimmerSpeed },
       opacity: { value: cfg.opacity },
-      celBands: { value: GAME_CONFIG.shaders.cel.bands },
-      celSoftness: { value: GAME_CONFIG.shaders.cel.softness },
-      celHatchStrength: { value: GAME_CONFIG.shaders.cel.hatchStrength },
-      celHatchScale: { value: GAME_CONFIG.shaders.cel.hatchScale },
+      celBands: { value: options.cel.bands },
+      celSoftness: { value: options.cel.softness },
+      celHatchStrength: { value: options.cel.hatchStrength },
+      celHatchScale: { value: options.cel.hatchScale },
     },
     vertexShader: waterVertexShader,
     fragmentShader: waterFragmentShader,
