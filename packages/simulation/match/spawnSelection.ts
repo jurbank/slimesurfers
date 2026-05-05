@@ -73,8 +73,9 @@ function getSurfacePosition(
   planetDefs: RuntimeMapPlanet[],
 ): SimVec3 {
   const planet = planetDefs.find((entry) => entry.id === planetId) ?? planetDefs[0]!;
+  const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
   const radius =
-    getTerrainRadius(normal.x, normal.y, normal.z, GAME_CONFIG) +
+    getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg) +
     GAME_CONFIG.movement.standingHeight;
   return {
     x: planet.center.x + normal.x * radius,

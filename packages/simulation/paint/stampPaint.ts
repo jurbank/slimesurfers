@@ -31,9 +31,10 @@ export function applyPaintImpact(
     impact.pos.y - planetPos.center.y,
     impact.pos.z - planetPos.center.z,
   );
-  const terrainCfg = { planet: { radius: planetPos.radius }, terrain: simState.mapTerrain };
-  const waterDepth = simState.mapTerrain.waterLevel - getTerrainHeight(nx, ny, nz, terrainCfg);
-  if (waterDepth > simState.mapTerrain.sandBand) {
+  const terrain = planetPos.terrain ?? simState.mapTerrain;
+  const terrainCfg = { planet: { radius: planetPos.radius }, terrain };
+  const waterDepth = terrain.waterLevel - getTerrainHeight(nx, ny, nz, terrainCfg);
+  if (waterDepth > terrain.sandBand) {
     return null;
   }
 

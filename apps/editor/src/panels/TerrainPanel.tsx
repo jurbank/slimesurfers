@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  defaultEditorConfig,
+  defaultEditorPlanet,
   type BrushFalloff,
   type BrushMode,
   type BrushState,
-  type EditorConfig,
+  type EditorPlanet,
 } from "../types.ts";
 import { BrushSettings } from "./ui/BrushSettings.tsx";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
@@ -20,20 +20,20 @@ const BRUSH_MODES: { id: BrushMode; label: string }[] = [
 ];
 
 interface TerrainPanelProps {
-  config: EditorConfig;
-  onTerrainChange: (t: EditorConfig["terrain"]) => void;
-  onColorsChange: (c: EditorConfig["colors"]) => void;
+  planet: EditorPlanet;
+  onTerrainChange: (t: EditorPlanet["terrain"]) => void;
+  onColorsChange: (c: EditorPlanet["colors"]) => void;
   onBrushChange: (state: BrushState | null) => void;
 }
 
 export function TerrainPanel({
-  config,
+  planet,
   onTerrainChange,
   onColorsChange,
   onBrushChange,
 }: TerrainPanelProps) {
-  const t = config.terrain;
-  const c = config.colors;
+  const t = planet.terrain;
+  const c = planet.colors;
 
   const [brushMode, setBrushMode] = useState<BrushMode | null>(null);
   const [brushSize, setBrushSize] = useState(8);
@@ -78,16 +78,16 @@ export function TerrainPanel({
     if (brushMode) notifyBrush(brushMode, brushSize, brushStrength, v);
   }
 
-  function setT<K extends keyof EditorConfig["terrain"]>(key: K, val: EditorConfig["terrain"][K]) {
+  function setT<K extends keyof EditorPlanet["terrain"]>(key: K, val: EditorPlanet["terrain"][K]) {
     onTerrainChange({ ...t, [key]: val });
   }
 
-  function setC<K extends keyof EditorConfig["colors"]>(key: K, val: EditorConfig["colors"][K]) {
+  function setC<K extends keyof EditorPlanet["colors"]>(key: K, val: EditorPlanet["colors"][K]) {
     onColorsChange({ ...c, [key]: val });
   }
 
   function resetShape() {
-    const d = defaultEditorConfig().terrain;
+    const d = defaultEditorPlanet("_").terrain;
     onTerrainChange({
       ...t,
       seed: d.seed,
@@ -103,7 +103,7 @@ export function TerrainPanel({
   }
 
   function resetBiomes() {
-    const d = defaultEditorConfig().terrain;
+    const d = defaultEditorPlanet("_").terrain;
     onTerrainChange({
       ...t,
       waterLevel: d.waterLevel,
@@ -114,7 +114,7 @@ export function TerrainPanel({
   }
 
   function resetColors() {
-    onColorsChange(defaultEditorConfig().colors);
+    onColorsChange(defaultEditorPlanet("_").colors);
   }
 
   return (

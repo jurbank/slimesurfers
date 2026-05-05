@@ -28,7 +28,7 @@ export class RailSystem {
     this.scene = scene;
     const devTerrainCfg = {
       planet: { radius: DEV_MAP.planets[0]!.radius },
-      terrain: DEV_MAP.terrain,
+      terrain: DEV_MAP.planets[0]!.terrain,
     };
     for (const def of RAIL_DEFS) {
       const planet = DEV_MAP.planets.find((p) => p.id === def.planetId) ?? DEV_MAP.planets[0]!;
@@ -38,14 +38,10 @@ export class RailSystem {
 
   setMapData(msg: MapDataMessage): void {
     this.dispose(this.scene);
-    const terrainCfg = {
-      planet: { radius: msg.planets[0]!.radius },
-      terrain: msg.terrain,
-    };
     for (const def of msg.rails) {
-      const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0];
-      const center = planet?.center ?? { x: 0, y: 0, z: 0 };
-      this.buildRailMeshes(def, center, terrainCfg);
+      const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0]!;
+      const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+      this.buildRailMeshes(def, planet.center, terrainCfg);
     }
   }
 

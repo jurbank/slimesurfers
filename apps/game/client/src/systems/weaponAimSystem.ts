@@ -40,8 +40,9 @@ export interface WeaponFireOutput {
 }
 
 export class WeaponAimSystem {
-  private terrainCfg: TerrainConfig = GAME_CONFIG;
-  private planetCenters: THREE.Vector3[] = [new THREE.Vector3()];
+  private planetEntries: { center: THREE.Vector3; terrainCfg: TerrainConfig }[] = [
+    { center: new THREE.Vector3(), terrainCfg: GAME_CONFIG },
+  ];
   private lastAimDir: { x: number; y: number; z: number } = { x: 0, y: 0, z: 1 };
   private fireHoldStartMs: number | null = null;
   private prevFireDown = false;
@@ -60,23 +61,27 @@ export class WeaponAimSystem {
   private readonly resolvedAimDir = new THREE.Vector3();
 
   setMapData(msg: MapDataMessage): void {
-    this.planetCenters = msg.planets.map(
-      (p) => new THREE.Vector3(p.center.x, p.center.y, p.center.z),
-    );
-    this.terrainCfg = {
-      planet: { radius: msg.planets[0]!.radius },
-      terrain: msg.terrain,
-    };
+    this.planetEntries = msg.planets.map((p) => ({
+      center: new THREE.Vector3(p.center.x, p.center.y, p.center.z),
+      terrainCfg: { planet: { radius: p.radius }, terrain: p.terrain },
+    }));
   }
 
   nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
-    let nearest = this.planetCenters[0]!;
+    return this.findNearestPlanetEntry(pos).center;
+  }
+
+  private findNearestPlanetEntry(pos: THREE.Vector3): {
+    center: THREE.Vector3;
+    terrainCfg: TerrainConfig;
+  } {
+    let nearest = this.planetEntries[0]!;
     let minDist = Infinity;
-    for (const center of this.planetCenters) {
-      const d = pos.distanceTo(center);
+    for (const entry of this.planetEntries) {
+      const d = pos.distanceTo(entry.center);
       if (d < minDist) {
         minDist = d;
-        nearest = center;
+        nearest = entry;
       }
     }
     return nearest;
@@ -145,13 +150,13 @@ export class WeaponAimSystem {
     const stepDistance = Math.max(0.5, GAME_CONFIG.movement.collisionRadius);
     for (let d = stepDistance; d < maxDistance; d += stepDistance) {
       this.terrainSample.copy(this.camera.camera.position).addScaledVector(this.crosshairRayDir, d);
-      const planetCenter = this.nearestPlanetCenter(this.terrainSample);
-      const dx = this.terrainSample.x - planetCenter.x;
-      const dy = this.terrainSample.y - planetCenter.y;
-      const dz = this.terrainSample.z - planetCenter.z;
+      const { center, terrainCfg } = this.findNearestPlanetEntry(this.terrainSample);
+      const dx = this.terrainSample.x - center.x;
+      const dy = this.terrainSample.y - center.y;
+      const dz = this.terrainSample.z - center.z;
       const dist = Math.hypot(dx, dy, dz);
       if (dist < 1e-6) return d;
-      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, this.terrainCfg);
+      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, terrainCfg);
       if (dist <= surfaceRadius) return d;
     }
     return null;
@@ -165,13 +170,13 @@ export class WeaponAimSystem {
     const stepDistance = Math.max(0.5, GAME_CONFIG.movement.collisionRadius);
     for (let d = stepDistance; d < totalDist - stepDistance; d += stepDistance) {
       this.terrainSample.copy(cameraPos).addScaledVector(this.losDir, d);
-      const planetCenter = this.nearestPlanetCenter(this.terrainSample);
-      const dx = this.terrainSample.x - planetCenter.x;
-      const dy = this.terrainSample.y - planetCenter.y;
-      const dz = this.terrainSample.z - planetCenter.z;
+      const { center, terrainCfg } = this.findNearestPlanetEntry(this.terrainSample);
+      const dx = this.terrainSample.x - center.x;
+      const dy = this.terrainSample.y - center.y;
+      const dz = this.terrainSample.z - center.z;
       const dist = Math.hypot(dx, dy, dz);
       if (dist < 1e-6) return true;
-      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, this.terrainCfg);
+      const surfaceRadius = getTerrainRadius(dx / dist, dy / dist, dz / dist, terrainCfg);
       if (dist <= surfaceRadius) return true;
     }
     return false;

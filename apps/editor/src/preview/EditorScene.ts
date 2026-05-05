@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import {
   getTerrainHeight,
   getTerrainRadius,
@@ -25,10 +24,10 @@ import {
   type TrackSurfaceSample,
 } from "../tools/tracks/trackCarving.ts";
 import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
-import { primaryTerrainConfig } from "../types.ts";
 import type {
   BrushState,
   EditorConfig,
+  EditorPlanet,
   PerformanceStats,
   PreviewSpawnState,
   PropBrushState,
@@ -43,19 +42,26 @@ function hexToVec3(hex: number): THREE.Vector3 {
   );
 }
 
+interface PlanetRenderState {
+  group: THREE.Group;
+  terrainMesh: THREE.Mesh;
+  outlineMesh: THREE.Mesh;
+  waterMesh: THREE.Mesh | null;
+  atmosphereMesh: THREE.Mesh | null;
+  planetMaterial: THREE.ShaderMaterial;
+  waterMaterial: THREE.ShaderMaterial | null;
+  atmosphereMaterial: THREE.ShaderMaterial | null;
+}
+
 export class EditorScene {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly canvas: HTMLCanvasElement;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
-  private readonly planetMaterial: THREE.ShaderMaterial;
   private readonly outlineMaterial: THREE.ShaderMaterial;
-  private waterMaterial: THREE.ShaderMaterial | null = null;
-  private atmosphereMaterial: THREE.ShaderMaterial | null = null;
-  private readonly planetMeshes: THREE.Mesh[];
-  private waterMesh: THREE.Mesh | null = null;
-  private atmosphereMesh: THREE.Mesh | null = null;
+  private readonly planetRenders = new Map<string, PlanetRenderState>();
+  private activePlanetId: string;
   private animFrameId = 0;
   private lastPerformanceEmit = Number.NEGATIVE_INFINITY;
   private lastPerformanceSignature = "";
@@ -78,6 +84,7 @@ export class EditorScene {
     depthTest: false,
   });
   private readonly spawnRaycaster = new THREE.Raycaster();
+  private readonly selectRaycaster = new THREE.Raycaster();
   private tracks: TrackState[];
   private trackCarveSamples: TrackCarveSample[] = [];
   private trackSurfaceSamples: TrackSurfaceSample[] = [];
@@ -86,6 +93,10 @@ export class EditorScene {
   private isSpaceHeld = false;
   private isPreviewActive = false;
   private lastFrameTime = 0;
+  private hasBrush = false;
+  private hasPropBrush = false;
+  private hasTrackMode = false;
+  private selectionPointerStart: { x: number; y: number } | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -98,11 +109,13 @@ export class EditorScene {
     onTrackPointSelectionChange: (pointId: string | null) => void,
     private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
+    private readonly onPlanetSelected: ((id: string) => void) | null = null,
   ) {
     this.canvas = canvas;
     this.currentConfig = config;
     this.tracks = tracks;
     this.previewSpawn = previewSpawn;
+    this.activePlanetId = config.planets[0]!.id;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -111,7 +124,6 @@ export class EditorScene {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x080818);
     this.scene.fog = new THREE.Fog(0x080818, 400, 1200);
-
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.position.set(200, 300, 100);
@@ -127,7 +139,7 @@ export class EditorScene {
     this.controls.maxDistance = 600;
     this.controls.target.set(0, 0, 0);
 
-    // Phase 1: init sculpt data before planet build
+    // Phase 1: init sculpt data and tool instances before planet build
     this.brushTool = new BrushTool(config);
     this.propPaintTool = new PropPaintTool();
     this.trackTool = new TrackTool();
@@ -147,69 +159,38 @@ export class EditorScene {
       config,
       this.previewTerrainProvider,
     );
-    this.trackPreviewVisuals = new TrackPreviewVisuals(
-      this.scene,
-      config,
-      tracks,
-      (nx, ny, nz) =>
-        getTerrainRadius(nx, ny, nz, primaryTerrainConfig(this.currentConfig)) +
-        this.brushTool.getDisplacementAtNormal(nx, ny, nz),
-    );
-
-    const terrainCfg = primaryTerrainConfig(config);
-    const waterRadius = terrainCfg.planet.radius + config.terrain.waterLevel;
-    const atmosphereRadius = terrainCfg.planet.radius + GAME_CONFIG.shaders.atmosphere.height;
-
-    this.rebuildTrackCarveSamples();
-    const planetGeo = buildPlanetGeometry(
-      terrainCfg,
-      config.terrain.icosahedronDetail,
-      this.brushTool.getDisplacements(),
-    );
-    this.planetMaterial = createPlanetMaterial({
-      paintMask: null,
-      planetCenter: new THREE.Vector3(0, 0, 0),
-      waterRadius,
+    this.trackPreviewVisuals = new TrackPreviewVisuals(this.scene, config, tracks, (nx, ny, nz) => {
+      const planet = this.getPlanetById(this.activePlanetId);
+      return (
+        getTerrainRadius(nx, ny, nz, {
+          planet: { radius: planet.radius },
+          terrain: planet.terrain,
+        }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
+      );
     });
 
     this.outlineMaterial = createOutlineMaterial();
-    const terrainMesh = new THREE.Mesh(planetGeo, this.planetMaterial);
-    const outlineMesh = new THREE.Mesh(planetGeo, this.outlineMaterial);
-    this.planetMeshes = [terrainMesh, outlineMesh];
-    this.scene.add(terrainMesh, outlineMesh);
+
+    // Build render groups for all planets
+    this.syncPlanetRenders(config);
+    const activeRender = this.planetRenders.get(this.activePlanetId)!;
+
     this.createSpawnMarker();
     this.updateSpawnMarker();
-
-    if (GAME_CONFIG.shaders.atmosphere.enabled) {
-      this.atmosphereMaterial = createAtmosphereMaterial();
-      this.atmosphereMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(atmosphereRadius, 48, 48),
-        this.atmosphereMaterial,
-      );
-      this.atmosphereMesh.renderOrder = 2;
-      this.scene.add(this.atmosphereMesh);
-    }
-
-    if (GAME_CONFIG.shaders.water.enabled) {
-      this.waterMaterial = createWaterMaterial();
-      this.waterMesh = new THREE.Mesh(
-        buildWaterGeometry(waterRadius, terrainCfg),
-        this.waterMaterial,
-      );
-      this.waterMesh.renderOrder = 1;
-      this.scene.add(this.waterMesh);
-    }
 
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     canvas.addEventListener("pointerdown", this.onSpawnPointerDown, true);
+    canvas.addEventListener("pointerdown", this.onSelectionPointerDown);
+    canvas.addEventListener("pointerup", this.onSelectionPointerUp);
 
-    // Phase 2: connect brush tool now that the scene and meshes exist
+    // Phase 2: connect tools to active planet meshes
+    this.rebuildTrackCarveSamples();
     this.brushTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
-      planetMeshes: this.planetMeshes,
+      planetMeshes: [activeRender.terrainMesh, activeRender.outlineMesh],
       onStrokeEnd: () => this.rebuildPlanetMeshes(),
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
     });
@@ -217,14 +198,14 @@ export class EditorScene {
       canvas,
       camera: this.camera,
       scene: this.scene,
-      planetMesh: terrainMesh,
+      planetMesh: activeRender.terrainMesh,
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
     });
     this.trackTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
-      planetMesh: terrainMesh,
+      planetMesh: activeRender.terrainMesh,
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
       onTrackChange,
       onPointSelectionChange: onTrackPointSelectionChange,
@@ -242,16 +223,19 @@ export class EditorScene {
 
   setBrushState(state: BrushState | null): void {
     if (this.isPreviewActive && state) return;
+    this.hasBrush = state !== null;
     this.brushTool.setBrushState(state);
   }
 
   setPropBrushState(state: PropBrushState | null): void {
     if (this.isPreviewActive && state) return;
+    this.hasPropBrush = state !== null;
     this.propPaintTool.setBrushState(state);
   }
 
   setTrackToolState(state: TrackToolState | null): void {
     if (this.isPreviewActive) return;
+    this.hasTrackMode = state?.mode != null;
     this.trackTool.setTrackToolState(state);
   }
 
@@ -292,101 +276,90 @@ export class EditorScene {
     this.playerPreview.setActive(active);
   }
 
+  setActivePlanet(id: string, center: { x: number; y: number; z: number }): void {
+    if (this.activePlanetId === id) return;
+    this.activePlanetId = id;
+    const render = this.planetRenders.get(id);
+    if (render) {
+      this.brushTool.setPlanetMeshes([render.terrainMesh, render.outlineMesh]);
+      this.propPaintTool.setPlanetMesh(render.terrainMesh);
+      this.trackTool.setPlanetMesh(render.terrainMesh);
+      this.brushTool.resetSculptBase(this.getPlanetById(id));
+    }
+    const prevTarget = this.controls.target.clone();
+    const camOffset = this.camera.position.clone().sub(prevTarget);
+    const newTarget = new THREE.Vector3(center.x, center.y, center.z);
+    this.controls.target.copy(newTarget);
+    this.camera.position.copy(newTarget).add(camOffset);
+    this.controls.update();
+    this.updateSpawnMarker();
+  }
+
   rebuildPlanet(config: EditorConfig): void {
     this.currentConfig = config;
-    this.brushTool.syncDetail(config);
+    this.brushTool.syncDetailForPlanet(this.getPlanetById(this.activePlanetId));
     this.playerPreview.setConfig(config);
+    this.syncPlanetRenders(config);
     this.rebuildPlanetMeshes();
     this.trackPreviewVisuals.setConfig(config);
     this.rebuildWater(config);
     this.updateUniforms(config);
   }
 
-  rebuildWater(config: EditorConfig): void {
-    if (!this.waterMesh) return;
+  rebuildWater(_config: EditorConfig): void {
+    const activeRender = this.planetRenders.get(this.activePlanetId);
+    if (!activeRender?.waterMesh) return;
     this.rebuildTrackCarveSamples();
-    const terrainCfg = primaryTerrainConfig(config);
-    const waterRadius = terrainCfg.planet.radius + config.terrain.waterLevel;
+    const planet = this.getPlanetById(this.activePlanetId);
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+    const waterRadius = planet.radius + planet.terrain.waterLevel;
     const newGeo = buildWaterGeometry(waterRadius, terrainCfg);
-    this.waterMesh.geometry.dispose();
-    this.waterMesh.geometry = newGeo;
+    activeRender.waterMesh.geometry.dispose();
+    activeRender.waterMesh.geometry = newGeo;
   }
 
   updateUniforms(config: EditorConfig): void {
     this.currentConfig = config;
     this.playerPreview.setConfig(config);
-    const u = this.planetMaterial.uniforms;
-    const waterRadius = (config.planets[0]?.radius ?? 100) + config.terrain.waterLevel;
-
-    u.waterLevel.value = config.terrain.waterLevel;
-    u.sandBand.value = config.terrain.sandBand;
-    u.rockLevel.value = config.terrain.rockLevel;
-    u.snowLevel.value = config.terrain.snowLevel;
-    u.waterRadius.value = waterRadius;
-
-    u.sandColor.value = new THREE.Color(config.colors.sand);
-    u.grassColor.value = new THREE.Color(config.colors.grass);
-    u.rockColor.value = new THREE.Color(config.colors.rock);
-    u.snowColor.value = new THREE.Color(config.colors.snow);
-    u.waterDeepColor.value = hexToVec3(config.colors.waterDeep);
-
-    u.celBands.value = config.shaders.cel.bands;
-    u.celSoftness.value = config.shaders.cel.softness;
-    u.celHatchStrength.value = config.shaders.cel.hatchStrength;
-    u.celHatchScale.value = config.shaders.cel.hatchScale;
-
-    if (this.waterMaterial) {
-      this.waterMaterial.uniforms.celBands.value = config.shaders.cel.bands;
-      this.waterMaterial.uniforms.celSoftness.value = config.shaders.cel.softness;
-      this.waterMaterial.uniforms.celHatchStrength.value = config.shaders.cel.hatchStrength;
-      this.waterMaterial.uniforms.celHatchScale.value = config.shaders.cel.hatchScale;
+    this.syncPlanetRenders(config);
+    for (const planet of config.planets) {
+      const render = this.planetRenders.get(planet.id);
+      if (render) this.updateUniformsForPlanet(planet, render, config.shaders.cel);
     }
-
-    const { lighting } = config.shaders;
-    const azRad = (lighting.sunAzimuth * Math.PI) / 180;
-    const elRad = (lighting.sunElevation * Math.PI) / 180;
-    u.sunDirection.value = new THREE.Vector3(
-      Math.cos(elRad) * Math.sin(azRad),
-      Math.sin(elRad),
-      Math.cos(elRad) * Math.cos(azRad),
-    );
-    u.sunIntensity.value = lighting.sunIntensity;
-    u.ambientIntensity.value = lighting.ambientIntensity;
-    u.rimColor.value = new THREE.Color(lighting.rimColor);
-    u.rimStrength.value = lighting.rimStrength;
-    u.rimPower.value = lighting.rimPower;
-
-    if (this.atmosphereMaterial) {
-      const au = this.atmosphereMaterial.uniforms;
-      au.atmosphereColor.value = new THREE.Color(config.shaders.atmosphere.color);
-      au.intensity.value = config.shaders.atmosphere.intensity;
-      au.opacity.value = config.shaders.atmosphere.opacity;
-      au.fresnelPower.value = config.shaders.atmosphere.fresnelPower;
-      au.falloffPower.value = config.shaders.atmosphere.falloffPower;
-    }
-
     this.updateSpawnMarker();
   }
 
   resetCamera(): void {
-    this.camera.position.set(0, 40, 230);
-    this.controls.target.set(0, 0, 0);
+    const planet = this.getPlanetById(this.activePlanetId);
+    const cx = planet.center.x;
+    const cy = planet.center.y;
+    const cz = planet.center.z;
+    this.camera.position.set(cx, cy + 40, cz + 230);
+    this.controls.target.set(cx, cy, cz);
     this.controls.update();
   }
 
   getPerformanceStats(): PerformanceStats {
+    const terrainMeshes: (THREE.Mesh | null)[] = [];
+    const waterMeshes: (THREE.Mesh | null)[] = [];
+    const atmoMeshes: (THREE.Mesh | null)[] = [];
+    for (const render of this.planetRenders.values()) {
+      terrainMeshes.push(render.terrainMesh, render.outlineMesh);
+      waterMeshes.push(render.waterMesh);
+      atmoMeshes.push(render.atmosphereMesh);
+    }
     const groups = [
       createMetricGroup(
         "planet",
         "Planet Terrain",
-        this.planetMeshes,
+        terrainMeshes,
         "Terrain shader and outline pass both render the planet geometry",
       ),
-      createMetricGroup("water", "Water", [this.waterMesh], "Animated transparent shader pass"),
+      createMetricGroup("water", "Water", waterMeshes, "Animated transparent shader pass"),
       createMetricGroup(
         "atmosphere",
         "Atmosphere",
-        [this.atmosphereMesh],
+        atmoMeshes,
         "Transparent fresnel shell around the planet",
       ),
       ...this.propPaintTool.getPerformanceStats(),
@@ -427,34 +400,202 @@ export class EditorScene {
     this.trackPreviewVisuals.dispose();
     this.playerPreview.dispose();
     this.disposeSpawnMarker();
-    this.disposeEditorSceneResources();
+    for (const render of this.planetRenders.values()) {
+      this.disposePlanetRender(render);
+      this.scene.remove(render.group);
+    }
+    this.planetRenders.clear();
+    this.outlineMaterial.dispose();
     this.renderer.dispose();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     this.canvas.removeEventListener("pointerdown", this.onSpawnPointerDown, true);
+    this.canvas.removeEventListener("pointerdown", this.onSelectionPointerDown);
+    this.canvas.removeEventListener("pointerup", this.onSelectionPointerUp);
+  }
+
+  private getPlanetById(id: string): EditorPlanet {
+    return this.currentConfig.planets.find((p) => p.id === id) ?? this.currentConfig.planets[0]!;
+  }
+
+  private buildPlanetRender(planet: EditorPlanet): PlanetRenderState {
+    const group = new THREE.Group();
+    group.position.set(planet.center.x, planet.center.y, planet.center.z);
+
+    const waterRadius = planet.radius + planet.terrain.waterLevel;
+    const atmosphereRadius = planet.radius + planet.atmosphere.height;
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+
+    const displacements =
+      planet.id === this.activePlanetId ? this.brushTool.getDisplacements() : new Float32Array(0);
+    const planetGeo = buildPlanetGeometry(
+      terrainCfg,
+      planet.terrain.icosahedronDetail,
+      displacements,
+    );
+    const planetMaterial = createPlanetMaterial({
+      paintMask: null,
+      planetCenter: new THREE.Vector3(0, 0, 0),
+      planetRadius: planet.radius,
+      waterRadius,
+      waterLevel: planet.terrain.waterLevel,
+      sandBand: planet.terrain.sandBand,
+      snowLevel: planet.terrain.snowLevel,
+      rockLevel: planet.terrain.rockLevel,
+    });
+
+    const terrainMesh = new THREE.Mesh(planetGeo, planetMaterial);
+    const outlineMesh = new THREE.Mesh(planetGeo, this.outlineMaterial);
+    group.add(terrainMesh, outlineMesh);
+
+    let waterMesh: THREE.Mesh | null = null;
+    let waterMaterial: THREE.ShaderMaterial | null = null;
+    if (planet.hasWater) {
+      waterMaterial = createWaterMaterial();
+      waterMesh = new THREE.Mesh(buildWaterGeometry(waterRadius, terrainCfg), waterMaterial);
+      waterMesh.renderOrder = 1;
+      group.add(waterMesh);
+    }
+
+    let atmosphereMesh: THREE.Mesh | null = null;
+    let atmosphereMaterial: THREE.ShaderMaterial | null = null;
+    if (planet.atmosphere.enabled) {
+      atmosphereMaterial = createAtmosphereMaterial();
+      atmosphereMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(atmosphereRadius, 48, 48),
+        atmosphereMaterial,
+      );
+      atmosphereMesh.renderOrder = 2;
+      group.add(atmosphereMesh);
+    }
+
+    return {
+      group,
+      terrainMesh,
+      outlineMesh,
+      waterMesh,
+      atmosphereMesh,
+      planetMaterial,
+      waterMaterial,
+      atmosphereMaterial,
+    };
+  }
+
+  private disposePlanetRender(render: PlanetRenderState): void {
+    render.terrainMesh.geometry.dispose();
+    render.planetMaterial.dispose();
+    render.waterMesh?.geometry.dispose();
+    render.waterMaterial?.dispose();
+    render.atmosphereMesh?.geometry.dispose();
+    render.atmosphereMaterial?.dispose();
+  }
+
+  private syncPlanetRenders(config: EditorConfig): void {
+    for (const planet of config.planets) {
+      if (!this.planetRenders.has(planet.id)) {
+        const render = this.buildPlanetRender(planet);
+        this.planetRenders.set(planet.id, render);
+        this.scene.add(render.group);
+      }
+      const render = this.planetRenders.get(planet.id)!;
+      render.group.position.set(planet.center.x, planet.center.y, planet.center.z);
+    }
+
+    const configIds = new Set(config.planets.map((p) => p.id));
+    for (const [id, render] of this.planetRenders) {
+      if (!configIds.has(id)) {
+        this.disposePlanetRender(render);
+        this.scene.remove(render.group);
+        this.planetRenders.delete(id);
+      }
+    }
+  }
+
+  private updateUniformsForPlanet(
+    planet: EditorPlanet,
+    render: PlanetRenderState,
+    cel: EditorConfig["shaders"]["cel"],
+  ): void {
+    const u = render.planetMaterial.uniforms;
+    const waterRadius = planet.radius + planet.terrain.waterLevel;
+
+    u.waterLevel.value = planet.terrain.waterLevel;
+    u.sandBand.value = planet.terrain.sandBand;
+    u.rockLevel.value = planet.terrain.rockLevel;
+    u.snowLevel.value = planet.terrain.snowLevel;
+    u.waterRadius.value = waterRadius;
+
+    u.sandColor.value = new THREE.Color(planet.colors.sand);
+    u.grassColor.value = new THREE.Color(planet.colors.grass);
+    u.rockColor.value = new THREE.Color(planet.colors.rock);
+    u.snowColor.value = new THREE.Color(planet.colors.snow);
+    u.waterDeepColor.value = hexToVec3(planet.colors.waterDeep);
+
+    u.celBands.value = cel.bands;
+    u.celSoftness.value = cel.softness;
+    u.celHatchStrength.value = cel.hatchStrength;
+    u.celHatchScale.value = cel.hatchScale;
+
+    if (render.waterMaterial) {
+      render.waterMaterial.uniforms.celBands.value = cel.bands;
+      render.waterMaterial.uniforms.celSoftness.value = cel.softness;
+      render.waterMaterial.uniforms.celHatchStrength.value = cel.hatchStrength;
+      render.waterMaterial.uniforms.celHatchScale.value = cel.hatchScale;
+    }
+
+    const { lighting } = planet;
+    const azRad = (lighting.sunAzimuth * Math.PI) / 180;
+    const elRad = (lighting.sunElevation * Math.PI) / 180;
+    u.sunDirection.value = new THREE.Vector3(
+      Math.cos(elRad) * Math.sin(azRad),
+      Math.sin(elRad),
+      Math.cos(elRad) * Math.cos(azRad),
+    );
+    u.sunIntensity.value = lighting.sunIntensity;
+    u.ambientIntensity.value = lighting.ambientIntensity;
+    u.rimColor.value = new THREE.Color(lighting.rimColor);
+    u.rimStrength.value = lighting.rimStrength;
+    u.rimPower.value = lighting.rimPower;
+
+    if (render.atmosphereMaterial) {
+      const au = render.atmosphereMaterial.uniforms;
+      au.atmosphereColor.value = new THREE.Color(planet.atmosphere.color);
+      au.intensity.value = planet.atmosphere.intensity;
+      au.opacity.value = planet.atmosphere.opacity;
+      au.fresnelPower.value = planet.atmosphere.fresnelPower;
+      au.falloffPower.value = planet.atmosphere.falloffPower;
+    }
   }
 
   private rebuildPlanetMeshes(): void {
+    const activeRender = this.planetRenders.get(this.activePlanetId);
+    if (!activeRender) return;
     this.rebuildTrackCarveSamples();
-    const cfg = primaryTerrainConfig(this.currentConfig);
+    const planet = this.getPlanetById(this.activePlanetId);
+    const cfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
     const newGeo = buildPlanetGeometry(
       cfg,
-      this.currentConfig.terrain.icosahedronDetail,
+      planet.terrain.icosahedronDetail,
       this.brushTool.getDisplacements(),
     );
-    const oldGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
-    for (const mesh of this.planetMeshes) {
-      mesh.geometry = newGeo;
-    }
-    oldGeometries.forEach((geometry) => geometry.dispose());
+    const oldGeo = activeRender.terrainMesh.geometry;
+    activeRender.terrainMesh.geometry = newGeo;
+    activeRender.outlineMesh.geometry = newGeo;
+    oldGeo.dispose();
     this.trackPreviewVisuals.setConfig(this.currentConfig);
     this.trackTool.syncSurface();
   }
 
   private rebuildTrackCarveSamples(): void {
-    const getRadiusAtNormal = (nx: number, ny: number, nz: number) =>
-      getTerrainRadius(nx, ny, nz, primaryTerrainConfig(this.currentConfig)) +
-      this.brushTool.getDisplacementAtNormal(nx, ny, nz);
+    const getRadiusAtNormal = (nx: number, ny: number, nz: number) => {
+      const planet = this.getPlanetById(this.activePlanetId);
+      return (
+        getTerrainRadius(nx, ny, nz, {
+          planet: { radius: planet.radius },
+          terrain: planet.terrain,
+        }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
+      );
+    };
     this.trackCarveSamples = buildTrackCarveSamples(
       this.tracks,
       this.currentConfig,
@@ -501,14 +642,16 @@ export class EditorScene {
     const normal = new THREE.Vector3(...this.previewSpawn.normal);
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
+    const planet = this.getPlanetById(this.activePlanetId);
     const radius = this.previewTerrainProvider.getRadius(
       normal.x,
       normal.y,
       normal.z,
-      primaryTerrainConfig(this.currentConfig),
-      "planet-0",
+      { planet: { radius: planet.radius }, terrain: planet.terrain },
+      planet.id,
     );
-    this.spawnMarker.position.copy(normal).multiplyScalar(radius + 1.3);
+    const center = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
+    this.spawnMarker.position.copy(center).addScaledVector(normal, radius + 1.3);
     this.spawnMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
   }
 
@@ -567,19 +710,6 @@ export class EditorScene {
     this.onPerformanceStats(stats);
   }
 
-  private disposeEditorSceneResources(): void {
-    const planetGeometries = new Set(this.planetMeshes.map((mesh) => mesh.geometry));
-    planetGeometries.forEach((geometry) => geometry.dispose());
-    this.planetMaterial.dispose();
-    this.outlineMaterial.dispose();
-
-    if (this.waterMesh) this.waterMesh.geometry.dispose();
-    this.waterMaterial?.dispose();
-
-    if (this.atmosphereMesh) this.atmosphereMesh.geometry.dispose();
-    this.atmosphereMaterial?.dispose();
-  }
-
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.code === "Space") this.isSpaceHeld = true;
   };
@@ -594,15 +724,47 @@ export class EditorScene {
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.spawnRaycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-    const hit = this.spawnRaycaster.intersectObject(this.planetMeshes[0])[0];
+    const activeRender = this.planetRenders.get(this.activePlanetId);
+    if (!activeRender) return;
+    const hit = this.spawnRaycaster.intersectObject(activeRender.terrainMesh)[0];
     if (!hit) return;
 
     e.preventDefault();
     e.stopImmediatePropagation();
-    const normal = hit.point.clone().normalize();
+    const planet = this.getPlanetById(this.activePlanetId);
+    const center = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
+    const normal = hit.point.clone().sub(center).normalize();
     const spawn: PreviewSpawnState = { normal: [normal.x, normal.y, normal.z] };
     this.setPreviewSpawn(spawn);
     this.onPreviewSpawnChange(spawn);
+  };
+
+  private readonly onSelectionPointerDown = (e: PointerEvent): void => {
+    if (e.button !== 0) return;
+    this.selectionPointerStart = { x: e.clientX, y: e.clientY };
+  };
+
+  private readonly onSelectionPointerUp = (e: PointerEvent): void => {
+    if (e.button !== 0 || !this.selectionPointerStart) return;
+    const dx = e.clientX - this.selectionPointerStart.x;
+    const dy = e.clientY - this.selectionPointerStart.y;
+    this.selectionPointerStart = null;
+
+    if (dx * dx + dy * dy > 25) return; // orbit drag, not a click
+    if (!this.onPlanetSelected || this.isPreviewActive || this.spawnPlacementActive) return;
+    if (this.hasBrush || this.hasPropBrush || this.hasTrackMode) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this.selectRaycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+
+    for (const [planetId, render] of this.planetRenders) {
+      if (this.selectRaycaster.intersectObject(render.terrainMesh).length > 0) {
+        this.onPlanetSelected(planetId);
+        return;
+      }
+    }
   };
 
   private start(): void {
@@ -612,8 +774,10 @@ export class EditorScene {
       const now = performance.now();
       const dt = this.lastFrameTime > 0 ? (now - this.lastFrameTime) / 1000 : 1 / 60;
       this.lastFrameTime = now;
-      this.planetMaterial.uniforms.time.value = t;
-      if (this.waterMaterial) this.waterMaterial.uniforms.time.value = t;
+      for (const render of this.planetRenders.values()) {
+        render.planetMaterial.uniforms.time.value = t;
+        if (render.waterMaterial) render.waterMaterial.uniforms.time.value = t;
+      }
       if (this.isPreviewActive) {
         this.playerPreview.update(dt);
       } else {

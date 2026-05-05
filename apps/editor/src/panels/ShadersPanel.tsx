@@ -1,47 +1,60 @@
-import { defaultEditorConfig, type EditorConfig } from "../types.ts";
+import {
+  defaultEditorPlanet,
+  defaultEditorConfig,
+  type EditorConfig,
+  type EditorPlanet,
+} from "../types.ts";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
 
 interface ShadersPanelProps {
-  config: EditorConfig;
+  planet: EditorPlanet;
+  shaders: EditorConfig["shaders"];
+  onPlanetChange: (p: EditorPlanet) => void;
   onShadersChange: (s: EditorConfig["shaders"]) => void;
 }
 
-export function ShadersPanel({ config, onShadersChange }: ShadersPanelProps) {
-  const { cel, atmosphere, lighting } = config.shaders;
+export function ShadersPanel({
+  planet,
+  shaders,
+  onPlanetChange,
+  onShadersChange,
+}: ShadersPanelProps) {
+  const { cel } = shaders;
+  const { atmosphere, lighting } = planet;
 
   function setCel<K extends keyof EditorConfig["shaders"]["cel"]>(
     key: K,
     val: EditorConfig["shaders"]["cel"][K],
   ) {
-    onShadersChange({ ...config.shaders, cel: { ...cel, [key]: val } });
+    onShadersChange({ ...shaders, cel: { ...cel, [key]: val } });
   }
 
-  function setAtmo<K extends keyof EditorConfig["shaders"]["atmosphere"]>(
+  function setAtmo<K extends keyof EditorPlanet["atmosphere"]>(
     key: K,
-    val: EditorConfig["shaders"]["atmosphere"][K],
+    val: EditorPlanet["atmosphere"][K],
   ) {
-    onShadersChange({ ...config.shaders, atmosphere: { ...atmosphere, [key]: val } });
+    onPlanetChange({ ...planet, atmosphere: { ...atmosphere, [key]: val } });
   }
 
-  function setLighting<K extends keyof EditorConfig["shaders"]["lighting"]>(
+  function setLighting<K extends keyof EditorPlanet["lighting"]>(
     key: K,
-    val: EditorConfig["shaders"]["lighting"][K],
+    val: EditorPlanet["lighting"][K],
   ) {
-    onShadersChange({ ...config.shaders, lighting: { ...lighting, [key]: val } });
+    onPlanetChange({ ...planet, lighting: { ...lighting, [key]: val } });
   }
 
   function resetLighting() {
-    onShadersChange({ ...config.shaders, lighting: defaultEditorConfig().shaders.lighting });
+    onPlanetChange({ ...planet, lighting: defaultEditorPlanet("_").lighting });
   }
 
   function resetCel() {
-    onShadersChange({ ...config.shaders, cel: defaultEditorConfig().shaders.cel });
+    onShadersChange({ ...shaders, cel: defaultEditorConfig().shaders.cel });
   }
 
   function resetAtmosphere() {
-    onShadersChange({ ...config.shaders, atmosphere: defaultEditorConfig().shaders.atmosphere });
+    onPlanetChange({ ...planet, atmosphere: defaultEditorPlanet("_").atmosphere });
   }
 
   return (

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
-import { primaryTerrainConfig } from "../../types.ts";
-import type { BrushFalloff, BrushState, EditorConfig } from "../../types.ts";
+import type { BrushFalloff, BrushState, EditorConfig, EditorPlanet } from "../../types.ts";
 
 const BRUSH_COLORS: Record<string, number> = {
   raise: 0x00ff99,
@@ -44,7 +43,7 @@ export class BrushTool {
   private flattenTarget: number | null = null;
 
   constructor(config: EditorConfig) {
-    this.initSculptBase(config);
+    this.initSculptBase(config.planets[0]!);
   }
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -80,11 +79,22 @@ export class BrushTool {
     if (this.canvas) this.canvas.style.cursor = "crosshair";
   }
 
-  // Called by EditorScene when icosahedronDetail may have changed
+  setPlanetMeshes(meshes: THREE.Mesh[]): void {
+    this.planetMeshes = meshes;
+  }
+
   syncDetail(config: EditorConfig): void {
-    if (config.terrain.icosahedronDetail !== this.sculptDetail) {
-      this.initSculptBase(config);
+    this.syncDetailForPlanet(config.planets[0]!);
+  }
+
+  syncDetailForPlanet(planet: EditorPlanet): void {
+    if (planet.terrain.icosahedronDetail !== this.sculptDetail) {
+      this.initSculptBase(planet);
     }
+  }
+
+  resetSculptBase(planet: EditorPlanet): void {
+    this.initSculptBase(planet);
   }
 
   getDisplacements(): Float32Array {
@@ -132,9 +142,9 @@ export class BrushTool {
 
   // ─── Sculpt base ──────────────────────────────────────────────────────────
 
-  private initSculptBase(config: EditorConfig): void {
-    const detail = config.terrain.icosahedronDetail;
-    const indexed = new THREE.IcosahedronGeometry(config.planets[0]!.radius, detail);
+  private initSculptBase(planet: EditorPlanet): void {
+    const detail = planet.terrain.icosahedronDetail;
+    const indexed = new THREE.IcosahedronGeometry(planet.radius, detail);
     const geo = indexed.toNonIndexed();
     indexed.dispose();
 
@@ -155,7 +165,10 @@ export class BrushTool {
       this.sculptBaseNormals[i * 3] = nx;
       this.sculptBaseNormals[i * 3 + 1] = ny;
       this.sculptBaseNormals[i * 3 + 2] = nz;
-      this.sculptBaseHeights[i] = getTerrainRadius(nx, ny, nz, primaryTerrainConfig(config));
+      this.sculptBaseHeights[i] = getTerrainRadius(nx, ny, nz, {
+        planet: { radius: planet.radius },
+        terrain: planet.terrain,
+      });
     }
 
     geo.dispose();

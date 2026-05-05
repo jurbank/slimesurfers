@@ -8,7 +8,12 @@ import {
 export interface PlanetMaterialOptions {
   paintMask: THREE.Texture | null;
   planetCenter: THREE.Vector3;
+  planetRadius: number;
   waterRadius: number;
+  waterLevel: number;
+  sandBand: number;
+  snowLevel: number;
+  rockLevel: number;
 }
 
 export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.ShaderMaterial {
@@ -16,12 +21,12 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
     uniforms: {
       paintMask: { value: options.paintMask },
       planetCenter: { value: options.planetCenter },
-      planetRadius: { value: GAME_CONFIG.planet.radius },
+      planetRadius: { value: options.planetRadius },
       waterRadius: { value: options.waterRadius },
-      waterLevel: { value: GAME_CONFIG.terrain.waterLevel },
-      sandBand: { value: GAME_CONFIG.terrain.sandBand },
-      snowLevel: { value: GAME_CONFIG.terrain.snowLevel },
-      rockLevel: { value: GAME_CONFIG.terrain.rockLevel },
+      waterLevel: { value: options.waterLevel },
+      sandBand: { value: options.sandBand },
+      snowLevel: { value: options.snowLevel },
+      rockLevel: { value: options.rockLevel },
       waterDeepColor: { value: new THREE.Vector3(...GAME_CONFIG.shaders.water.deepColor) },
       sandColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.sandColor) },
       grassColor: { value: new THREE.Color(GAME_CONFIG.shaders.terrain.grassColor) },

@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
+type PlanetRef = { id: string; center: { x: number; y: number; z: number } };
 import type { SimPaintStamp, SimPlanetPaintState, SimVec3 } from "../match/simState.ts";
 
 export interface PaintDetectionResult {
@@ -152,7 +152,7 @@ export function getPaintAtPoint(
   pos: SimVec3,
   planetId: string,
   planets: Map<string, SimPlanetPaintState>,
-  planetDefs: RuntimeMapPlanet[],
+  planetDefs: PlanetRef[],
 ): PaintDetectionResult | null {
   const planetState = planets.get(planetId);
   const planetPos = planetDefs.find((p) => p.id === planetId);

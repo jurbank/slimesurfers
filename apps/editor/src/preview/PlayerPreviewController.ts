@@ -38,7 +38,7 @@ function createStepConfig(config: EditorConfig): StepConfig {
     planet: { radius: config.planets[0]!.radius },
     movement: { ...GAME_CONFIG.movement },
     rail: { ...GAME_CONFIG.rail },
-    terrain: { ...config.terrain },
+    terrain: { ...config.planets[0]!.terrain },
   };
 }
 

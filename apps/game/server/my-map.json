@@ -10,22 +10,117 @@
         "y": 0,
         "z": 0
       },
-      "radius": 100
+      "radius": 82,
+      "terrain": {
+        "seed": 42,
+        "baseAmplitude": 54,
+        "frequency": 1.4,
+        "octaves": 3,
+        "lacunarity": 2.2,
+        "persistence": 0.45,
+        "heightSmoothingStrength": 0.45,
+        "heightSmoothingSampleAngle": 0.035,
+        "icosahedronDetail": 30,
+        "waterLevel": -3,
+        "sandBand": 1.5,
+        "rockLevel": 7,
+        "snowLevel": 9
+      },
+      "colors": {
+        "sand": 13942904,
+        "grass": 4039485,
+        "rock": 9079418,
+        "snow": 15660280,
+        "waterDeep": 669811
+      },
+      "atmosphere": {
+        "enabled": true,
+        "height": 18,
+        "color": 6404351,
+        "intensity": 0.85,
+        "opacity": 0.42,
+        "fresnelPower": 2.4,
+        "falloffPower": 1.5
+      },
+      "lighting": {
+        "sunAzimuth": 63,
+        "sunElevation": 53,
+        "sunIntensity": 1,
+        "ambientIntensity": 0.5,
+        "rimColor": 9090303,
+        "rimStrength": 0.4,
+        "rimPower": 3
+      },
+      "props": {
+        "treeDensity": 400,
+        "cactusDensity": 200,
+        "seed": 12345,
+        "rocketEnabled": true
+      },
+      "hasWater": true
+    },
+    {
+      "id": "planet-1",
+      "center": {
+        "x": 400,
+        "y": 0,
+        "z": 0
+      },
+      "radius": 68,
+      "terrain": {
+        "seed": 42,
+        "baseAmplitude": 23,
+        "frequency": 1.2,
+        "octaves": 3,
+        "lacunarity": 2.2,
+        "persistence": 0.45,
+        "heightSmoothingStrength": 0.45,
+        "heightSmoothingSampleAngle": 0.035,
+        "icosahedronDetail": 15,
+        "waterLevel": -3,
+        "sandBand": 1.5,
+        "rockLevel": 7,
+        "snowLevel": 9
+      },
+      "colors": {
+        "sand": 13942904,
+        "grass": 4039485,
+        "rock": 9079418,
+        "snow": 15660280,
+        "waterDeep": 669811
+      },
+      "atmosphere": {
+        "enabled": true,
+        "height": 18,
+        "color": 6404351,
+        "intensity": 0.85,
+        "opacity": 0.42,
+        "fresnelPower": 2.4,
+        "falloffPower": 1.5
+      },
+      "lighting": {
+        "sunAzimuth": 63,
+        "sunElevation": 53,
+        "sunIntensity": 1,
+        "ambientIntensity": 0.5,
+        "rimColor": 9090303,
+        "rimStrength": 0.4,
+        "rimPower": 3
+      },
+      "props": {
+        "treeDensity": 400,
+        "cactusDensity": 200,
+        "seed": 12345,
+        "rocketEnabled": true
+      },
+      "hasWater": true
     }
   ],
-  "terrain": {
-    "seed": 42,
-    "baseAmplitude": 18,
-    "frequency": 1.4,
-    "octaves": 3,
-    "lacunarity": 2.2,
-    "persistence": 0.45,
-    "heightSmoothingStrength": 0.45,
-    "heightSmoothingSampleAngle": 0.035,
-    "waterLevel": -3,
-    "snowLevel": 9,
-    "sandBand": 1.5,
-    "rockLevel": 7
+  "cel": {
+    "bands": 3,
+    "softness": 0.02,
+    "hatchStrength": 0.15,
+    "hatchScale": 5
   },
   "rails": [],
   "spawns": {

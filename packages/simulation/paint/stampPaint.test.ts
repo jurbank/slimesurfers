@@ -13,7 +13,7 @@ function createSimState(): SimMatchState {
   return {
     players: new Map(),
     planetDefs: DEV_MAP.planets,
-    mapTerrain: DEV_MAP.terrain,
+    mapTerrain: DEV_MAP.planets[0]!.terrain,
     planets: new Map(),
     railStates: new Map(),
     projectiles: new Map(),
@@ -62,7 +62,7 @@ function findTerrainNormal(predicate: (height: number) => boolean): {
       };
       const terrainCfg = {
         planet: { radius: DEV_MAP.planets[0]!.radius },
-        terrain: DEV_MAP.terrain,
+        terrain: DEV_MAP.planets[0]!.terrain,
       };
       const height = getTerrainHeight(normal.x, normal.y, normal.z, terrainCfg);
       if (predicate(height)) {
@@ -130,10 +130,10 @@ describe("stampPaint", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
-    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.terrain };
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.planets[0]!.terrain };
     const normal = findTerrainNormal((height) => {
-      const depth = DEV_MAP.terrain.waterLevel - height;
-      return depth > 0 && depth <= DEV_MAP.terrain.sandBand;
+      const depth = DEV_MAP.planets[0]!.terrain.waterLevel - height;
+      return depth > 0 && depth <= DEV_MAP.planets[0]!.terrain.sandBand;
     });
     const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 
@@ -159,9 +159,10 @@ describe("stampPaint", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
-    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.terrain };
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.planets[0]!.terrain };
     const normal = findTerrainNormal(
-      (height) => DEV_MAP.terrain.waterLevel - height > DEV_MAP.terrain.sandBand,
+      (height) =>
+        DEV_MAP.planets[0]!.terrain.waterLevel - height > DEV_MAP.planets[0]!.terrain.sandBand,
     );
     const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 

@@ -6,7 +6,7 @@ import {
 } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
-import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
+import type { PlanetData } from "@splat/simulation/movement/simulatedMovement.ts";
 import type { ProjectileSnapshot } from "@splat/protocol/network/serverMessages.ts";
 import { createSlimeMaterial } from "../materials/slimeMaterial.ts";
 
@@ -60,7 +60,7 @@ export interface RemovedProjectile {
 
 export class ProjectileSystem {
   private readonly scene: THREE.Scene;
-  private mapPlanets: RuntimeMapPlanet[] = DEV_MAP.planets;
+  private mapPlanets: PlanetData[] = DEV_MAP.planets;
   private readonly projectiles = new Map<string, ProjectileState>();
   private readonly tempVelocity = new THREE.Vector3();
   private readonly tempForward = new THREE.Vector3();
@@ -79,7 +79,7 @@ export class ProjectileSystem {
     this.scene = scene;
   }
 
-  setMapPlanets(planets: RuntimeMapPlanet[]): void {
+  setMapPlanets(planets: PlanetData[]): void {
     this.mapPlanets = planets;
   }
 

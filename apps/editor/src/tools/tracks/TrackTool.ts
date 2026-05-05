@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { type TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
 import { createMetricGroup } from "../../performance/geometryStats.ts";
-import { primaryTerrainConfig } from "../../types.ts";
 import type { PerformanceMetricGroup } from "../../types.ts";
 import { Gizmo } from "../Gizmo.ts";
 import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
@@ -95,6 +94,10 @@ export class TrackTool {
   private gizmo: Gizmo | null = null;
   private selectedPointId: string | null = null;
   private isProjectingGizmo = false;
+
+  setPlanetMesh(mesh: THREE.Mesh): void {
+    this.planetMesh = mesh;
+  }
 
   connect(options: TrackConnectOptions): void {
     this.canvas = options.canvas;
@@ -377,9 +380,10 @@ export class TrackTool {
     );
 
     const samples: TrackSample[] = [];
-    const waterLevel = this.config?.terrain.waterLevel ?? 0;
-    const terrainCfg = this.config
-      ? primaryTerrainConfig(this.config)
+    const p0 = this.config?.planets[0];
+    const waterLevel = p0?.terrain.waterLevel ?? 0;
+    const terrainCfg = p0
+      ? { planet: { radius: p0.radius }, terrain: p0.terrain }
       : {
           planet: { radius: 120 },
           terrain: {
@@ -646,8 +650,8 @@ export class TrackTool {
 
     const bridgeData: { matrix: THREE.Matrix4 }[] = [];
     const pillarSpacing = 4;
-    const waterLevel = this.config?.terrain.waterLevel ?? 0;
-    const planetRadius = this.config ? primaryTerrainConfig(this.config).planet.radius : 120;
+    const waterLevel = this.config?.planets[0]?.terrain.waterLevel ?? 0;
+    const planetRadius = this.config?.planets[0]?.radius ?? 120;
     const waterRadius = planetRadius + waterLevel;
 
     for (let i = 0; i < samples.length; i += pillarSpacing) {

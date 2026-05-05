@@ -12,6 +12,7 @@ interface PlanetPreviewProps {
   onTrackPointSelectionChange: (pointId: string | null) => void;
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
+  onPlanetSelected: (id: string) => void;
 }
 
 export function PlanetPreview({
@@ -23,6 +24,7 @@ export function PlanetPreview({
   onTrackPointSelectionChange,
   onPreviewSpawnChange,
   onPerformanceStats,
+  onPlanetSelected,
 }: PlanetPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,6 +46,7 @@ export function PlanetPreview({
       onTrackPointSelectionChange,
       onPreviewSpawnChange,
       onPerformanceStats,
+      onPlanetSelected,
     );
     onScene(scene);
 

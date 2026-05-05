@@ -55,19 +55,24 @@ describe("validateRuntimeMapData", () => {
   });
 
   test("rejects missing terrain field", () => {
-    const { seed: _seed, ...terrainWithoutSeed } = DEV_MAP.terrain;
-    const result = validateRuntimeMapData({ ...DEV_MAP, terrain: terrainWithoutSeed });
+    const planet0 = DEV_MAP.planets[0]!;
+    const { seed: _seed, ...terrainWithoutSeed } = planet0.terrain;
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [{ ...planet0, terrain: terrainWithoutSeed }],
+    });
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "terrain.seed")).toBe(true);
+    expect(result.errors.some((e) => e.field === "planets[0].terrain.seed")).toBe(true);
   });
 
   test("rejects non-integer octaves", () => {
+    const planet0 = DEV_MAP.planets[0]!;
     const result = validateRuntimeMapData({
       ...DEV_MAP,
-      terrain: { ...DEV_MAP.terrain, octaves: 2.5 },
+      planets: [{ ...planet0, terrain: { ...planet0.terrain, octaves: 2.5 } }],
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "terrain.octaves")).toBe(true);
+    expect(result.errors.some((e) => e.field === "planets[0].terrain.octaves")).toBe(true);
   });
 
   test("rejects rail referencing unknown planet", () => {

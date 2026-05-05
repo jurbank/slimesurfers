@@ -131,7 +131,7 @@ function makeAirborneSkier(player: ReturnType<MatchSimulation["addPlayer"]>): vo
   const planet = DEV_MAP.planets[0]!;
   player.pos = {
     x: planet.center.x,
-    y: planet.center.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 18,
+    y: planet.center.y + planet.radius + DEV_MAP.planets[0]!.terrain.baseAmplitude + 18,
     z: planet.center.z,
   };
   player.vel = { x: 0, y: 6, z: 0 };
@@ -474,7 +474,8 @@ describe("MatchSimulation", () => {
   });
 
   it("keeps pickup spawn anchors above the waterline", () => {
-    const waterRadius = GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.waterLevel;
+    const planet = DEV_MAP.planets[0]!;
+    const waterRadius = planet.radius + DEV_MAP.planets[0]!.terrain.waterLevel;
 
     for (const spawn of [...MAP_WEAPON_PICKUP_SPAWNS, ...CLUSTER_WEAPON_PICKUP_SPAWNS]) {
       const terrainRadius = getTerrainRadius(
@@ -720,8 +721,7 @@ describe("MatchSimulation", () => {
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const machineGun = getWeaponDefinition(WeaponId.MachineGun);
     const planet = DEV_MAP.planets[0]!;
-    const startY =
-      planet.center.y + GAME_CONFIG.planet.radius + GAME_CONFIG.terrain.baseAmplitude + 30;
+    const startY = planet.center.y + planet.radius + DEV_MAP.planets[0]!.terrain.baseAmplitude + 30;
 
     simulation.matchState.projectiles.set("stream-arc-test", {
       id: "stream-arc-test",

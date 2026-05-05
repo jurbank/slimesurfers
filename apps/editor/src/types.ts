@@ -1,5 +1,4 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import type { TerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
 
 export type BrushMode = "raise" | "lower" | "smooth" | "flatten";
 export type BrushFalloff = "smooth" | "linear" | "sharp";
@@ -34,12 +33,7 @@ export interface EditorPlanet {
   id: string;
   center: { x: number; y: number; z: number };
   radius: number;
-}
-
-export interface EditorConfig {
-  planets: EditorPlanet[];
   terrain: {
-    // Geometry params — require mesh rebuild
     seed: number;
     baseAmplitude: number;
     frequency: number;
@@ -49,7 +43,6 @@ export interface EditorConfig {
     heightSmoothingStrength: number;
     heightSmoothingSampleAngle: number;
     icosahedronDetail: number;
-    // Biome thresholds — uniform-only
     waterLevel: number;
     sandBand: number;
     rockLevel: number;
@@ -62,28 +55,41 @@ export interface EditorConfig {
     snow: number;
     waterDeep: number;
   };
+  atmosphere: {
+    enabled: boolean;
+    height: number;
+    color: number;
+    intensity: number;
+    opacity: number;
+    fresnelPower: number;
+    falloffPower: number;
+  };
+  lighting: {
+    sunAzimuth: number;
+    sunElevation: number;
+    sunIntensity: number;
+    ambientIntensity: number;
+    rimColor: number;
+    rimStrength: number;
+    rimPower: number;
+  };
+  props: {
+    treeDensity: number;
+    cactusDensity: number;
+    seed: number;
+    rocketEnabled: boolean;
+  };
+  hasWater: boolean;
+}
+
+export interface EditorConfig {
+  planets: EditorPlanet[];
   shaders: {
     cel: {
       bands: number;
       softness: number;
       hatchStrength: number;
       hatchScale: number;
-    };
-    atmosphere: {
-      color: number;
-      intensity: number;
-      opacity: number;
-      fresnelPower: number;
-      falloffPower: number;
-    };
-    lighting: {
-      sunAzimuth: number;
-      sunElevation: number;
-      sunIntensity: number;
-      ambientIntensity: number;
-      rimColor: number;
-      rimStrength: number;
-      rimPower: number;
     };
   };
 }
@@ -118,19 +124,14 @@ function rgbToHex(r: number, g: number, b: number): number {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }
 
-export function primaryTerrainConfig(config: EditorConfig): TerrainConfig {
-  return {
-    planet: { radius: config.planets[0]?.radius ?? 100 },
-    terrain: config.terrain,
-  };
-}
-
-export function defaultEditorConfig(): EditorConfig {
+export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): EditorPlanet {
   const g = GAME_CONFIG;
   const [wr, wg, wb] = g.shaders.water.deepColor;
   const [ar, ag, ab] = g.shaders.atmosphere.color;
   return {
-    planets: [{ id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: g.planet.radius }],
+    id,
+    center,
+    radius: g.planet.radius,
     terrain: {
       seed: g.terrain.seed,
       baseAmplitude: g.terrain.baseAmplitude,
@@ -153,6 +154,38 @@ export function defaultEditorConfig(): EditorConfig {
       snow: g.shaders.terrain.snowColor,
       waterDeep: rgbToHex(wr, wg, wb),
     },
+    atmosphere: {
+      enabled: true,
+      height: g.shaders.atmosphere.height,
+      color: rgbToHex(ar, ag, ab),
+      intensity: g.shaders.atmosphere.intensity,
+      opacity: g.shaders.atmosphere.opacity,
+      fresnelPower: g.shaders.atmosphere.fresnelPower,
+      falloffPower: g.shaders.atmosphere.falloffPower,
+    },
+    lighting: {
+      sunAzimuth: 63,
+      sunElevation: 53,
+      sunIntensity: 1.0,
+      ambientIntensity: 0.5,
+      rimColor: 0x8ab4ff,
+      rimStrength: 0.4,
+      rimPower: 3.0,
+    },
+    props: {
+      treeDensity: g.shaders.props.treeDensity,
+      cactusDensity: g.shaders.props.cactusDensity,
+      seed: g.shaders.props.seed,
+      rocketEnabled: g.shaders.props.rocketEnabled,
+    },
+    hasWater: true,
+  };
+}
+
+export function defaultEditorConfig(): EditorConfig {
+  const g = GAME_CONFIG;
+  return {
+    planets: [defaultEditorPlanet("planet-0")],
     shaders: {
       cel: {
         bands: g.shaders.cel.bands,
@@ -160,27 +193,11 @@ export function defaultEditorConfig(): EditorConfig {
         hatchStrength: g.shaders.cel.hatchStrength,
         hatchScale: g.shaders.cel.hatchScale,
       },
-      atmosphere: {
-        color: rgbToHex(ar, ag, ab),
-        intensity: g.shaders.atmosphere.intensity,
-        opacity: g.shaders.atmosphere.opacity,
-        fresnelPower: g.shaders.atmosphere.fresnelPower,
-        falloffPower: g.shaders.atmosphere.falloffPower,
-      },
-      lighting: {
-        sunAzimuth: 63,
-        sunElevation: 53,
-        sunIntensity: 1.0,
-        ambientIntensity: 0.5,
-        rimColor: 0x8ab4ff,
-        rimStrength: 0.4,
-        rimPower: 3.0,
-      },
     },
   };
 }
 
-export const GEOMETRY_TERRAIN_KEYS: ReadonlySet<keyof EditorConfig["terrain"]> = new Set([
+export const GEOMETRY_TERRAIN_KEYS: ReadonlySet<keyof EditorPlanet["terrain"]> = new Set([
   "seed",
   "baseAmplitude",
   "frequency",

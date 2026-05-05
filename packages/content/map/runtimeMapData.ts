@@ -1,12 +1,6 @@
 import { RAIL_DEFS, type RailDef } from "../config/railDefs.ts";
 import type { SpawnPolicy } from "../modes/gameModes.ts";
 
-export interface RuntimeMapPlanet {
-  id: string;
-  center: { x: number; y: number; z: number };
-  radius: number;
-}
-
 export interface RuntimeMapTerrain {
   seed: number;
   baseAmplitude: number;
@@ -23,12 +17,66 @@ export interface RuntimeMapTerrain {
   icosahedronDetail: number;
 }
 
+export interface RuntimeMapColors {
+  sand: number;
+  grass: number;
+  rock: number;
+  snow: number;
+  waterDeep: number;
+}
+
+export interface RuntimeMapAtmosphere {
+  enabled: boolean;
+  height: number;
+  color: number;
+  intensity: number;
+  opacity: number;
+  fresnelPower: number;
+  falloffPower: number;
+}
+
+export interface RuntimeMapLighting {
+  sunAzimuth: number;
+  sunElevation: number;
+  sunIntensity: number;
+  ambientIntensity: number;
+  rimColor: number;
+  rimStrength: number;
+  rimPower: number;
+}
+
+export interface RuntimeMapProps {
+  treeDensity: number;
+  cactusDensity: number;
+  seed: number;
+  rocketEnabled: boolean;
+}
+
+export interface RuntimeMapCel {
+  bands: number;
+  softness: number;
+  hatchStrength: number;
+  hatchScale: number;
+}
+
+export interface RuntimeMapPlanet {
+  id: string;
+  center: { x: number; y: number; z: number };
+  radius: number;
+  terrain: RuntimeMapTerrain;
+  colors: RuntimeMapColors;
+  atmosphere: RuntimeMapAtmosphere;
+  lighting: RuntimeMapLighting;
+  props: RuntimeMapProps;
+  hasWater: boolean;
+}
+
 export interface RuntimeMapData {
   version: number;
   mapId: string;
   name: string;
   planets: RuntimeMapPlanet[];
-  terrain: RuntimeMapTerrain;
+  cel: RuntimeMapCel;
   rails: RailDef[];
   spawns: Record<string, SpawnPolicy>;
 }
@@ -41,6 +89,127 @@ export interface ValidationError {
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
+}
+
+const TERRAIN_NUMERIC_FIELDS: ReadonlyArray<keyof RuntimeMapTerrain> = [
+  "seed",
+  "baseAmplitude",
+  "frequency",
+  "octaves",
+  "lacunarity",
+  "persistence",
+  "heightSmoothingStrength",
+  "heightSmoothingSampleAngle",
+  "waterLevel",
+  "snowLevel",
+  "sandBand",
+  "rockLevel",
+  "icosahedronDetail",
+];
+
+function validateFiniteNumber(
+  value: unknown,
+  field: string,
+  errors: ValidationError[],
+): value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    errors.push({ field, message: "must be a finite number" });
+    return false;
+  }
+  return true;
+}
+
+function validateTerrain(t: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof t !== "object" || t === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const terrain = t as Record<string, unknown>;
+  for (const field of TERRAIN_NUMERIC_FIELDS) {
+    validateFiniteNumber(terrain[field], `${prefix}.${field}`, errors);
+  }
+  if (
+    typeof terrain.octaves === "number" &&
+    (!Number.isInteger(terrain.octaves) || terrain.octaves < 1)
+  ) {
+    errors.push({ field: `${prefix}.octaves`, message: "must be a positive integer" });
+  }
+}
+
+function validateColors(c: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof c !== "object" || c === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const colors = c as Record<string, unknown>;
+  for (const field of ["sand", "grass", "rock", "snow", "waterDeep"] as const) {
+    validateFiniteNumber(colors[field], `${prefix}.${field}`, errors);
+  }
+}
+
+function validateAtmosphere(a: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof a !== "object" || a === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const atmo = a as Record<string, unknown>;
+  if (typeof atmo.enabled !== "boolean") {
+    errors.push({ field: `${prefix}.enabled`, message: "must be a boolean" });
+  }
+  for (const field of [
+    "height",
+    "color",
+    "intensity",
+    "opacity",
+    "fresnelPower",
+    "falloffPower",
+  ] as const) {
+    validateFiniteNumber(atmo[field], `${prefix}.${field}`, errors);
+  }
+}
+
+function validateLighting(l: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof l !== "object" || l === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const lighting = l as Record<string, unknown>;
+  for (const field of [
+    "sunAzimuth",
+    "sunElevation",
+    "sunIntensity",
+    "ambientIntensity",
+    "rimColor",
+    "rimStrength",
+    "rimPower",
+  ] as const) {
+    validateFiniteNumber(lighting[field], `${prefix}.${field}`, errors);
+  }
+}
+
+function validateProps(p: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof p !== "object" || p === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const props = p as Record<string, unknown>;
+  for (const field of ["treeDensity", "cactusDensity", "seed"] as const) {
+    validateFiniteNumber(props[field], `${prefix}.${field}`, errors);
+  }
+  if (typeof props.rocketEnabled !== "boolean") {
+    errors.push({ field: `${prefix}.rocketEnabled`, message: "must be a boolean" });
+  }
+}
+
+function validateCel(c: unknown, prefix: string, errors: ValidationError[]): void {
+  if (typeof c !== "object" || c === null) {
+    errors.push({ field: prefix, message: "must be an object" });
+    return;
+  }
+  const cel = c as Record<string, unknown>;
+  for (const field of ["bands", "softness", "hatchStrength", "hatchScale"] as const) {
+    validateFiniteNumber(cel[field], `${prefix}.${field}`, errors);
+  }
 }
 
 export function validateRuntimeMapData(map: unknown): ValidationResult {
@@ -61,6 +230,8 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
   if (typeof m.name !== "string" || m.name.trim() === "") {
     errors.push({ field: "name", message: "must be a non-empty string" });
   }
+
+  validateCel(m.cel, "cel", errors);
 
   const planetIds = new Set<string>();
 
@@ -92,35 +263,14 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
           }
         }
       }
-    }
-  }
-
-  if (typeof m.terrain !== "object" || m.terrain === null) {
-    errors.push({ field: "terrain", message: "must be an object" });
-  } else {
-    const t = m.terrain as Record<string, unknown>;
-    const numericFields = [
-      "seed",
-      "baseAmplitude",
-      "frequency",
-      "octaves",
-      "lacunarity",
-      "persistence",
-      "heightSmoothingStrength",
-      "heightSmoothingSampleAngle",
-      "waterLevel",
-      "snowLevel",
-      "sandBand",
-      "rockLevel",
-      "icosahedronDetail",
-    ] as const;
-    for (const field of numericFields) {
-      if (typeof t[field] !== "number" || !Number.isFinite(t[field] as number)) {
-        errors.push({ field: `terrain.${field}`, message: "must be a finite number" });
+      if (typeof p.hasWater !== "boolean") {
+        errors.push({ field: `planets[${i}].hasWater`, message: "must be a boolean" });
       }
-    }
-    if (typeof t.octaves === "number" && (!Number.isInteger(t.octaves) || t.octaves < 1)) {
-      errors.push({ field: "terrain.octaves", message: "must be a positive integer" });
+      validateTerrain(p.terrain, `planets[${i}].terrain`, errors);
+      validateColors(p.colors, `planets[${i}].colors`, errors);
+      validateAtmosphere(p.atmosphere, `planets[${i}].atmosphere`, errors);
+      validateLighting(p.lighting, `planets[${i}].lighting`, errors);
+      validateProps(p.props, `planets[${i}].props`, errors);
     }
   }
 
@@ -245,25 +395,79 @@ function validateSpawnAnchor(
   }
 }
 
+const DEV_PLANET_TERRAIN: RuntimeMapTerrain = {
+  seed: 42,
+  baseAmplitude: 54.0,
+  frequency: 1.4,
+  octaves: 3,
+  lacunarity: 2.2,
+  persistence: 0.45,
+  heightSmoothingStrength: 0.45,
+  heightSmoothingSampleAngle: 0.035,
+  waterLevel: -3.0,
+  snowLevel: 9.0,
+  sandBand: 1.5,
+  rockLevel: 7.0,
+  icosahedronDetail: 50,
+};
+
+const DEV_PLANET_COLORS: RuntimeMapColors = {
+  sand: 0xd4c078,
+  grass: 0x3da33d,
+  rock: 0x8a8a7a,
+  snow: 0xeef4f8,
+  waterDeep: 0x0a3873,
+};
+
+const DEV_PLANET_ATMOSPHERE: RuntimeMapAtmosphere = {
+  enabled: true,
+  height: 18.0,
+  color: 0x61b8ff,
+  intensity: 0.85,
+  opacity: 0.42,
+  fresnelPower: 2.4,
+  falloffPower: 1.5,
+};
+
+const DEV_PLANET_LIGHTING: RuntimeMapLighting = {
+  sunAzimuth: 63,
+  sunElevation: 53,
+  sunIntensity: 1.0,
+  ambientIntensity: 0.5,
+  rimColor: 0x8ab4ff,
+  rimStrength: 0.4,
+  rimPower: 3.0,
+};
+
+const DEV_PLANET_PROPS: RuntimeMapProps = {
+  treeDensity: 400,
+  cactusDensity: 200,
+  seed: 12345,
+  rocketEnabled: true,
+};
+
 export const DEV_MAP: RuntimeMapData = {
   version: 1,
   mapId: "dev",
   name: "Dev Planet",
-  planets: [{ id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: 100 }],
-  terrain: {
-    seed: 42,
-    baseAmplitude: 54.0,
-    frequency: 1.4,
-    octaves: 3,
-    lacunarity: 2.2,
-    persistence: 0.45,
-    heightSmoothingStrength: 0.45,
-    heightSmoothingSampleAngle: 0.035,
-    waterLevel: -3.0,
-    snowLevel: 9.0,
-    sandBand: 1.5,
-    rockLevel: 7.0,
-    icosahedronDetail: 50,
+  planets: [
+    {
+      id: "planet-0",
+      center: { x: 0, y: 0, z: 0 },
+      radius: 100,
+      terrain: DEV_PLANET_TERRAIN,
+      colors: DEV_PLANET_COLORS,
+      atmosphere: DEV_PLANET_ATMOSPHERE,
+      lighting: DEV_PLANET_LIGHTING,
+      props: DEV_PLANET_PROPS,
+      hasWater: true,
+    },
+  ],
+  cel: {
+    bands: 3.0,
+    softness: 0.02,
+    hatchStrength: 0.15,
+    hatchScale: 5.0,
   },
   rails: RAIL_DEFS,
   spawns: {

@@ -179,7 +179,7 @@ function getCellWorldPosition(
     simState.planetDefs.find((entry) => entry.id === planetId) ?? simState.planetDefs[0] ?? null;
   if (!planet) return null;
 
-  const terrainCfg = { planet: { radius: planet.radius }, terrain: simState.mapTerrain };
+  const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
   const normal = getCellNormal(row, col, rows, cols);
   const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
   return {
@@ -199,7 +199,7 @@ function choosePaintTarget(
   if (!planetState) return null;
   const planetDef =
     simState.planetDefs.find((p) => p.id === bot.planetId) ?? simState.planetDefs[0]!;
-  const terrainCfg = { planet: { radius: planetDef.radius }, terrain: simState.mapTerrain };
+  const terrainCfg = { planet: { radius: planetDef.radius }, terrain: planetDef.terrain };
   const minTravelDistSq = 16;
   const bias = normalizeBiases(profile);
 

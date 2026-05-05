@@ -85,13 +85,67 @@ function toPublicMatchMode(modeId: string): MatchModeId {
 function migrateMapData(data: unknown): unknown {
   if (typeof data !== "object" || data === null) return data;
   const m = data as Record<string, unknown>;
-  const terrain = m.terrain;
-  if (typeof terrain === "object" && terrain !== null) {
-    const t = terrain as Record<string, unknown>;
-    if (typeof t.icosahedronDetail !== "number") {
-      t.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+
+  if (!Array.isArray(m.planets)) {
+    // Old format: per-planet fields lived at the top level of RuntimeMapData.
+    // Hoist them into the planets array the new format requires.
+    const legacyPlanet = (
+      typeof m.planet === "object" && m.planet !== null ? m.planet : {}
+    ) as Record<string, unknown>;
+    const radius =
+      typeof m.radius === "number"
+        ? m.radius
+        : typeof legacyPlanet.radius === "number"
+          ? legacyPlanet.radius
+          : GAME_CONFIG.planet.radius;
+    const center =
+      typeof m.center === "object" && m.center !== null
+        ? m.center
+        : typeof legacyPlanet.center === "object" && legacyPlanet.center !== null
+          ? legacyPlanet.center
+          : { x: 0, y: 0, z: 0 };
+    const terrain = (
+      typeof m.terrain === "object" && m.terrain !== null ? m.terrain : {}
+    ) as Record<string, unknown>;
+    if (typeof terrain.icosahedronDetail !== "number") {
+      terrain.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+    }
+    m.planets = [
+      {
+        id: "planet-0",
+        center,
+        radius,
+        terrain,
+        colors: m.colors ?? {},
+        atmosphere: m.atmosphere ?? {},
+        lighting: m.lighting ?? {},
+        props: m.props ?? {},
+        hasWater: typeof m.hasWater === "boolean" ? m.hasWater : true,
+      },
+    ];
+  } else {
+    // New format: apply icosahedronDetail backfill per planet.
+    for (const planet of m.planets) {
+      if (typeof planet !== "object" || planet === null) continue;
+      const p = planet as Record<string, unknown>;
+      if (typeof p.terrain === "object" && p.terrain !== null) {
+        const t = p.terrain as Record<string, unknown>;
+        if (typeof t.icosahedronDetail !== "number") {
+          t.icosahedronDetail = GAME_CONFIG.terrain.icosahedronDetail;
+        }
+      }
     }
   }
+
+  if (typeof m.cel !== "object" || m.cel === null) {
+    m.cel = {
+      bands: GAME_CONFIG.shaders.cel.bands,
+      softness: GAME_CONFIG.shaders.cel.softness,
+      hatchStrength: GAME_CONFIG.shaders.cel.hatchStrength,
+      hatchScale: GAME_CONFIG.shaders.cel.hatchScale,
+    };
+  }
+
   return data;
 }
 
@@ -179,7 +233,6 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       mapId: this.map.mapId,
       name: this.map.name,
       planets: this.map.planets,
-      terrain: this.map.terrain,
       rails: this.map.rails,
     });
 

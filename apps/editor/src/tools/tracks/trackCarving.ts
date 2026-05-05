@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { primaryTerrainConfig } from "../../types.ts";
 import type { EditorConfig } from "../../types.ts";
 import type { TrackState } from "./TrackTypes.ts";
 import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
@@ -36,8 +35,8 @@ export function buildTrackCarveSamples(
   getRadiusAtNormal: TrackRadiusSampler,
 ): TrackCarveSample[] {
   const samples: TrackCarveSample[] = [];
-  const terrainCfg = primaryTerrainConfig(config);
-  const waterRadius = terrainCfg.planet.radius + config.terrain.waterLevel;
+  const p0 = config.planets[0]!;
+  const waterRadius = p0.radius + p0.terrain.waterLevel;
 
   for (const track of tracks) {
     if (track.points.length < 2) continue;

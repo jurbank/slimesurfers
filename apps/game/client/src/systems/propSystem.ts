@@ -60,31 +60,47 @@ export class PropSystem {
     this.billboardGeometry = merged;
   }
 
-  addPlanetProps(planet: { id: string; x: number; y: number; z: number }): void {
-    const cfg = GAME_CONFIG.shaders.props;
-    if (!cfg.enabled) return;
+  addPlanetProps(planet: {
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    radius: number;
+    terrain: TerrainConfig["terrain"];
+    props: {
+      treeDensity: number;
+      cactusDensity: number;
+      seed: number;
+      rocketEnabled: boolean;
+    };
+  }): void {
+    if (!GAME_CONFIG.shaders.props.enabled) return;
 
     const group = new THREE.Group();
     group.position.set(planet.x, planet.y, planet.z);
     this.scene.add(group);
     this.planetProps.push(group);
 
-    const planetSeed = seedFromString(planet.id) + cfg.seed;
+    const planetSeed = seedFromString(planet.id) + planet.props.seed;
+    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
 
-    this.scatterTreeGroves(group, planetSeed, cfg.treeDensity, {
-      minScale: 4,
-      maxScale: 7,
-      heightOffset: 0.45,
-    });
+    if (planet.props.treeDensity > 0) {
+      this.scatterTreeGroves(group, planetSeed, terrainCfg, planet.props.treeDensity, {
+        minScale: 4,
+        maxScale: 7,
+        heightOffset: 0.45,
+      });
+    }
 
-    if (cfg.rocketEnabled) {
-      this.spawnRocket(group, planetSeed + 1000);
+    if (planet.props.rocketEnabled) {
+      this.spawnRocket(group, planetSeed + 1000, terrainCfg);
     }
   }
 
   private scatterTreeGroves(
     group: THREE.Group,
     baseSeed: number,
+    terrainCfg: TerrainConfig,
     density: number,
     opts: { minScale: number; maxScale: number; heightOffset: number },
   ): void {
@@ -107,7 +123,6 @@ export class PropSystem {
     const quaternion = new THREE.Quaternion();
 
     let count = 0;
-    const terrainCfg: TerrainConfig = GAME_CONFIG;
     const groveCount = Math.max(3, Math.min(6, Math.round(density / 9)));
     const centerDirections: THREE.Vector3[] = [];
 
@@ -199,9 +214,8 @@ export class PropSystem {
     return null;
   }
 
-  private spawnRocket(group: THREE.Group, seed: number): void {
+  private spawnRocket(group: THREE.Group, seed: number, terrainCfg: TerrainConfig): void {
     // Find a valid spot (Sand biome preferably)
-    const terrainCfg: TerrainConfig = GAME_CONFIG;
     let found = false;
     const pos = new THREE.Vector3();
     const normal = new THREE.Vector3();

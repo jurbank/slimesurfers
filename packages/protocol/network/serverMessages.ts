@@ -204,21 +204,43 @@ export interface MapDataMessage {
     id: string;
     center: { x: number; y: number; z: number };
     radius: number;
+    terrain: {
+      seed: number;
+      baseAmplitude: number;
+      frequency: number;
+      octaves: number;
+      lacunarity: number;
+      persistence: number;
+      heightSmoothingStrength: number;
+      heightSmoothingSampleAngle: number;
+      waterLevel: number;
+      snowLevel: number;
+      sandBand: number;
+      rockLevel: number;
+      icosahedronDetail: number;
+    };
+    colors: { sand: number; grass: number; rock: number; snow: number; waterDeep: number };
+    atmosphere: {
+      enabled: boolean;
+      height: number;
+      color: number;
+      intensity: number;
+      opacity: number;
+      fresnelPower: number;
+      falloffPower: number;
+    };
+    lighting: {
+      sunAzimuth: number;
+      sunElevation: number;
+      sunIntensity: number;
+      ambientIntensity: number;
+      rimColor: number;
+      rimStrength: number;
+      rimPower: number;
+    };
+    props: { treeDensity: number; cactusDensity: number; seed: number; rocketEnabled: boolean };
+    hasWater: boolean;
   }>;
-  terrain: {
-    seed: number;
-    baseAmplitude: number;
-    frequency: number;
-    octaves: number;
-    lacunarity: number;
-    persistence: number;
-    heightSmoothingStrength: number;
-    heightSmoothingSampleAngle: number;
-    waterLevel: number;
-    snowLevel: number;
-    sandBand: number;
-    rockLevel: number;
-  };
   rails: Array<{
     id: number;
     planetId: string;

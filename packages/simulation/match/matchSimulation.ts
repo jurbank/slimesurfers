@@ -36,6 +36,7 @@ import {
   tickProjectiles,
   tryFireHitscan,
   tryFireProjectile,
+  type CombatConfig,
 } from "../combat/projectiles.ts";
 import {
   collectWeaponPickup,
@@ -96,10 +97,10 @@ function buildPlanets(map: RuntimeMapData): PlanetData[] {
   }));
 }
 
-function buildStepConfig(map: RuntimeMapData): StepConfig {
+function buildStepConfig(map: RuntimeMapData, planet = map.planets[0]!): StepConfig {
   return {
-    planet: { radius: map.planets[0]?.radius ?? GAME_CONFIG.planet.radius },
-    terrain: map.terrain,
+    planet: { radius: planet.radius },
+    terrain: planet.terrain,
     movement: GAME_CONFIG.movement,
     rail: GAME_CONFIG.rail,
   };
@@ -415,6 +416,7 @@ export class MatchSimulation {
   private readonly planets: PlanetData[];
   private readonly rails: ComputedRail[];
   private readonly stepCfg: StepConfig;
+  private readonly stepCfgs: Map<string, StepConfig>;
   private readonly simState: SimMatchState;
   private readonly inputQueues = new Map<string, InputMessage[]>();
   private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
@@ -433,6 +435,7 @@ export class MatchSimulation {
     this.mode = mode;
     this.planets = buildPlanets(map);
     this.stepCfg = buildStepConfig(map);
+    this.stepCfgs = new Map(map.planets.map((planet) => [planet.id, buildStepConfig(map, planet)]));
     this.rails = buildRails(map);
     this.simState = createSimMatchState(
       mode,
@@ -459,6 +462,15 @@ export class MatchSimulation {
 
   get maxPlayers(): number {
     return NETWORK_CONFIG.rooms.maxPlayers;
+  }
+
+  private getStepConfig(planetId: string): StepConfig {
+    return this.stepCfgs.get(planetId) ?? this.stepCfg;
+  }
+
+  private getGameplayConfig(planetId: string): CombatConfig {
+    const stepCfg = this.getStepConfig(planetId);
+    return { ...GAME_CONFIG, planet: stepCfg.planet, terrain: stepCfg.terrain };
   }
 
   takenColorIndices(): number[] {
@@ -778,7 +790,7 @@ export class MatchSimulation {
             input,
             inputDtSec,
             this.planets,
-            this.stepCfg,
+            this.getStepConfig(player.planetId),
             this.simState.planets,
             this.rails,
           );
@@ -799,7 +811,8 @@ export class MatchSimulation {
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
           collectHealthPickup(this.simState, player, GAME_CONFIG);
-          rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, GAME_CONFIG);
+          const gameplayCfg = this.getGameplayConfig(player.planetId);
+          rechargePlayerSlime(this.simState, player, inputDtSec, actionNowMs, gameplayCfg);
           if (
             this.simState.matchPhase === MatchPhase.Active ||
             this.simState.matchPhase === MatchPhase.Countdown
@@ -810,7 +823,7 @@ export class MatchSimulation {
               input,
               actionNowMs,
               this.planets,
-              GAME_CONFIG,
+              gameplayCfg,
               (event) => this.recordKillEvent(event),
             )) {
               this.recordPaintStamp(stamp);
@@ -821,7 +834,7 @@ export class MatchSimulation {
               input,
               actionNowMs,
               this.planets,
-              GAME_CONFIG,
+              gameplayCfg,
               (event) => this.recordKillEvent(event),
             )) {
               this.recordPaintStamp(stamp);
@@ -841,7 +854,7 @@ export class MatchSimulation {
           IDLE_INPUT,
           serverDtSec,
           this.planets,
-          this.stepCfg,
+          this.getStepConfig(player.planetId),
           this.simState.planets,
           this.rails,
         );
@@ -867,7 +880,7 @@ export class MatchSimulation {
           player,
           serverDtSec,
           this.simState.elapsedMs,
-          GAME_CONFIG,
+          this.getGameplayConfig(player.planetId),
         );
       }
     });

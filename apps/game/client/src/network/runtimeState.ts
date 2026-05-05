@@ -158,6 +158,7 @@ export class ClientRuntimeState {
   private readonly pendingInputs: InputMessage[] = [];
   private readonly remoteSnapshots = new Map<string, BufferedSnapshot[]>();
   private stepCfg: StepConfig = GAME_CONFIG;
+  private readonly stepCfgs = new Map<string, StepConfig>();
   private planets: PlanetData[] = [];
   private computedRails: ComputedRail[] = [];
 
@@ -167,21 +168,31 @@ export class ClientRuntimeState {
       center: { x: p.center.x, y: p.center.y, z: p.center.z },
       radius: p.radius,
     }));
-    const terrainCfg = {
-      planet: { radius: msg.planets[0]!.radius },
-      terrain: msg.terrain,
-    };
     this.computedRails = msg.rails.map((def) => {
-      const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0];
-      const center = planet?.center ?? { x: 0, y: 0, z: 0 };
-      return buildComputedRail(def, center, terrainCfg);
+      const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0]!;
+      const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+      return buildComputedRail(def, planet.center, terrainCfg);
     });
+    this.stepCfgs.clear();
+    for (const planet of msg.planets) {
+      this.stepCfgs.set(planet.id, {
+        planet: { radius: planet.radius },
+        terrain: planet.terrain,
+        movement: GAME_CONFIG.movement,
+        rail: GAME_CONFIG.rail,
+      });
+    }
+    const p0 = msg.planets[0]!;
     this.stepCfg = {
-      planet: terrainCfg.planet,
-      terrain: msg.terrain,
+      planet: { radius: p0.radius },
+      terrain: p0.terrain,
       movement: GAME_CONFIG.movement,
       rail: GAME_CONFIG.rail,
     };
+  }
+
+  private getStepConfig(planetId: string): StepConfig {
+    return this.stepCfgs.get(planetId) ?? this.stepCfg;
   }
 
   removePlayer(sessionId: string): void {
@@ -209,7 +220,7 @@ export class ClientRuntimeState {
       input,
       input.dt,
       this.planets,
-      this.stepCfg,
+      this.getStepConfig(this.localPlayer.planetId),
       planetPaint,
       this.computedRails,
     );
@@ -284,7 +295,7 @@ export class ClientRuntimeState {
         input,
         input.dt,
         this.planets,
-        this.stepCfg,
+        this.getStepConfig(this.localPlayer.planetId),
         planetPaint,
         this.computedRails,
       );

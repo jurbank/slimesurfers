@@ -56,6 +56,10 @@ export class PropPaintTool {
     this.canvas.addEventListener("pointerleave", this.onPointerLeave, false);
   }
 
+  setPlanetMesh(mesh: THREE.Mesh): void {
+    this.planetMesh = mesh;
+  }
+
   setBrushState(state: PropBrushState | null): void {
     this.brushState = state;
     if (!state) {

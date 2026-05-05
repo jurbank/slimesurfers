@@ -17,6 +17,7 @@ import {
 } from "./tools/tracks/TrackTypes.ts";
 import {
   defaultEditorConfig,
+  defaultEditorPlanet,
   GEOMETRY_TERRAIN_KEYS,
   type BrushState,
   type EditorConfig,
@@ -75,12 +76,16 @@ export function App() {
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
   const [previewActive, setPreviewActive] = useState(false);
+  const [activePlanetId, setActivePlanetId] = useState(
+    () => initialState.config.planets[0]?.id ?? "planet-0",
+  );
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
   const previewSpawnRef = useRef<PreviewSpawnState>(previewSpawn);
   const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
   const previewActiveRef = useRef(false);
+  const activePlanetIdRef = useRef(activePlanetId);
   const sceneRef = useRef<EditorScene | null>(null);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -188,39 +193,78 @@ export function App() {
     }, REBUILD_DELAY_MS);
   }, []);
 
+  const handleActivePlanetChange = useCallback((id: string) => {
+    activePlanetIdRef.current = id;
+    setActivePlanetId(id);
+    const planet = configRef.current.planets.find((p) => p.id === id);
+    if (planet) sceneRef.current?.setActivePlanet(id, planet.center);
+  }, []);
+
   function handlePlanetsChange(planets: EditorPlanet[]) {
     setSaveStatus("idle");
     const prev = configRef.current;
-    const radiusChanged = planets[0]?.radius !== prev.planets[0]?.radius;
     const next = { ...prev, planets };
     configRef.current = next;
+
+    if (!planets.find((p) => p.id === activePlanetIdRef.current)) {
+      const firstId = planets[0]?.id ?? "";
+      activePlanetIdRef.current = firstId;
+      setActivePlanetId(firstId);
+    }
+
     setConfig(next);
-    if (radiusChanged) {
+    sceneRef.current?.updateUniforms(next);
+
+    const activeId = activePlanetIdRef.current;
+    const activeRadiusChanged =
+      planets.find((p) => p.id === activeId)?.radius !==
+      prev.planets.find((p) => p.id === activeId)?.radius;
+    if (activeRadiusChanged) {
       sceneRef.current?.rebuildPlanet(next);
       sceneRef.current?.rebuildWater(next);
     }
   }
 
-  function handleTerrainChange(terrain: EditorConfig["terrain"]) {
+  function handleTerrainChange(terrain: EditorPlanet["terrain"]) {
     setSaveStatus("idle");
-    const prev = configRef.current.terrain;
-    const next = { ...configRef.current, terrain };
+    const activeId = activePlanetIdRef.current;
+    const prevPlanet =
+      configRef.current.planets.find((p) => p.id === activeId) ?? configRef.current.planets[0]!;
+    const planets = configRef.current.planets.map((p) =>
+      p.id === activeId ? { ...p, terrain } : p,
+    );
+    const next = { ...configRef.current, planets };
     configRef.current = next;
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
 
-    const waterLevelChanged = terrain.waterLevel !== prev.waterLevel;
-    if (waterLevelChanged) sceneRef.current?.rebuildWater(next);
+    if (terrain.waterLevel !== prevPlanet.terrain.waterLevel) {
+      sceneRef.current?.rebuildWater(next);
+    }
 
     const needsRebuild = (Object.keys(terrain) as (keyof typeof terrain)[]).some(
-      (k) => GEOMETRY_TERRAIN_KEYS.has(k) && terrain[k] !== prev[k],
+      (k) => GEOMETRY_TERRAIN_KEYS.has(k) && terrain[k] !== prevPlanet.terrain[k],
     );
     if (needsRebuild) scheduleRebuild();
   }
 
-  function handleColorsChange(colors: EditorConfig["colors"]) {
+  function handleColorsChange(colors: EditorPlanet["colors"]) {
     setSaveStatus("idle");
-    const next = { ...configRef.current, colors };
+    const activeId = activePlanetIdRef.current;
+    const planets = configRef.current.planets.map((p) =>
+      p.id === activeId ? { ...p, colors } : p,
+    );
+    const next = { ...configRef.current, planets };
+    configRef.current = next;
+    setConfig(next);
+    sceneRef.current?.updateUniforms(next);
+  }
+
+  function handlePlanetChange(planet: EditorPlanet) {
+    setSaveStatus("idle");
+    const activeId = activePlanetIdRef.current;
+    const planets = configRef.current.planets.map((p) => (p.id === activeId ? planet : p));
+    const next = { ...configRef.current, planets };
     configRef.current = next;
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
@@ -306,6 +350,7 @@ export function App() {
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
+          onPlanetSelected={handleActivePlanetChange}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
           <button
@@ -440,21 +485,35 @@ export function App() {
       <aside className="w-72 border-l border-zinc-700 flex flex-col shrink-0">
         <div className="p-4 border-b border-zinc-700">
           <h2 className="text-sm font-semibold text-zinc-300 capitalize">{activePanel}</h2>
+          {config.planets.length > 1 &&
+            (activePanel === "terrain" || activePanel === "shaders" || activePanel === "props") && (
+              <p className="text-xs text-cyan-500 mt-0.5">{activePlanetId}</p>
+            )}
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {activePanel === "planets" && (
-            <PlanetPanel config={config} onPlanetsChange={handlePlanetsChange} />
+            <PlanetPanel
+              config={config}
+              activePlanetId={activePlanetId}
+              onPlanetsChange={handlePlanetsChange}
+              onActivePlanetChange={handleActivePlanetChange}
+            />
           )}
           {activePanel === "terrain" && (
             <TerrainPanel
-              config={config}
+              planet={config.planets.find((p) => p.id === activePlanetId) ?? config.planets[0]!}
               onTerrainChange={handleTerrainChange}
               onColorsChange={handleColorsChange}
               onBrushChange={handleBrushChange}
             />
           )}
           {activePanel === "shaders" && (
-            <ShadersPanel config={config} onShadersChange={handleShadersChange} />
+            <ShadersPanel
+              planet={config.planets.find((p) => p.id === activePlanetId) ?? config.planets[0]!}
+              shaders={config.shaders}
+              onPlanetChange={handlePlanetChange}
+              onShadersChange={handleShadersChange}
+            />
           )}
           {activePanel === "props" && <PropsPanel onPropBrushChange={handlePropBrushChange} />}
           {activePanel === "tracks" && (
@@ -630,10 +689,11 @@ function loadEditorState(): EditorSaveState | null {
 
     const cfg = parsed.config as unknown as Record<string, unknown>;
     if (!Array.isArray(cfg.planets)) {
-      const legacyPlanet = cfg.planet as { radius?: number } | undefined;
-      cfg.planets = [
-        { id: "planet-0", center: { x: 0, y: 0, z: 0 }, radius: legacyPlanet?.radius ?? 100 },
-      ];
+      const legacyPlanet = (
+        typeof cfg.planet === "object" && cfg.planet !== null ? cfg.planet : {}
+      ) as Record<string, unknown>;
+      const base = defaultEditorPlanet("planet-0");
+      cfg.planets = [{ ...base, ...legacyPlanet, id: "planet-0" }];
       delete cfg.planet;
     }
 
