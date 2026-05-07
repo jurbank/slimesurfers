@@ -162,7 +162,10 @@ export function App() {
   }, []);
 
   const resetPreviewSpawn = useCallback(() => {
-    const spawn: PreviewSpawnState = { normal: [0, 1, 0] };
+    const spawn: PreviewSpawnState = {
+      planetId: configRef.current.planets[0]?.id ?? "planet-0",
+      normal: [0, 1, 0],
+    };
     handlePreviewSpawnChange(spawn);
     sceneRef.current?.setPreviewSpawn(spawn);
   }, [handlePreviewSpawnChange]);
@@ -174,6 +177,15 @@ export function App() {
     setPreviewActive(next);
     sceneRef.current?.setPreviewActive(next);
   }, []);
+
+  const togglePreviewFromSpawn = useCallback(() => {
+    if (previewActiveRef.current) {
+      togglePreview();
+      return;
+    }
+    sceneRef.current?.setPreviewSpawn(previewSpawnRef.current);
+    togglePreview();
+  }, [togglePreview]);
 
   const ensureActiveTrackForPlanet = useCallback((planetId: string) => {
     let nextTracks = tracksRef.current;
@@ -652,7 +664,9 @@ export function App() {
             <SpawnsPanel
               spawn={previewSpawn}
               placementActive={spawnPlacementActive}
+              previewActive={previewActive}
               onPlacementActiveChange={handleSpawnPlacementActiveChange}
+              onPreview={togglePreviewFromSpawn}
               onReset={resetPreviewSpawn}
             />
           )}
@@ -734,7 +748,10 @@ function createInitialEditorState(): InitialEditorState {
       config: saved.config,
       tracks: saved.tracks.tracks,
       activeTrackId: saved.activeTrackId,
-      previewSpawn: saved.previewSpawn ?? { normal: [0, 1, 0] },
+      previewSpawn: saved.previewSpawn ?? {
+        planetId: saved.config.planets[0]?.id,
+        normal: [0, 1, 0],
+      },
       mapName: saved.mapName ?? "My Map",
     };
   }
@@ -744,7 +761,7 @@ function createInitialEditorState(): InitialEditorState {
     config: defaultEditorConfig(),
     tracks: [track],
     activeTrackId: track.id,
-    previewSpawn: { normal: [0, 1, 0] },
+    previewSpawn: { planetId: "planet-0", normal: [0, 1, 0] },
     mapName: "My Map",
   };
 }

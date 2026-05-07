@@ -13,13 +13,7 @@ import type { TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTer
 import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
 import type { EditorConfig, PreviewSpawnState } from "../types.ts";
 
-const PLANETS: PlanetData[] = [
-  {
-    id: "planet-0",
-    center: { x: 0, y: 0, z: 0 },
-    radius: 100,
-  },
-];
+let PLANETS: PlanetData[] = [];
 
 const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
 const MAX_DT = 1 / 30;
@@ -33,12 +27,32 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
-function createStepConfig(config: EditorConfig): StepConfig {
+function getPreviewPlanetId(config: EditorConfig, spawn: PreviewSpawnState): string {
+  return config.planets.some((planet) => planet.id === spawn.planetId)
+    ? spawn.planetId!
+    : (config.planets[0]?.id ?? "planet-0");
+}
+
+function getPreviewPlanet(config: EditorConfig, spawn: PreviewSpawnState) {
+  const planetId = getPreviewPlanetId(config, spawn);
+  return config.planets.find((planet) => planet.id === planetId) ?? config.planets[0]!;
+}
+
+function createPlanetData(config: EditorConfig): PlanetData[] {
+  return config.planets.map((planet) => ({
+    id: planet.id,
+    center: planet.center,
+    radius: planet.radius,
+  }));
+}
+
+function createStepConfig(config: EditorConfig, spawn: PreviewSpawnState): StepConfig {
+  const planet = getPreviewPlanet(config, spawn);
   return {
-    planet: { radius: config.planets[0]!.radius },
+    planet: { radius: planet.radius },
     movement: { ...GAME_CONFIG.movement },
     rail: { ...GAME_CONFIG.rail },
-    terrain: { ...config.planets[0]!.terrain },
+    terrain: { ...planet.terrain },
   };
 }
 
@@ -51,6 +65,7 @@ function applyQuat(
 }
 
 export class PlayerPreviewController {
+  private config: EditorConfig;
   private stepConfig: StepConfig;
   private active = false;
   private seq = 0;
@@ -90,7 +105,9 @@ export class PlayerPreviewController {
     config: EditorConfig,
     private readonly terrainProvider: TerrainSurfaceProvider,
   ) {
-    this.stepConfig = createStepConfig(config);
+    this.config = config;
+    PLANETS = createPlanetData(config);
+    this.stepConfig = createStepConfig(config, this.spawn);
     this.cameraSystem = new CameraSystem({ camera, manageWindowResize: false });
     this.player = this.createPlayerState();
     this.createPlayerMesh();
@@ -105,17 +122,16 @@ export class PlayerPreviewController {
   }
 
   setConfig(config: EditorConfig): void {
-    this.stepConfig = createStepConfig(config);
-    PLANETS[0] = {
-      id: "planet-0",
-      center: { x: 0, y: 0, z: 0 },
-      radius: config.planets[0]!.radius,
-    };
+    this.config = config;
+    PLANETS = createPlanetData(config);
+    this.stepConfig = createStepConfig(config, this.spawn);
     if (this.active) this.snapPlayerToSurface();
   }
 
   setSpawn(spawn: PreviewSpawnState): void {
     this.spawn = spawn;
+    this.stepConfig = createStepConfig(this.config, spawn);
+    if (this.active) this.player = this.createPlayerState();
   }
 
   setActive(active: boolean): void {
@@ -192,22 +208,24 @@ export class PlayerPreviewController {
     const normal = new THREE.Vector3(...this.spawn.normal);
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
+    const planet = getPreviewPlanet(this.config, this.spawn);
+    this.planetCenter.set(planet.center.x, planet.center.y, planet.center.z);
     const radius = this.terrainProvider.getRadius(
       normal.x,
       normal.y,
       normal.z,
       this.stepConfig,
-      "planet-0",
+      planet.id,
     );
     return {
       pos: {
-        x: normal.x * (radius + GAME_CONFIG.movement.standingHeight),
-        y: normal.y * (radius + GAME_CONFIG.movement.standingHeight),
-        z: normal.z * (radius + GAME_CONFIG.movement.standingHeight),
+        x: planet.center.x + normal.x * (radius + GAME_CONFIG.movement.standingHeight),
+        y: planet.center.y + normal.y * (radius + GAME_CONFIG.movement.standingHeight),
+        z: planet.center.z + normal.z * (radius + GAME_CONFIG.movement.standingHeight),
       },
       vel: { x: 0, y: 0, z: 0 },
       rot: { x: 0, y: 0, z: 0, w: 1 },
-      planetId: "planet-0",
+      planetId: planet.id,
       paintGroupId: 0,
       movementState: PlayerMovementState.Idle,
       surfState: PlayerSurfState.None,
@@ -223,7 +241,13 @@ export class PlayerPreviewController {
   }
 
   private snapPlayerToSurface(): void {
-    const normal = new THREE.Vector3(this.player.pos.x, this.player.pos.y, this.player.pos.z);
+    const planet =
+      PLANETS.find((candidate) => candidate.id === this.player.planetId) ??
+      getPreviewPlanet(this.config, this.spawn);
+    this.planetCenter.set(planet.center.x, planet.center.y, planet.center.z);
+    const normal = new THREE.Vector3(this.player.pos.x, this.player.pos.y, this.player.pos.z).sub(
+      this.planetCenter,
+    );
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
     const radius = this.terrainProvider.getRadius(
@@ -231,11 +255,11 @@ export class PlayerPreviewController {
       normal.y,
       normal.z,
       this.stepConfig,
-      "planet-0",
+      planet.id,
     );
-    this.player.pos.x = normal.x * (radius + GAME_CONFIG.movement.standingHeight);
-    this.player.pos.y = normal.y * (radius + GAME_CONFIG.movement.standingHeight);
-    this.player.pos.z = normal.z * (radius + GAME_CONFIG.movement.standingHeight);
+    this.player.pos.x = planet.center.x + normal.x * (radius + GAME_CONFIG.movement.standingHeight);
+    this.player.pos.y = planet.center.y + normal.y * (radius + GAME_CONFIG.movement.standingHeight);
+    this.player.pos.z = planet.center.z + normal.z * (radius + GAME_CONFIG.movement.standingHeight);
   }
 
   private updateMesh(): void {
@@ -250,7 +274,9 @@ export class PlayerPreviewController {
 
   private updateAimBasis(): void {
     this.playerPos.set(this.player.pos.x, this.player.pos.y, this.player.pos.z);
-    this.up.copy(this.playerPos).normalize();
+    const planet = PLANETS.find((candidate) => candidate.id === this.player.planetId);
+    if (planet) this.planetCenter.set(planet.center.x, planet.center.y, planet.center.z);
+    this.up.copy(this.playerPos).sub(this.planetCenter).normalize();
     this.aimForward.addScaledVector(this.up, -this.aimForward.dot(this.up));
     if (this.aimForward.lengthSq() < 1e-8) {
       this.forward.set(0, 0, 1);

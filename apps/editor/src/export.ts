@@ -23,6 +23,9 @@ export function editorStateToRuntimeMap(
 ): RuntimeMapData {
   const [sx, sy, sz] = previewSpawn.normal;
   const planetIds = new Set(config.planets.map((p) => p.id));
+  const spawnPlanetId = planetIds.has(previewSpawn.planetId ?? "")
+    ? previewSpawn.planetId!
+    : (config.planets[0]?.id ?? "planet-0");
 
   const rails = tracks
     .filter((t) => t.points.length >= 2 && planetIds.has(t.planetId))
@@ -72,7 +75,7 @@ export function editorStateToRuntimeMap(
       dev: {
         kind: "cluster",
         radius: 7,
-        anchor: { planetId: config.planets[0]?.id ?? "planet-0", normal: { x: sx, y: sy, z: sz } },
+        anchor: { planetId: spawnPlanetId, normal: { x: sx, y: sy, z: sz } },
       },
     },
   };

@@ -4,6 +4,10 @@ Agent-maintained notes for changes that touch `apps/editor`.
 
 ## 2026-05-07
 
+- Changed spawn preview wiring in `src/types.ts`, `src/App.tsx`, `src/panels/SpawnsPanel.tsx`, `src/preview/EditorScene.ts`, `src/preview/PlayerPreviewController.ts`, and `src/export.ts`.
+- User-visible behavior: placed preview spawns now remember their planet, export that planet as the dev spawn anchor, and the Spawns panel includes a direct `Preview From Spawn` control.
+- Validation: `vp install`; `vp fmt`; `vp check`; `vp test`.
+
 - Changed terrain authoring in `src/types.ts`, `src/App.tsx`, `src/preview/PlanetPreview.tsx`, `src/panels/TerrainPanel.tsx`, `src/preview/EditorScene.ts`, `src/tools/brush/BrushTool.ts`, and new `src/tools/terrain/*` stamp modules.
 - User-visible behavior: Terrain now includes a Stamps section with Crater, Ridge, Crevasse, and Mesa tools that commit editable sculpt displacement into the terrain mesh; sculpt/stamp edits persist in local saves and exported editor config; Scene Cost debug notes update with sculpted vertex count and max displacement.
 - Validation: `vp fmt`; `vp check`; `vp test`; `vp build`.

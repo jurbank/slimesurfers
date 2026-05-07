@@ -35,6 +35,7 @@ export interface PropBrushState {
 }
 
 export interface PreviewSpawnState {
+  planetId?: string;
   normal: [number, number, number];
 }
 

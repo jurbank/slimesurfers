@@ -740,7 +740,7 @@ export class EditorScene {
     const normal = new THREE.Vector3(...this.previewSpawn.normal);
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
-    const planet = this.getPlanetById(this.activePlanetId);
+    const planet = this.getPlanetById(this.previewSpawn.planetId ?? this.activePlanetId);
     const radius = this.previewTerrainProvider.getRadius(
       normal.x,
       normal.y,
@@ -833,7 +833,10 @@ export class EditorScene {
     const planet = this.getPlanetById(this.activePlanetId);
     const center = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
     const normal = hit.point.clone().sub(center).normalize();
-    const spawn: PreviewSpawnState = { normal: [normal.x, normal.y, normal.z] };
+    const spawn: PreviewSpawnState = {
+      planetId: planet.id,
+      normal: [normal.x, normal.y, normal.z],
+    };
     this.setPreviewSpawn(spawn);
     this.onPreviewSpawnChange(spawn);
   };
