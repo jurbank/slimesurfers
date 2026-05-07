@@ -38,6 +38,17 @@ export interface PreviewSpawnState {
   normal: [number, number, number];
 }
 
+export interface EditorSculptSample {
+  index: number;
+  value: number;
+}
+
+export interface EditorSculptState {
+  detail: number;
+  vertexCount: number;
+  samples: EditorSculptSample[];
+}
+
 export interface EditorPlanet {
   id: string;
   center: { x: number; y: number; z: number };
@@ -113,6 +124,7 @@ export interface EditorPlanet {
     seed: number;
     rocketEnabled: boolean;
   };
+  sculpt: EditorSculptState;
   hasWater: boolean;
 }
 
@@ -230,6 +242,11 @@ export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): 
       cactusDensity: DEFAULT_RUNTIME_PLANET_PROPS.cactusDensity,
       seed: DEFAULT_RUNTIME_PLANET_PROPS.seed,
       rocketEnabled: DEFAULT_RUNTIME_PLANET_PROPS.rocketEnabled,
+    },
+    sculpt: {
+      detail: 30,
+      vertexCount: 0,
+      samples: [],
     },
     hasWater: true,
   };

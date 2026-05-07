@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import { getTerrainRadius } from "@splat/simulation/terrain/planetTerrain.ts";
-import type { BrushFalloff, BrushState, EditorConfig, EditorPlanet } from "../../types.ts";
+import type {
+  BrushFalloff,
+  BrushState,
+  EditorConfig,
+  EditorPlanet,
+  EditorSculptState,
+} from "../../types.ts";
+import { terrainStampDelta, terrainStampRadiusRadians } from "../terrain/terrainStampMath.ts";
+import type { TerrainStampState } from "../terrain/TerrainStampTypes.ts";
 
 const BRUSH_COLORS: Record<string, number> = {
   raise: 0x00ff99,
@@ -17,7 +25,7 @@ export interface BrushConnectOptions {
   camera: THREE.Camera;
   scene: THREE.Scene;
   planetMeshes: THREE.Mesh[];
-  onStrokeEnd: () => void;
+  onStrokeEnd: (sculpt: EditorSculptState) => void;
   shouldOrbit: () => boolean;
 }
 
@@ -32,7 +40,7 @@ export class BrushTool {
   private canvas: HTMLCanvasElement | null = null;
   private camera: THREE.Camera | null = null;
   private planetMeshes: THREE.Mesh[] = [];
-  private onStrokeEnd: (() => void) | null = null;
+  private onStrokeEnd: ((sculpt: EditorSculptState) => void) | null = null;
   private shouldOrbit: (() => boolean) | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private brushCursor: THREE.LineLoop | null = null;
@@ -101,6 +109,31 @@ export class BrushTool {
     return this.sculptDisplacements;
   }
 
+  getSculptState(): EditorSculptState {
+    const samples: EditorSculptState["samples"] = [];
+    for (let i = 0; i < this.sculptDisplacements.length; i++) {
+      const value = this.sculptDisplacements[i] ?? 0;
+      if (Math.abs(value) > 1e-4) samples.push({ index: i, value });
+    }
+    return {
+      detail: this.sculptDetail,
+      vertexCount: this.sculptDisplacements.length,
+      samples,
+    };
+  }
+
+  getSculptSummary(): { editedVertices: number; maxAbsDisplacement: number } {
+    let editedVertices = 0;
+    let maxAbsDisplacement = 0;
+    for (let i = 0; i < this.sculptDisplacements.length; i++) {
+      const value = Math.abs(this.sculptDisplacements[i] ?? 0);
+      if (value <= 1e-4) continue;
+      editedVertices++;
+      if (value > maxAbsDisplacement) maxAbsDisplacement = value;
+    }
+    return { editedVertices, maxAbsDisplacement };
+  }
+
   getDisplacementAtNormal(nx: number, ny: number, nz: number): number {
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (len < 1e-8 || this.sculptDisplacements.length === 0) return 0;
@@ -124,6 +157,46 @@ export class BrushTool {
     }
 
     return this.sculptDisplacements[bestIndex] ?? 0;
+  }
+
+  applyTerrainStamp(hitPoint: THREE.Vector3, state: TerrainStampState): EditorSculptState {
+    const hitNormal = hitPoint.clone().normalize();
+    const baseUp =
+      Math.abs(hitNormal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    const tangent = new THREE.Vector3().crossVectors(baseUp, hitNormal).normalize();
+    const bitangent = new THREE.Vector3().crossVectors(hitNormal, tangent).normalize();
+    const rotation = (state.rotation * Math.PI) / 180;
+    const rotatedTangent = tangent
+      .clone()
+      .multiplyScalar(Math.cos(rotation))
+      .addScaledVector(bitangent, Math.sin(rotation))
+      .normalize();
+    const rotatedBitangent = new THREE.Vector3().crossVectors(hitNormal, rotatedTangent);
+    const radiusRadians = terrainStampRadiusRadians(state);
+    const count = this.sculptBaseNormals.length / 3;
+
+    for (let i = 0; i < count; i++) {
+      const delta = terrainStampDelta(state.kind, {
+        normal: [
+          this.sculptBaseNormals[i * 3],
+          this.sculptBaseNormals[i * 3 + 1],
+          this.sculptBaseNormals[i * 3 + 2],
+        ],
+        center: [hitNormal.x, hitNormal.y, hitNormal.z],
+        tangent: [rotatedTangent.x, rotatedTangent.y, rotatedTangent.z],
+        bitangent: [rotatedBitangent.x, rotatedBitangent.y, rotatedBitangent.z],
+        radiusRadians,
+        strength: state.strength,
+        roughness: state.roughness,
+        falloff: state.falloff,
+      });
+      if (delta === 0) continue;
+      const next = this.sculptDisplacements[i] + delta;
+      this.sculptDisplacements[i] = Math.max(-MAX_DISPLACEMENT, Math.min(MAX_DISPLACEMENT, next));
+    }
+
+    this.fastUpdatePositions();
+    return this.getSculptState();
   }
 
   dispose(): void {
@@ -173,6 +246,21 @@ export class BrushTool {
 
     geo.dispose();
     this.sculptDetail = detail;
+    this.loadSculptState(planet.sculpt);
+  }
+
+  private loadSculptState(sculpt: EditorSculptState | undefined): void {
+    if (!sculpt || sculpt.detail !== this.sculptDetail) return;
+    if (sculpt.vertexCount > 0 && sculpt.vertexCount !== this.sculptDisplacements.length) return;
+
+    for (const sample of sculpt.samples) {
+      if (!Number.isInteger(sample.index)) continue;
+      if (sample.index < 0 || sample.index >= this.sculptDisplacements.length) continue;
+      this.sculptDisplacements[sample.index] = Math.max(
+        -MAX_DISPLACEMENT,
+        Math.min(MAX_DISPLACEMENT, sample.value),
+      );
+    }
   }
 
   // ─── Brush stroke ─────────────────────────────────────────────────────────
@@ -391,7 +479,7 @@ export class BrushTool {
     if (e.button === 0 && this.isPainting) {
       this.isPainting = false;
       this.flattenTarget = null;
-      this.onStrokeEnd?.();
+      this.onStrokeEnd?.(this.getSculptState());
     }
   };
 

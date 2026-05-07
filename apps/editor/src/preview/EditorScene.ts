@@ -12,6 +12,8 @@ import { createWaterMaterial } from "@splat/client-runtime/materials/waterMateri
 import { createMetricGroup } from "../performance/geometryStats.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
+import { TerrainStampTool } from "../tools/terrain/TerrainStampTool.ts";
+import type { TerrainStampState } from "../tools/terrain/TerrainStampTypes.ts";
 import { TrackTool } from "../tools/tracks/TrackTool.ts";
 import { TrackPreviewVisuals } from "../tools/tracks/TrackPreviewVisuals.ts";
 import {
@@ -27,6 +29,7 @@ import type {
   BrushState,
   EditorConfig,
   EditorPlanet,
+  EditorSculptState,
   PerformanceStats,
   PreviewSpawnState,
   PropBrushState,
@@ -47,6 +50,17 @@ function hexToVec3(hex: number): THREE.Vector3 {
     ((hex >> 8) & 0xff) / 255,
     (hex & 0xff) / 255,
   );
+}
+
+function summarizeSculptSamples(sculpt: EditorSculptState): {
+  editedVertices: number;
+  maxAbsDisplacement: number;
+} {
+  let maxAbsDisplacement = 0;
+  for (const sample of sculpt.samples) {
+    maxAbsDisplacement = Math.max(maxAbsDisplacement, Math.abs(sample.value));
+  }
+  return { editedVertices: sculpt.samples.length, maxAbsDisplacement };
 }
 
 interface PlanetRenderState {
@@ -74,6 +88,7 @@ export class EditorScene {
 
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
+  private readonly terrainStampTool: TerrainStampTool;
   private readonly propPaintTool: PropPaintTool;
   private readonly trackTool: TrackTool;
   private readonly trackPreviewVisuals: TrackPreviewVisuals;
@@ -100,6 +115,7 @@ export class EditorScene {
   private isPreviewActive = false;
   private lastFrameTime = 0;
   private hasBrush = false;
+  private hasTerrainStamp = false;
   private hasPropBrush = false;
   private hasTrackMode = false;
   private selectionPointerStart: { x: number; y: number } | null = null;
@@ -113,6 +129,7 @@ export class EditorScene {
     previewSpawn: PreviewSpawnState,
     onTrackChange: (track: TrackState) => void,
     onTrackPointSelectionChange: (pointId: string | null) => void,
+    private readonly onSculptChange: (planetId: string, sculpt: EditorSculptState) => void,
     private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
     private readonly onPlanetSelected: ((id: string) => void) | null = null,
@@ -147,6 +164,7 @@ export class EditorScene {
 
     // Phase 1: init sculpt data and tool instances before planet build
     this.brushTool = new BrushTool(config);
+    this.terrainStampTool = new TerrainStampTool();
     this.propPaintTool = new PropPaintTool();
     this.trackTool = new TrackTool();
     this.baseTerrainProvider = {
@@ -202,8 +220,23 @@ export class EditorScene {
       camera: this.camera,
       scene: this.scene,
       planetMeshes: [activeRender.terrainMesh, activeRender.outlineMesh],
-      onStrokeEnd: () => this.rebuildPlanetMeshes(),
+      onStrokeEnd: (sculpt) => {
+        this.onSculptChange(this.activePlanetId, sculpt);
+        this.rebuildPlanetMeshes();
+      },
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
+    });
+    this.terrainStampTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMesh: activeRender.terrainMesh,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
+      onStamp: (hitPoint, state) => {
+        const sculpt = this.brushTool.applyTerrainStamp(hitPoint, state);
+        this.onSculptChange(this.activePlanetId, sculpt);
+        this.rebuildPlanetMeshes();
+      },
     });
     this.propPaintTool.connect({
       canvas,
@@ -238,6 +271,12 @@ export class EditorScene {
     this.brushTool.setBrushState(state);
   }
 
+  setTerrainStampState(state: TerrainStampState | null): void {
+    if (this.isPreviewActive && state) return;
+    this.hasTerrainStamp = state !== null;
+    this.terrainStampTool.setStampState(state);
+  }
+
   setPropBrushState(state: PropBrushState | null): void {
     if (this.isPreviewActive && state) return;
     this.hasPropBrush = state !== null;
@@ -254,6 +293,7 @@ export class EditorScene {
     this.spawnPlacementActive = active && !this.isPreviewActive;
     if (this.spawnPlacementActive) {
       this.brushTool.setBrushState(null);
+      this.terrainStampTool.setStampState(null);
       this.propPaintTool.setBrushState(null);
       this.trackTool.setTrackToolState(null);
       this.canvas.style.cursor = "crosshair";
@@ -281,6 +321,7 @@ export class EditorScene {
     this.controls.enabled = !active;
     this.setSpawnPlacementActive(false);
     this.brushTool.setBrushState(null);
+    this.terrainStampTool.setStampState(null);
     this.propPaintTool.setBrushState(null);
     if (active) this.trackTool.setTrackToolState(null);
     this.trackPreviewVisuals.setActive(active);
@@ -293,6 +334,7 @@ export class EditorScene {
     const render = this.planetRenders.get(id);
     if (render) {
       this.brushTool.setPlanetMeshes([render.terrainMesh, render.outlineMesh]);
+      this.terrainStampTool.setPlanetMesh(render.terrainMesh);
       this.propPaintTool.setPlanetMesh(render.terrainMesh);
       this.trackTool.setPlanetMesh(render.terrainMesh);
       this.brushTool.resetSculptBase(this.getPlanetById(id));
@@ -355,18 +397,27 @@ export class EditorScene {
     const terrainMeshes: (THREE.Mesh | null)[] = [];
     const waterMeshes: (THREE.Mesh | null)[] = [];
     const atmoMeshes: (THREE.Mesh | null)[] = [];
+    let sculptedVertices = 0;
+    let maxSculptDisplacement = 0;
     for (const render of this.planetRenders.values()) {
       terrainMeshes.push(render.terrainMesh, render.outlineMesh);
       waterMeshes.push(render.waterMesh);
       atmoMeshes.push(render.atmosphere.atmosphereMesh);
     }
+    for (const planet of this.currentConfig.planets) {
+      const summary =
+        planet.id === this.activePlanetId
+          ? this.brushTool.getSculptSummary()
+          : summarizeSculptSamples(planet.sculpt);
+      sculptedVertices += summary.editedVertices;
+      maxSculptDisplacement = Math.max(maxSculptDisplacement, summary.maxAbsDisplacement);
+    }
+    const sculptNote =
+      sculptedVertices > 0
+        ? `Terrain shader and outline pass both render the planet geometry; ${sculptedVertices.toLocaleString()} sculpted vertices, max displacement ${maxSculptDisplacement.toFixed(1)}`
+        : "Terrain shader and outline pass both render the planet geometry";
     const groups = [
-      createMetricGroup(
-        "planet",
-        "Planet Terrain",
-        terrainMeshes,
-        "Terrain shader and outline pass both render the planet geometry",
-      ),
+      createMetricGroup("planet", "Planet Terrain", terrainMeshes, sculptNote),
       createMetricGroup("water", "Water", waterMeshes, "Animated transparent shader pass"),
       createMetricGroup(
         "atmosphere",
@@ -407,6 +458,7 @@ export class EditorScene {
     cancelAnimationFrame(this.animFrameId);
     this.controls.dispose();
     this.brushTool.dispose();
+    this.terrainStampTool.dispose();
     this.propPaintTool.dispose();
     this.trackTool.dispose();
     this.trackPreviewVisuals.dispose();
@@ -629,6 +681,7 @@ export class EditorScene {
     oldGeo.dispose();
     this.trackPreviewVisuals.setConfig(this.currentConfig);
     this.trackTool.syncSurface();
+    this.emitPerformanceStats(true);
   }
 
   private rebuildTrackCarveSamples(): void {
@@ -740,12 +793,13 @@ export class EditorScene {
     const stats = this.getPerformanceStats();
     const signature = JSON.stringify({
       totals: stats.totals,
-      groups: stats.groups.map(({ id, triangles, drawCalls, meshes, instances }) => ({
+      groups: stats.groups.map(({ id, triangles, drawCalls, meshes, instances, notes }) => ({
         id,
         triangles,
         drawCalls,
         meshes,
         instances,
+        notes,
       })),
     });
     if (!force && signature === this.lastPerformanceSignature) return;
@@ -797,7 +851,7 @@ export class EditorScene {
 
     if (dx * dx + dy * dy > 25) return; // orbit drag, not a click
     if (!this.onPlanetSelected || this.isPreviewActive || this.spawnPlacementActive) return;
-    if (this.hasBrush || this.hasPropBrush || this.hasTrackMode) return;
+    if (this.hasBrush || this.hasTerrainStamp || this.hasPropBrush || this.hasTrackMode) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;

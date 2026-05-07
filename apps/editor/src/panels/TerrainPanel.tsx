@@ -6,6 +6,7 @@ import {
   type BrushState,
   type EditorPlanet,
 } from "../types.ts";
+import type { TerrainStampKind, TerrainStampState } from "../tools/terrain/TerrainStampTypes.ts";
 import { BrushSettings } from "./ui/BrushSettings.tsx";
 import { ColorSwatch } from "./ui/ColorSwatch.tsx";
 import { Section } from "./ui/Section.tsx";
@@ -19,11 +20,19 @@ const BRUSH_MODES: { id: BrushMode; label: string }[] = [
   { id: "flatten", label: "Flatten" },
 ];
 
+const STAMP_TYPES: { id: TerrainStampKind; label: string }[] = [
+  { id: "crater", label: "Crater" },
+  { id: "ridge", label: "Ridge" },
+  { id: "crevasse", label: "Crevasse" },
+  { id: "mesa", label: "Mesa" },
+];
+
 interface TerrainPanelProps {
   planet: EditorPlanet;
   onTerrainChange: (t: EditorPlanet["terrain"]) => void;
   onColorsChange: (c: EditorPlanet["colors"]) => void;
   onBrushChange: (state: BrushState | null) => void;
+  onTerrainStampChange: (state: TerrainStampState | null) => void;
 }
 
 export function TerrainPanel({
@@ -31,6 +40,7 @@ export function TerrainPanel({
   onTerrainChange,
   onColorsChange,
   onBrushChange,
+  onTerrainStampChange,
 }: TerrainPanelProps) {
   const t = planet.terrain;
   const c = planet.colors;
@@ -39,12 +49,19 @@ export function TerrainPanel({
   const [brushSize, setBrushSize] = useState(8);
   const [brushStrength, setBrushStrength] = useState(0.5);
   const [brushFalloff, setBrushFalloff] = useState<BrushFalloff>("smooth");
+  const [stampKind, setStampKind] = useState<TerrainStampKind | null>(null);
+  const [stampSize, setStampSize] = useState(10);
+  const [stampStrength, setStampStrength] = useState(5);
+  const [stampRotation, setStampRotation] = useState(0);
+  const [stampRoughness, setStampRoughness] = useState(0.15);
+  const [stampFalloff, setStampFalloff] = useState<BrushFalloff>("smooth");
 
   useEffect(() => {
     return () => {
       onBrushChange(null);
+      onTerrainStampChange(null);
     };
-    // onBrushChange is stable (useCallback in App)
+    // callbacks are stable (useCallback in App)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -60,6 +77,10 @@ export function TerrainPanel({
   function handleModeClick(mode: BrushMode) {
     const next = brushMode === mode ? null : mode;
     setBrushMode(next);
+    if (next) {
+      setStampKind(null);
+      onTerrainStampChange(null);
+    }
     notifyBrush(next, brushSize, brushStrength, brushFalloff);
   }
 
@@ -76,6 +97,57 @@ export function TerrainPanel({
   function handleFalloffChange(v: BrushFalloff) {
     setBrushFalloff(v);
     if (brushMode) notifyBrush(brushMode, brushSize, brushStrength, v);
+  }
+
+  function notifyStamp(
+    kind: TerrainStampKind | null,
+    size: number,
+    strength: number,
+    rotation: number,
+    falloff: BrushFalloff,
+    roughness: number,
+  ) {
+    onTerrainStampChange(kind ? { kind, size, strength, rotation, falloff, roughness } : null);
+  }
+
+  function handleStampClick(kind: TerrainStampKind) {
+    const next = stampKind === kind ? null : kind;
+    setStampKind(next);
+    if (next) {
+      setBrushMode(null);
+      onBrushChange(null);
+    }
+    notifyStamp(next, stampSize, stampStrength, stampRotation, stampFalloff, stampRoughness);
+  }
+
+  function handleStampSizeChange(v: number) {
+    setStampSize(v);
+    if (stampKind) {
+      notifyStamp(stampKind, v, stampStrength, stampRotation, stampFalloff, stampRoughness);
+    }
+  }
+
+  function handleStampStrengthChange(v: number) {
+    setStampStrength(v);
+    if (stampKind)
+      notifyStamp(stampKind, stampSize, v, stampRotation, stampFalloff, stampRoughness);
+  }
+
+  function handleStampRotationChange(v: number) {
+    setStampRotation(v);
+    if (stampKind)
+      notifyStamp(stampKind, stampSize, stampStrength, v, stampFalloff, stampRoughness);
+  }
+
+  function handleStampFalloffChange(v: BrushFalloff) {
+    setStampFalloff(v);
+    if (stampKind)
+      notifyStamp(stampKind, stampSize, stampStrength, stampRotation, v, stampRoughness);
+  }
+
+  function handleStampRoughnessChange(v: number) {
+    setStampRoughness(v);
+    if (stampKind) notifyStamp(stampKind, stampSize, stampStrength, stampRotation, stampFalloff, v);
   }
 
   function setT<K extends keyof EditorPlanet["terrain"]>(key: K, val: EditorPlanet["terrain"][K]) {
@@ -137,6 +209,70 @@ export function TerrainPanel({
               onFalloffChange={handleFalloffChange}
             />
             <p className="text-xs text-zinc-500 pt-1">Alt + drag to orbit</p>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Stamps">
+        <GridSelector
+          items={STAMP_TYPES}
+          selectedId={stampKind}
+          onSelect={(id) => handleStampClick(id as TerrainStampKind)}
+          columns={2}
+        />
+        {stampKind && (
+          <div className="mt-3 space-y-2">
+            <Slider
+              label="Size"
+              value={stampSize}
+              min={2}
+              max={28}
+              step={0.5}
+              decimals={1}
+              onChange={handleStampSizeChange}
+            />
+            <Slider
+              label={stampKind === "crevasse" ? "Depth" : "Height"}
+              value={stampStrength}
+              min={0.5}
+              max={18}
+              step={0.25}
+              decimals={2}
+              onChange={handleStampStrengthChange}
+            />
+            {(stampKind === "ridge" || stampKind === "crevasse") && (
+              <Slider
+                label="Rotation"
+                value={stampRotation}
+                min={0}
+                max={180}
+                step={1}
+                decimals={0}
+                onChange={handleStampRotationChange}
+              />
+            )}
+            <Slider
+              label="Roughness"
+              value={stampRoughness}
+              min={0}
+              max={1}
+              step={0.01}
+              onChange={handleStampRoughnessChange}
+            />
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs text-zinc-400">Blend</label>
+              <GridSelector
+                items={[
+                  { id: "smooth", label: "Smooth" },
+                  { id: "linear", label: "Linear" },
+                  { id: "sharp", label: "Sharp" },
+                ]}
+                selectedId={stampFalloff}
+                onSelect={(id) => handleStampFalloffChange(id as BrushFalloff)}
+                columns={3}
+              />
+            </div>
+            <p className="text-xs text-zinc-500 pt-1">Click terrain to commit a stamp</p>
           </div>
         )}
       </Section>

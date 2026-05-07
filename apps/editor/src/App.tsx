@@ -14,6 +14,7 @@ import {
   type TrackState,
   type TrackToolState,
 } from "./tools/tracks/TrackTypes.ts";
+import type { TerrainStampState } from "./tools/terrain/TerrainStampTypes.ts";
 import {
   defaultEditorConfig,
   defaultEditorPlanet,
@@ -21,6 +22,7 @@ import {
   type BrushState,
   type EditorConfig,
   type EditorPlanet,
+  type EditorSculptState,
   type PerformanceStats,
   type PreviewSpawnState,
   type PropBrushState,
@@ -108,6 +110,10 @@ export function App() {
     sceneRef.current?.setBrushState(state);
   }, []);
 
+  const handleTerrainStampChange = useCallback((state: TerrainStampState | null) => {
+    sceneRef.current?.setTerrainStampState(state);
+  }, []);
+
   const handlePropBrushChange = useCallback((state: PropBrushState | null) => {
     sceneRef.current?.setPropBrushState(state);
   }, []);
@@ -129,6 +135,19 @@ export function App() {
   const handleTrackPointSelectionChange = useCallback((pointId: string | null) => {
     selectedTrackPointIdRef.current = pointId;
     setSelectedTrackPointId(pointId);
+  }, []);
+
+  const handleSculptChange = useCallback((planetId: string, sculpt: EditorSculptState) => {
+    setSaveStatus("idle");
+    const next = {
+      ...configRef.current,
+      planets: configRef.current.planets.map((planet) =>
+        planet.id === planetId ? { ...planet, sculpt } : planet,
+      ),
+    };
+    configRef.current = next;
+    setConfig(next);
+    sceneRef.current?.updateUniforms(next);
   }, []);
 
   const handlePreviewSpawnChange = useCallback((spawn: PreviewSpawnState) => {
@@ -184,6 +203,7 @@ export function App() {
   const clearTransientTools = useCallback((nextLayer: LayerSelection) => {
     if (nextLayer.kind !== "planet" || nextLayer.panel !== "terrain") {
       sceneRef.current?.setBrushState(null);
+      sceneRef.current?.setTerrainStampState(null);
     }
     if (nextLayer.kind !== "planet" || nextLayer.panel !== "props") {
       sceneRef.current?.setPropBrushState(null);
@@ -325,8 +345,17 @@ export function App() {
     const activeId = activePlanetIdRef.current;
     const prevPlanet =
       configRef.current.planets.find((p) => p.id === activeId) ?? configRef.current.planets[0]!;
+    const detailChanged = terrain.icosahedronDetail !== prevPlanet.terrain.icosahedronDetail;
     const planets = configRef.current.planets.map((p) =>
-      p.id === activeId ? { ...p, terrain } : p,
+      p.id === activeId
+        ? {
+            ...p,
+            terrain,
+            sculpt: detailChanged
+              ? { detail: terrain.icosahedronDetail, vertexCount: 0, samples: [] }
+              : p.sculpt,
+          }
+        : p,
     );
     const next = { ...configRef.current, planets };
     configRef.current = next;
@@ -419,6 +448,7 @@ export function App() {
           onScene={handleScene}
           onTrackChange={handleTrackChange}
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
+          onSculptChange={handleSculptChange}
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
           onPlanetSelected={handlePreviewPlanetSelected}
@@ -578,6 +608,7 @@ export function App() {
               onTerrainChange={handleTerrainChange}
               onColorsChange={handleColorsChange}
               onBrushChange={handleBrushChange}
+              onTerrainStampChange={handleTerrainStampChange}
             />
           )}
           {selectedLayer.kind === "global" && selectedLayer.panel === "cel" && (
@@ -867,8 +898,29 @@ function normalizeEditorConfig(config: EditorConfig): EditorConfig {
         },
         lighting: { ...base.lighting, ...planet.lighting },
         props: { ...base.props, ...planet.props },
+        sculpt: normalizeSculptState(
+          planet.sculpt,
+          planet.terrain?.icosahedronDetail ?? base.sculpt.detail,
+        ),
       };
     }),
+  };
+}
+
+function normalizeSculptState(
+  sculpt: EditorSculptState | undefined,
+  detail: number,
+): EditorSculptState {
+  if (!sculpt || !Array.isArray(sculpt.samples)) {
+    return { detail, vertexCount: 0, samples: [] };
+  }
+
+  return {
+    detail: Number.isFinite(sculpt.detail) ? sculpt.detail : detail,
+    vertexCount: Number.isFinite(sculpt.vertexCount) ? sculpt.vertexCount : 0,
+    samples: sculpt.samples
+      .filter((sample) => Number.isInteger(sample.index) && Number.isFinite(sample.value))
+      .map((sample) => ({ index: sample.index, value: sample.value })),
   };
 }
 

@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import type { EditorConfig, PerformanceStats, PreviewSpawnState } from "../types.ts";
+import type {
+  EditorConfig,
+  EditorSculptState,
+  PerformanceStats,
+  PreviewSpawnState,
+} from "../types.ts";
 import type { TrackState } from "../tools/tracks/TrackTypes.ts";
 import { EditorScene } from "./EditorScene.ts";
 
@@ -10,6 +15,7 @@ interface PlanetPreviewProps {
   onScene: (scene: EditorScene) => void;
   onTrackChange: (track: TrackState) => void;
   onTrackPointSelectionChange: (pointId: string | null) => void;
+  onSculptChange: (planetId: string, sculpt: EditorSculptState) => void;
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
   onPlanetSelected: (id: string) => void;
@@ -22,6 +28,7 @@ export function PlanetPreview({
   onScene,
   onTrackChange,
   onTrackPointSelectionChange,
+  onSculptChange,
   onPreviewSpawnChange,
   onPerformanceStats,
   onPlanetSelected,
@@ -44,6 +51,7 @@ export function PlanetPreview({
       initialPreviewSpawn,
       onTrackChange,
       onTrackPointSelectionChange,
+      onSculptChange,
       onPreviewSpawnChange,
       onPerformanceStats,
       onPlanetSelected,
