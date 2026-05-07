@@ -18,6 +18,7 @@ const EDIT_MODES: { id: TrackEditMode; label: string }[] = [
 
 interface TracksPanelProps {
   tracks: TrackState[];
+  planetId: string;
   activeTrackId: string;
   selectedPointId: string | null;
   onActiveTrackChange: (trackId: string) => void;
@@ -33,6 +34,7 @@ interface TracksPanelProps {
 
 export function TracksPanel({
   tracks,
+  planetId,
   activeTrackId,
   selectedPointId,
   onActiveTrackChange,
@@ -42,9 +44,14 @@ export function TracksPanel({
   onPointSelectionChange,
 }: TracksPanelProps) {
   const [mode, setMode] = useState<TrackEditMode | null>("add");
-  const activeTrack = tracks.find((track) => track.id === activeTrackId) ?? tracks[0];
-  const trackRef = useRef(activeTrack);
+  const planetTracks = tracks.filter((track) => track.planetId === planetId);
+  const activeTrack = planetTracks.find((track) => track.id === activeTrackId) ?? planetTracks[0];
+  const trackRef = useRef<TrackState | null>(activeTrack ?? null);
   const selectedPoint = activeTrack?.points.find((point) => point.id === selectedPointId) ?? null;
+
+  useEffect(() => {
+    if (activeTrack && activeTrack.id !== activeTrackId) onActiveTrackChange(activeTrack.id);
+  }, [activeTrack, activeTrackId, onActiveTrackChange]);
 
   useEffect(() => {
     if (!activeTrack) return;
@@ -54,7 +61,9 @@ export function TracksPanel({
 
   useEffect(() => {
     return () => {
-      onTrackToolChange({ mode: null, track: trackRef.current, selectedPointId: null });
+      if (trackRef.current) {
+        onTrackToolChange({ mode: null, track: trackRef.current, selectedPointId: null });
+      }
     };
   }, [onTrackToolChange]);
 
@@ -64,12 +73,14 @@ export function TracksPanel({
   }
 
   function replaceTracks(
-    nextTracks: TrackState[],
+    nextPlanetTracks: TrackState[],
     nextActiveTrackId = activeTrackId,
     nextSelectedPointId: string | null = selectedPointId,
   ) {
+    const otherTracks = tracks.filter((track) => track.planetId !== planetId);
+    const nextTracks = [...otherTracks, ...nextPlanetTracks];
     onTracksChange(nextTracks, nextActiveTrackId, nextSelectedPointId);
-    const nextActiveTrack = nextTracks.find((track) => track.id === nextActiveTrackId);
+    const nextActiveTrack = nextPlanetTracks.find((track) => track.id === nextActiveTrackId);
     if (nextActiveTrack) {
       onTrackToolChange({
         mode,
@@ -84,24 +95,25 @@ export function TracksPanel({
   }
 
   function addTrack() {
-    const track = createDefaultTrackState();
-    replaceTracks([...tracks, track], track.id, null);
+    const track = createDefaultTrackState(undefined, planetId);
+    replaceTracks([...planetTracks, track], track.id, null);
   }
 
   function duplicateTrack() {
     if (!activeTrack) return;
     const duplicate: TrackState = {
       ...activeTrack,
-      id: createDefaultTrackState().id,
+      id: createDefaultTrackState(undefined, planetId).id,
+      planetId,
       name: `${activeTrack.name} Copy`,
       points: activeTrack.points.map((point) => ({ ...point, id: createPointId() })),
     };
-    replaceTracks([...tracks, duplicate], duplicate.id, null);
+    replaceTracks([...planetTracks, duplicate], duplicate.id, null);
   }
 
   function deleteTrack() {
-    if (tracks.length <= 1 || !activeTrack) return;
-    const nextTracks = tracks.filter((track) => track.id !== activeTrack.id);
+    if (planetTracks.length <= 1 || !activeTrack) return;
+    const nextTracks = planetTracks.filter((track) => track.id !== activeTrack.id);
     replaceTracks(nextTracks, nextTracks[0].id, null);
   }
 
@@ -164,7 +176,7 @@ export function TracksPanel({
     <div className="space-y-4">
       <Section title="Tracks">
         <GridSelector
-          items={tracks.map((t) => ({
+          items={planetTracks.map((t) => ({
             id: t.id,
             label: t.name,
             description: `${t.points.length} pts`,
@@ -188,7 +200,7 @@ export function TracksPanel({
           </button>
           <button
             onClick={deleteTrack}
-            disabled={tracks.length <= 1}
+            disabled={planetTracks.length <= 1}
             className="py-1 text-xs rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 transition-colors"
           >
             Delete

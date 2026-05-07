@@ -36,8 +36,33 @@ const TEST_CONFIG: EditorConfig = {
         color: 0,
         intensity: 1,
         opacity: 1,
+        blendMode: "normal",
         fresnelPower: 1,
         falloffPower: 1,
+        clouds: {
+          enabled: false,
+          height: 0,
+          thickness: 1,
+          density: 0,
+          color: 0,
+          shadowStrength: 0,
+          coverageScale: 1,
+          movementSpeed: 0,
+          opacity: 0,
+          blendMode: "normal",
+          puffs: {
+            enabled: false,
+            height: 0,
+            thickness: 1,
+            density: 0,
+            size: 1,
+            color: 0,
+            opacity: 0,
+            blendMode: "normal",
+            shadowStrength: 0,
+            movementSpeed: 0,
+          },
+        },
       },
       lighting: {
         sunAzimuth: 0,
@@ -53,13 +78,14 @@ const TEST_CONFIG: EditorConfig = {
     },
   ],
   shaders: {
-    cel: { bands: 3, softness: 0.2, hatchStrength: 0, hatchScale: 1 },
+    cel: { enabled: true, bands: 3, softness: 0.2, hatchStrength: 0, hatchScale: 1 },
   },
 };
 
 function makeTrack(pointRadius: number): TrackState {
   return {
     id: "track-1",
+    planetId: "planet-0",
     name: "Track 1",
     closed: false,
     width: 8,

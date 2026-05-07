@@ -56,6 +56,13 @@ export const waterFragmentShader = `
   uniform float shimmerScale;
   uniform float shimmerSpeed;
   uniform float opacity;
+  uniform vec3 sunDirection;
+  uniform float planetRadius;
+  uniform float puffyCloudShadowStrength;
+  uniform float puffyCloudShadowDensity;
+  uniform float puffyCloudShadowHeight;
+  uniform float puffyCloudShadowSize;
+  uniform float puffyCloudShadowMovementSpeed;
 
   varying vec3 vNormal;
   varying vec3 vWorldPosition;
@@ -76,6 +83,41 @@ export const waterFragmentShader = `
                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+
+  float puffyCloudShadow(vec3 surfaceNormal) {
+    if (puffyCloudShadowStrength <= 0.0 || puffyCloudShadowDensity <= 0.0) return 1.0;
+
+    vec3 sun = normalize(sunDirection);
+    float litSide = smoothstep(-0.2, 0.35, dot(surfaceNormal, sun));
+    if (litSide <= 0.0) return 1.0;
+
+    float projectionOffset = clamp(puffyCloudShadowHeight / max(planetRadius, 1.0), 0.01, 0.28);
+    vec3 cloudNormal = normalize(surfaceNormal + sun * projectionOffset);
+    float drift = time * puffyCloudShadowMovementSpeed * 0.22;
+    float normalizedDensity =
+      puffyCloudShadowDensity <= 1.0
+        ? puffyCloudShadowDensity
+        : clamp(puffyCloudShadowDensity / 14.0, 0.0, 1.0);
+    float radiusScale = clamp(puffyCloudShadowSize / 14.0, 0.55, 2.4);
+    float coverage = 0.0;
+
+    for (int i = 0; i < 12; i++) {
+      float fi = float(i);
+      float y = 1.0 - (fi / 11.0) * 2.0;
+      float ringRadius = sqrt(max(0.0, 1.0 - y * y));
+      float theta = fi * 2.39996323 + drift;
+      float bankSeed = fi * 23.71;
+      float bankCoverage = hash(vec3(bankSeed + 0.3, bankSeed + 1.7, bankSeed + 2.9));
+      float visible = smoothstep(bankCoverage - 0.22, bankCoverage + 0.28, normalizedDensity);
+      vec3 bankNormal = normalize(vec3(cos(theta) * ringRadius, y, sin(theta) * ringRadius));
+      float angularFalloff = 1.0 - dot(cloudNormal, bankNormal);
+      float width = (0.014 + hash(vec3(bankSeed + 1.3, bankSeed + 3.1, 0.0)) * 0.018) * radiusScale;
+      coverage += (1.0 - smoothstep(0.0, width, angularFalloff)) * visible;
+    }
+
+    float shadow = clamp(coverage, 0.0, 1.0) * puffyCloudShadowStrength * litSide;
+    return 1.0 - shadow * 0.45;
   }
 
   vec3 rippleNormal(vec3 baseNormal) {
@@ -109,7 +151,7 @@ export const waterFragmentShader = `
     waterColor = mix(waterColor, shoreLineColor, shoreBand * shoreLineStrength);
     waterColor = mix(waterColor, rimColor, fresnel * 0.4);
 
-    vec3 lightDir = normalize(vec3(200.0, 300.0, 100.0));
+    vec3 lightDir = normalize(sunDirection);
     float diff = max(dot(waterNormal, lightDir), 0.0);
     diff = getCelLighting(diff);
     vec3 ambient = vec3(0.45);
@@ -120,6 +162,7 @@ export const waterFragmentShader = `
 
     vec3 finalColor = waterColor * (diff + ambient) + vec3(1.0) * spec * specularStrength;
     finalColor *= getHatching(gl_FragCoord.xy / 1000.0, diff);
+    finalColor *= puffyCloudShadow(normalize(vNormal));
     finalColor += glowColor * fresnel * glowIntensity;
 
     float deepOpacity = smoothstep(0.0, opaqueDepth, depth);

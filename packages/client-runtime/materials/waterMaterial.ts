@@ -9,6 +9,16 @@ import type { RuntimeMapCel } from "@splat/content/map/runtimeMapData.ts";
 export interface WaterMaterialOptions {
   deepColor: number;
   cel: RuntimeMapCel;
+  planetRadius?: number;
+  sunDirection?: THREE.Vector3;
+  puffyCloudShadows?: {
+    enabled: boolean;
+    density: number;
+    height: number;
+    size: number;
+    strength: number;
+    movementSpeed: number;
+  };
 }
 
 function hexToVec3(hex: number): THREE.Vector3 {
@@ -52,10 +62,22 @@ export function createWaterMaterial(options: WaterMaterialOptions): THREE.Shader
       shimmerScale: { value: cfg.shimmerScale },
       shimmerSpeed: { value: cfg.shimmerSpeed },
       opacity: { value: cfg.opacity },
+      sunDirection: { value: options.sunDirection?.clone() ?? new THREE.Vector3(0.5, 0.7, 0.5) },
+      celEnabled: { value: "enabled" in options.cel && options.cel.enabled === false ? 0 : 1 },
       celBands: { value: options.cel.bands },
       celSoftness: { value: options.cel.softness },
       celHatchStrength: { value: options.cel.hatchStrength },
       celHatchScale: { value: options.cel.hatchScale },
+      planetRadius: { value: options.planetRadius ?? 1 },
+      puffyCloudShadowStrength: {
+        value: options.puffyCloudShadows?.enabled ? options.puffyCloudShadows.strength : 0,
+      },
+      puffyCloudShadowDensity: { value: options.puffyCloudShadows?.density ?? 0 },
+      puffyCloudShadowHeight: { value: options.puffyCloudShadows?.height ?? 0 },
+      puffyCloudShadowSize: { value: options.puffyCloudShadows?.size ?? 0 },
+      puffyCloudShadowMovementSpeed: {
+        value: options.puffyCloudShadows?.movementSpeed ?? 0,
+      },
     },
     vertexShader: waterVertexShader,
     fragmentShader: waterFragmentShader,

@@ -5,7 +5,6 @@ import {
   getTerrainRadius,
   type TerrainSurfaceProvider,
 } from "@splat/simulation/terrain/planetTerrain.ts";
-import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosphereMaterial.ts";
 import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import { buildPlanetGeometry, buildWaterGeometry } from "../rendering/planetGeometry.ts";
 import { createPlanetMaterial } from "@splat/client-runtime/materials/planetMaterial.ts";
@@ -33,6 +32,14 @@ import type {
   PropBrushState,
 } from "../types.ts";
 import { PlayerPreviewController } from "./PlayerPreviewController.ts";
+import {
+  createPlanetAtmosphereShells,
+  disposePlanetAtmosphereShells,
+  type PlanetAtmosphereShells,
+  syncPlanetAtmosphereShells,
+  updatePlanetAtmosphereTime,
+  updatePlanetAtmosphereUniforms,
+} from "./planetAtmosphereShells.ts";
 
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
@@ -47,10 +54,9 @@ interface PlanetRenderState {
   terrainMesh: THREE.Mesh;
   outlineMesh: THREE.Mesh;
   waterMesh: THREE.Mesh | null;
-  atmosphereMesh: THREE.Mesh | null;
+  atmosphere: PlanetAtmosphereShells;
   planetMaterial: THREE.ShaderMaterial;
   waterMaterial: THREE.ShaderMaterial | null;
-  atmosphereMaterial: THREE.ShaderMaterial | null;
 }
 
 export class EditorScene {
@@ -159,15 +165,20 @@ export class EditorScene {
       config,
       this.previewTerrainProvider,
     );
-    this.trackPreviewVisuals = new TrackPreviewVisuals(this.scene, config, tracks, (nx, ny, nz) => {
-      const planet = this.getPlanetById(this.activePlanetId);
-      return (
-        getTerrainRadius(nx, ny, nz, {
-          planet: { radius: planet.radius },
-          terrain: planet.terrain,
-        }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
-      );
-    });
+    this.trackPreviewVisuals = new TrackPreviewVisuals(
+      this.scene,
+      config,
+      this.getActivePlanetTracks(),
+      (nx, ny, nz) => {
+        const planet = this.getPlanetById(this.activePlanetId);
+        return (
+          getTerrainRadius(nx, ny, nz, {
+            planet: { radius: planet.radius },
+            terrain: planet.terrain,
+          }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
+        );
+      },
+    );
 
     this.outlineMaterial = createOutlineMaterial();
 
@@ -260,7 +271,7 @@ export class EditorScene {
   setTracks(tracks: TrackState[]): void {
     this.tracks = tracks;
     this.rebuildTrackCarveSamples();
-    this.trackPreviewVisuals.setTracks(tracks);
+    this.trackPreviewVisuals.setTracks(this.getActivePlanetTracks());
     this.playerPreview.setConfig(this.currentConfig);
   }
 
@@ -285,6 +296,7 @@ export class EditorScene {
       this.propPaintTool.setPlanetMesh(render.terrainMesh);
       this.trackTool.setPlanetMesh(render.terrainMesh);
       this.brushTool.resetSculptBase(this.getPlanetById(id));
+      this.trackPreviewVisuals.setTracks(this.getActivePlanetTracks());
     }
     const prevTarget = this.controls.target.clone();
     const camOffset = this.camera.position.clone().sub(prevTarget);
@@ -346,7 +358,7 @@ export class EditorScene {
     for (const render of this.planetRenders.values()) {
       terrainMeshes.push(render.terrainMesh, render.outlineMesh);
       waterMeshes.push(render.waterMesh);
-      atmoMeshes.push(render.atmosphereMesh);
+      atmoMeshes.push(render.atmosphere.atmosphereMesh);
     }
     const groups = [
       createMetricGroup(
@@ -418,12 +430,15 @@ export class EditorScene {
     return this.currentConfig.planets.find((p) => p.id === id) ?? this.currentConfig.planets[0]!;
   }
 
+  private getActivePlanetTracks(): TrackState[] {
+    return this.tracks.filter((track) => track.planetId === this.activePlanetId);
+  }
+
   private buildPlanetRender(planet: EditorPlanet): PlanetRenderState {
     const group = new THREE.Group();
     group.position.set(planet.center.x, planet.center.y, planet.center.z);
 
     const waterRadius = planet.radius + planet.terrain.waterLevel;
-    const atmosphereRadius = planet.radius + planet.atmosphere.height;
     const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
 
     const displacements =
@@ -445,6 +460,14 @@ export class EditorScene {
       colors: planet.colors,
       cel: this.currentConfig.shaders.cel,
       lighting: planet.lighting,
+      puffyCloudShadows: {
+        enabled: planet.atmosphere.clouds.puffs.enabled,
+        density: planet.atmosphere.clouds.puffs.density,
+        height: planet.atmosphere.clouds.puffs.height,
+        size: planet.atmosphere.clouds.puffs.size,
+        strength: planet.atmosphere.clouds.puffs.shadowStrength,
+        movementSpeed: planet.atmosphere.clouds.puffs.movementSpeed,
+      },
     });
 
     const terrainMesh = new THREE.Mesh(planetGeo, planetMaterial);
@@ -457,33 +480,31 @@ export class EditorScene {
       waterMaterial = createWaterMaterial({
         deepColor: planet.colors.waterDeep,
         cel: this.currentConfig.shaders.cel,
+        planetRadius: planet.radius,
+        puffyCloudShadows: {
+          enabled: planet.atmosphere.clouds.puffs.enabled,
+          density: planet.atmosphere.clouds.puffs.density,
+          height: planet.atmosphere.clouds.puffs.height,
+          size: planet.atmosphere.clouds.puffs.size,
+          strength: planet.atmosphere.clouds.puffs.shadowStrength,
+          movementSpeed: planet.atmosphere.clouds.puffs.movementSpeed,
+        },
       });
       waterMesh = new THREE.Mesh(buildWaterGeometry(waterRadius, terrainCfg), waterMaterial);
       waterMesh.renderOrder = 1;
       group.add(waterMesh);
     }
 
-    let atmosphereMesh: THREE.Mesh | null = null;
-    let atmosphereMaterial: THREE.ShaderMaterial | null = null;
-    if (planet.atmosphere.enabled) {
-      atmosphereMaterial = createAtmosphereMaterial(planet.atmosphere);
-      atmosphereMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(atmosphereRadius, 48, 48),
-        atmosphereMaterial,
-      );
-      atmosphereMesh.renderOrder = 2;
-      group.add(atmosphereMesh);
-    }
+    const atmosphere = createPlanetAtmosphereShells(group, planet);
 
     return {
       group,
       terrainMesh,
       outlineMesh,
       waterMesh,
-      atmosphereMesh,
+      atmosphere,
       planetMaterial,
       waterMaterial,
-      atmosphereMaterial,
     };
   }
 
@@ -492,8 +513,7 @@ export class EditorScene {
     render.planetMaterial.dispose();
     render.waterMesh?.geometry.dispose();
     render.waterMaterial?.dispose();
-    render.atmosphereMesh?.geometry.dispose();
-    render.atmosphereMaterial?.dispose();
+    disposePlanetAtmosphereShells(render.atmosphere);
   }
 
   private syncPlanetRenders(config: EditorConfig): void {
@@ -505,6 +525,7 @@ export class EditorScene {
       }
       const render = this.planetRenders.get(planet.id)!;
       render.group.position.set(planet.center.x, planet.center.y, planet.center.z);
+      syncPlanetAtmosphereShells(render.group, planet, render.atmosphere);
     }
 
     const configIds = new Set(config.planets.map((p) => p.id));
@@ -537,6 +558,7 @@ export class EditorScene {
     u.snowColor.value = new THREE.Color(planet.colors.snow);
     u.waterDeepColor.value = hexToVec3(planet.colors.waterDeep);
 
+    u.celEnabled.value = cel.enabled ? 1 : 0;
     u.celBands.value = cel.bands;
     u.celSoftness.value = cel.softness;
     u.celHatchStrength.value = cel.hatchStrength;
@@ -544,10 +566,24 @@ export class EditorScene {
 
     if (render.waterMaterial) {
       render.waterMaterial.uniforms.deepColor.value = hexToVec3(planet.colors.waterDeep);
+      render.waterMaterial.uniforms.celEnabled.value = cel.enabled ? 1 : 0;
       render.waterMaterial.uniforms.celBands.value = cel.bands;
       render.waterMaterial.uniforms.celSoftness.value = cel.softness;
       render.waterMaterial.uniforms.celHatchStrength.value = cel.hatchStrength;
       render.waterMaterial.uniforms.celHatchScale.value = cel.hatchScale;
+      render.waterMaterial.uniforms.planetRadius.value = planet.radius;
+      render.waterMaterial.uniforms.puffyCloudShadowStrength.value = planet.atmosphere.clouds.puffs
+        .enabled
+        ? planet.atmosphere.clouds.puffs.shadowStrength
+        : 0;
+      render.waterMaterial.uniforms.puffyCloudShadowDensity.value =
+        planet.atmosphere.clouds.puffs.density;
+      render.waterMaterial.uniforms.puffyCloudShadowHeight.value =
+        planet.atmosphere.clouds.puffs.height;
+      render.waterMaterial.uniforms.puffyCloudShadowSize.value =
+        planet.atmosphere.clouds.puffs.size;
+      render.waterMaterial.uniforms.puffyCloudShadowMovementSpeed.value =
+        planet.atmosphere.clouds.puffs.movementSpeed;
     }
 
     const { lighting } = planet;
@@ -563,15 +599,17 @@ export class EditorScene {
     u.rimColor.value = new THREE.Color(lighting.rimColor);
     u.rimStrength.value = lighting.rimStrength;
     u.rimPower.value = lighting.rimPower;
+    if (render.waterMaterial)
+      render.waterMaterial.uniforms.sunDirection.value.copy(u.sunDirection.value);
+    u.puffyCloudShadowStrength.value = planet.atmosphere.clouds.puffs.enabled
+      ? planet.atmosphere.clouds.puffs.shadowStrength
+      : 0;
+    u.puffyCloudShadowDensity.value = planet.atmosphere.clouds.puffs.density;
+    u.puffyCloudShadowHeight.value = planet.atmosphere.clouds.puffs.height;
+    u.puffyCloudShadowSize.value = planet.atmosphere.clouds.puffs.size;
+    u.puffyCloudShadowMovementSpeed.value = planet.atmosphere.clouds.puffs.movementSpeed;
 
-    if (render.atmosphereMaterial) {
-      const au = render.atmosphereMaterial.uniforms;
-      au.atmosphereColor.value = new THREE.Color(planet.atmosphere.color);
-      au.intensity.value = planet.atmosphere.intensity;
-      au.opacity.value = planet.atmosphere.opacity;
-      au.fresnelPower.value = planet.atmosphere.fresnelPower;
-      au.falloffPower.value = planet.atmosphere.falloffPower;
-    }
+    updatePlanetAtmosphereUniforms(planet, render.atmosphere, u.sunDirection.value);
   }
 
   private rebuildPlanetMeshes(): void {
@@ -604,12 +642,12 @@ export class EditorScene {
       );
     };
     this.trackCarveSamples = buildTrackCarveSamples(
-      this.tracks,
+      this.getActivePlanetTracks(),
       this.currentConfig,
       getRadiusAtNormal,
     );
     this.trackSurfaceSamples = buildTrackSurfaceSamples(
-      this.tracks,
+      this.getActivePlanetTracks(),
       this.currentConfig,
       getRadiusAtNormal,
     );
@@ -784,6 +822,7 @@ export class EditorScene {
       for (const render of this.planetRenders.values()) {
         render.planetMaterial.uniforms.time.value = t;
         if (render.waterMaterial) render.waterMaterial.uniforms.time.value = t;
+        updatePlanetAtmosphereTime(render.atmosphere, t);
       }
       if (this.isPreviewActive) {
         this.playerPreview.update(dt);

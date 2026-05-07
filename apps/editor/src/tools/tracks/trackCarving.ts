@@ -35,11 +35,11 @@ export function buildTrackCarveSamples(
   getRadiusAtNormal: TrackRadiusSampler,
 ): TrackCarveSample[] {
   const samples: TrackCarveSample[] = [];
-  const p0 = config.planets[0]!;
-  const waterRadius = p0.radius + p0.terrain.waterLevel;
 
   for (const track of tracks) {
     if (track.points.length < 2) continue;
+    const planet = config.planets.find((p) => p.id === track.planetId) ?? config.planets[0]!;
+    const waterRadius = planet.radius + planet.terrain.waterLevel;
 
     const controls = track.points.map((point) => {
       if (point.position) return new THREE.Vector3(...point.position);

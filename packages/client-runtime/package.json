@@ -6,10 +6,13 @@
     "./systems/cameraSystem.ts": "./systems/cameraSystem.ts",
     "./shaders/atmosphereShader.ts": "./shaders/atmosphereShader.ts",
     "./shaders/celShader.ts": "./shaders/celShader.ts",
+    "./shaders/cloudShader.ts": "./shaders/cloudShader.ts",
     "./shaders/outlineShader.ts": "./shaders/outlineShader.ts",
     "./shaders/planetShader.ts": "./shaders/planetShader.ts",
     "./shaders/waterShader.ts": "./shaders/waterShader.ts",
+    "./geometry/puffyCloudGeometry.ts": "./geometry/puffyCloudGeometry.ts",
     "./materials/atmosphereMaterial.ts": "./materials/atmosphereMaterial.ts",
+    "./materials/cloudMaterial.ts": "./materials/cloudMaterial.ts",
     "./materials/outlineMaterial.ts": "./materials/outlineMaterial.ts",
     "./materials/waterMaterial.ts": "./materials/waterMaterial.ts",
     "./materials/planetMaterial.ts": "./materials/planetMaterial.ts"

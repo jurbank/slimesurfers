@@ -5,10 +5,17 @@ interface SectionProps {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  headerControl?: ReactNode;
   onReset?: () => void;
 }
 
-export function Section({ title, children, defaultOpen = true, onReset }: SectionProps) {
+export function Section({
+  title,
+  children,
+  defaultOpen = true,
+  headerControl,
+  onReset,
+}: SectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -20,7 +27,8 @@ export function Section({ title, children, defaultOpen = true, onReset }: Sectio
         >
           {title}
         </button>
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
+          {headerControl}
           {onReset && (
             <button
               onClick={onReset}

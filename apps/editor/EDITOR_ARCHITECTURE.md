@@ -109,6 +109,20 @@ Currently owns browser runtime presentation:
 
 Shared client runtime pieces that the editor also needs should migrate out of `apps/game/client` only when there is a concrete second use in the editor.
 
+### `packages/client-runtime`
+
+Owns browser presentation code that has both editor preview and live game value:
+
+- shared shader source and material factories
+- shared render geometry builders and lightweight visual systems
+- camera/input/presentation helpers used by both editor preview and game client
+
+When an editor preview feature starts implementing production-like rendering behavior such as
+planet materials, water, atmosphere, clouds, player visuals, paint visuals, or other map
+presentation, prefer putting the reusable shader/material/geometry code in `packages/client-runtime`
+from the start. The editor should keep scene lifecycle, authoring UI, and preview-only controls, but
+should not become the long-term owner of rendering primitives that the game is expected to share.
+
 ### `apps/editor`
 
 Owns editor workflow:

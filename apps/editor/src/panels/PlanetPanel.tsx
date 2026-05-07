@@ -7,6 +7,7 @@ interface PlanetPanelProps {
   activePlanetId: string;
   onPlanetsChange: (planets: EditorPlanet[]) => void;
   onActivePlanetChange: (id: string) => void;
+  showPlanetList?: boolean;
 }
 
 function nextPlanetId(planets: EditorPlanet[]): string {
@@ -22,6 +23,7 @@ export function PlanetPanel({
   activePlanetId,
   onPlanetsChange,
   onActivePlanetChange,
+  showPlanetList = true,
 }: PlanetPanelProps) {
   const planets = config.planets;
   const activePlanet = planets.find((p) => p.id === activePlanetId) ?? planets[0]!;
@@ -48,28 +50,30 @@ export function PlanetPanel({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        {planets.map((planet, index) => (
+      {showPlanetList && (
+        <div className="space-y-1">
+          {planets.map((planet, index) => (
+            <button
+              key={planet.id}
+              onClick={() => onActivePlanetChange(planet.id)}
+              className={`w-full text-left px-3 py-2 rounded text-xs transition-colors ${
+                planet.id === activePlanetId
+                  ? "bg-cyan-900/40 border border-cyan-600 text-cyan-300"
+                  : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+              }`}
+            >
+              {planet.id}
+              {index === 0 ? " (main)" : ""}
+            </button>
+          ))}
           <button
-            key={planet.id}
-            onClick={() => onActivePlanetChange(planet.id)}
-            className={`w-full text-left px-3 py-2 rounded text-xs transition-colors ${
-              planet.id === activePlanetId
-                ? "bg-cyan-900/40 border border-cyan-600 text-cyan-300"
-                : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
-            }`}
+            onClick={addPlanet}
+            className="w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
           >
-            {planet.id}
-            {index === 0 ? " (main)" : ""}
+            + Add planet
           </button>
-        ))}
-        <button
-          onClick={addPlanet}
-          className="w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-        >
-          + Add planet
-        </button>
-      </div>
+        </div>
+      )}
 
       <Section title={`Edit: ${activePlanet.id}`} defaultOpen>
         <Slider

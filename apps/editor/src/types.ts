@@ -10,6 +10,7 @@ import {
 
 export type BrushMode = "raise" | "lower" | "smooth" | "flatten";
 export type BrushFalloff = "smooth" | "linear" | "sharp";
+export type ShaderBlendMode = "normal" | "additive" | "multiply";
 export type PropId =
   | "lowPolyTree"
   | "palmTree"
@@ -69,8 +70,33 @@ export interface EditorPlanet {
     color: number;
     intensity: number;
     opacity: number;
+    blendMode: ShaderBlendMode;
     fresnelPower: number;
     falloffPower: number;
+    clouds: {
+      enabled: boolean;
+      height: number;
+      thickness: number;
+      density: number;
+      color: number;
+      shadowStrength: number;
+      coverageScale: number;
+      movementSpeed: number;
+      opacity: number;
+      blendMode: ShaderBlendMode;
+      puffs: {
+        enabled: boolean;
+        height: number;
+        thickness: number;
+        density: number;
+        size: number;
+        color: number;
+        opacity: number;
+        blendMode: ShaderBlendMode;
+        shadowStrength: number;
+        movementSpeed: number;
+      };
+    };
   };
   lighting: {
     sunAzimuth: number;
@@ -94,6 +120,7 @@ export interface EditorConfig {
   planets: EditorPlanet[];
   shaders: {
     cel: {
+      enabled: boolean;
       bands: number;
       softness: number;
       hatchStrength: number;
@@ -161,8 +188,33 @@ export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): 
       color: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.color,
       intensity: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.intensity,
       opacity: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.opacity,
+      blendMode: "normal",
       fresnelPower: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.fresnelPower,
       falloffPower: DEFAULT_RUNTIME_PLANET_ATMOSPHERE.falloffPower,
+      clouds: {
+        enabled: true,
+        height: 26,
+        thickness: 4,
+        density: 0.48,
+        color: 0xffffff,
+        shadowStrength: 0.34,
+        coverageScale: 3.6,
+        movementSpeed: 0.08,
+        opacity: 0.72,
+        blendMode: "normal",
+        puffs: {
+          enabled: true,
+          height: 18,
+          thickness: 10,
+          density: 10,
+          size: 14,
+          color: 0xffffff,
+          opacity: 0.78,
+          blendMode: "normal",
+          shadowStrength: 0.28,
+          movementSpeed: 0.04,
+        },
+      },
     },
     lighting: {
       sunAzimuth: DEFAULT_RUNTIME_PLANET_LIGHTING.sunAzimuth,
@@ -188,6 +240,7 @@ export function defaultEditorConfig(): EditorConfig {
     planets: [defaultEditorPlanet("planet-0")],
     shaders: {
       cel: {
+        enabled: true,
         bands: DEFAULT_RUNTIME_CEL.bands,
         softness: DEFAULT_RUNTIME_CEL.softness,
         hatchStrength: DEFAULT_RUNTIME_CEL.hatchStrength,

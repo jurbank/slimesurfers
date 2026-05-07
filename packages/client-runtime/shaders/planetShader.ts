@@ -56,6 +56,11 @@ export const planetFragmentShader = `
   uniform vec3 rimColor;
   uniform float rimStrength;
   uniform float rimPower;
+  uniform float puffyCloudShadowStrength;
+  uniform float puffyCloudShadowDensity;
+  uniform float puffyCloudShadowHeight;
+  uniform float puffyCloudShadowSize;
+  uniform float puffyCloudShadowMovementSpeed;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -78,6 +83,41 @@ export const planetFragmentShader = `
                    mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
                    mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+
+  float puffyCloudShadow(vec3 surfaceNormal) {
+    if (puffyCloudShadowStrength <= 0.0 || puffyCloudShadowDensity <= 0.0) return 1.0;
+
+    vec3 sun = normalize(sunDirection);
+    float litSide = smoothstep(-0.2, 0.35, dot(surfaceNormal, sun));
+    if (litSide <= 0.0) return 1.0;
+
+    float projectionOffset = clamp(puffyCloudShadowHeight / max(planetRadius, 1.0), 0.01, 0.28);
+    vec3 cloudNormal = normalize(surfaceNormal + sun * projectionOffset);
+    float drift = time * puffyCloudShadowMovementSpeed * 0.22;
+    float normalizedDensity =
+      puffyCloudShadowDensity <= 1.0
+        ? puffyCloudShadowDensity
+        : clamp(puffyCloudShadowDensity / 14.0, 0.0, 1.0);
+    float radiusScale = clamp(puffyCloudShadowSize / 14.0, 0.55, 2.4);
+    float coverage = 0.0;
+
+    for (int i = 0; i < 12; i++) {
+      float fi = float(i);
+      float y = 1.0 - (fi / 11.0) * 2.0;
+      float ringRadius = sqrt(max(0.0, 1.0 - y * y));
+      float theta = fi * 2.39996323 + drift;
+      float bankSeed = fi * 23.71;
+      float bankCoverage = hash(vec3(bankSeed + 0.3, bankSeed + 1.7, bankSeed + 2.9));
+      float visible = smoothstep(bankCoverage - 0.22, bankCoverage + 0.28, normalizedDensity);
+      vec3 bankNormal = normalize(vec3(cos(theta) * ringRadius, y, sin(theta) * ringRadius));
+      float angularFalloff = 1.0 - dot(cloudNormal, bankNormal);
+      float width = (0.014 + hash(vec3(bankSeed + 1.3, bankSeed + 3.1, 0.0)) * 0.018) * radiusScale;
+      coverage += (1.0 - smoothstep(0.0, width, angularFalloff)) * visible;
+    }
+
+    float shadow = clamp(coverage, 0.0, 1.0) * puffyCloudShadowStrength * litSide;
+    return 1.0 - shadow * 0.45;
   }
 
   vec3 paintNormal(vec3 baseNormal, vec3 localNormal, float flowA, float flowB) {
@@ -161,6 +201,7 @@ export const planetFragmentShader = `
     shadedPaint *= 1.0 - pooledCenter * slimePoolDarkening * 0.18;
 
     vec3 finalColor = mix(shadedTerrain, shadedPaint, mask * paintBlendStrength);
+    finalColor *= puffyCloudShadow(smoothLocalNormal);
 
     float rimDot = 1.0 - max(dot(viewDir, normalize(vSmoothNormal)), 0.0);
     finalColor += rimColor * pow(rimDot, rimPower) * rimStrength;

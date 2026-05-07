@@ -1,5 +1,4 @@
-import { useCallback, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PlanetPanel } from "./panels/PlanetPanel.tsx";
@@ -28,16 +27,13 @@ import {
 } from "./types.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
 
-type Panel = "planets" | "terrain" | "shaders" | "props" | "tracks" | "spawns";
-
-const PANELS: { id: Panel; label: string }[] = [
-  { id: "planets", label: "Planets" },
-  { id: "terrain", label: "Terrain" },
-  { id: "shaders", label: "Shaders" },
-  { id: "props", label: "Props" },
-  { id: "tracks", label: "Tracks" },
-  { id: "spawns", label: "Spawns" },
-];
+type LayerSelection =
+  | { kind: "global"; panel: "cel" | "spawns" }
+  | {
+      kind: "planet";
+      planetId: string;
+      panel: "planet" | "terrain" | "props" | "tracks" | "atmosphere" | "lighting";
+    };
 
 const REBUILD_DELAY_MS = 600;
 const LOCAL_SAVE_KEY = "slime-surfers-editor-save";
@@ -65,7 +61,6 @@ interface InitialEditorState {
 
 export function App() {
   const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
-  const [activePanel, setActivePanel] = useState<Panel>("terrain");
   const [config, setConfig] = useState<EditorConfig>(initialState.config);
   const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
   const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
@@ -79,6 +74,11 @@ export function App() {
   const [activePlanetId, setActivePlanetId] = useState(
     () => initialState.config.planets[0]?.id ?? "planet-0",
   );
+  const [selectedLayer, setSelectedLayer] = useState<LayerSelection>(() => ({
+    kind: "planet",
+    planetId: initialState.config.planets[0]?.id ?? "planet-0",
+    panel: "terrain",
+  }));
   const configRef = useRef<EditorConfig>(config);
   const tracksRef = useRef<TrackState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
@@ -156,6 +156,54 @@ export function App() {
     sceneRef.current?.setPreviewActive(next);
   }, []);
 
+  const ensureActiveTrackForPlanet = useCallback((planetId: string) => {
+    let nextTracks = tracksRef.current;
+    let activeTrack = nextTracks.find((track) => track.planetId === planetId);
+    if (!activeTrack) {
+      activeTrack = createDefaultTrackState(undefined, planetId);
+      nextTracks = [...nextTracks, activeTrack];
+      tracksRef.current = nextTracks;
+      setTracks(nextTracks);
+      sceneRef.current?.setTracks(nextTracks);
+      setSaveStatus("idle");
+    }
+
+    if (activeTrackIdRef.current !== activeTrack.id) {
+      activeTrackIdRef.current = activeTrack.id;
+      selectedTrackPointIdRef.current = null;
+      setActiveTrackId(activeTrack.id);
+      setSelectedTrackPointId(null);
+      sceneRef.current?.setTrackToolState({
+        mode: null,
+        track: activeTrack,
+        selectedPointId: null,
+      });
+    }
+  }, []);
+
+  const clearTransientTools = useCallback((nextLayer: LayerSelection) => {
+    if (nextLayer.kind !== "planet" || nextLayer.panel !== "terrain") {
+      sceneRef.current?.setBrushState(null);
+    }
+    if (nextLayer.kind !== "planet" || nextLayer.panel !== "props") {
+      sceneRef.current?.setPropBrushState(null);
+    }
+    if (nextLayer.kind !== "global" || nextLayer.panel !== "spawns") {
+      setSpawnPlacementActive(false);
+      sceneRef.current?.setSpawnPlacementActive(false);
+    }
+    if (nextLayer.kind !== "planet" || nextLayer.panel !== "tracks") {
+      const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
+      if (activeTrack) {
+        sceneRef.current?.setTrackToolState({
+          mode: null,
+          track: activeTrack,
+          selectedPointId: selectedTrackPointIdRef.current,
+        });
+      }
+    }
+  }, []);
+
   const setActiveTrack = useCallback((trackId: string) => {
     setSaveStatus("idle");
     activeTrackIdRef.current = trackId;
@@ -193,12 +241,50 @@ export function App() {
     }, REBUILD_DELAY_MS);
   }, []);
 
-  const handleActivePlanetChange = useCallback((id: string) => {
-    activePlanetIdRef.current = id;
-    setActivePlanetId(id);
-    const planet = configRef.current.planets.find((p) => p.id === id);
-    if (planet) sceneRef.current?.setActivePlanet(id, planet.center);
-  }, []);
+  const handleActivePlanetChange = useCallback(
+    (id: string) => {
+      activePlanetIdRef.current = id;
+      setActivePlanetId(id);
+      ensureActiveTrackForPlanet(id);
+      const planet = configRef.current.planets.find((p) => p.id === id);
+      if (planet) sceneRef.current?.setActivePlanet(id, planet.center);
+    },
+    [ensureActiveTrackForPlanet],
+  );
+
+  const selectLayer = useCallback(
+    (nextLayer: LayerSelection) => {
+      clearTransientTools(nextLayer);
+      if (nextLayer.kind === "planet") {
+        handleActivePlanetChange(nextLayer.planetId);
+        if (nextLayer.panel === "tracks") ensureActiveTrackForPlanet(nextLayer.planetId);
+      }
+      setSelectedLayer(nextLayer);
+    },
+    [clearTransientTools, ensureActiveTrackForPlanet, handleActivePlanetChange],
+  );
+
+  const handlePreviewPlanetSelected = useCallback(
+    (planetId: string) => {
+      const panel = selectedLayer.kind === "planet" ? selectedLayer.panel : "planet";
+      selectLayer({ kind: "planet", planetId, panel });
+    },
+    [selectLayer, selectedLayer],
+  );
+
+  const addPlanet = useCallback(() => {
+    setSaveStatus("idle");
+    const planets = configRef.current.planets;
+    const id = nextPlanetId(planets);
+    const centerOffset = 400 * planets.length;
+    const nextPlanet = defaultEditorPlanet(id, { x: centerOffset, y: 0, z: 0 });
+    const nextConfig = { ...configRef.current, planets: [...planets, nextPlanet] };
+    configRef.current = nextConfig;
+    setConfig(nextConfig);
+    sceneRef.current?.updateUniforms(nextConfig);
+    handleActivePlanetChange(id);
+    setSelectedLayer({ kind: "planet", planetId: id, panel: "planet" });
+  }, [handleActivePlanetChange]);
 
   function handlePlanetsChange(planets: EditorPlanet[]) {
     setSaveStatus("idle");
@@ -210,6 +296,15 @@ export function App() {
       const firstId = planets[0]?.id ?? "";
       activePlanetIdRef.current = firstId;
       setActivePlanetId(firstId);
+      setSelectedLayer({ kind: "planet", planetId: firstId, panel: "planet" });
+    }
+
+    const planetIds = new Set(planets.map((planet) => planet.id));
+    const nextTracks = tracksRef.current.filter((track) => planetIds.has(track.planetId));
+    if (nextTracks.length !== tracksRef.current.length) {
+      tracksRef.current = nextTracks;
+      setTracks(nextTracks);
+      sceneRef.current?.setTracks(nextTracks);
     }
 
     setConfig(next);
@@ -304,37 +399,13 @@ export function App() {
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">Slime Surfers</p>
         </div>
-        <nav className="flex-1 p-2 space-y-0.5">
-          {PANELS.map(({ id, label }) => (
-            <NavItem
-              key={id}
-              active={activePanel === id}
-              onClick={() => {
-                if (id !== "terrain") sceneRef.current?.setBrushState(null);
-                if (id !== "props") sceneRef.current?.setPropBrushState(null);
-                if (id !== "spawns") {
-                  setSpawnPlacementActive(false);
-                  sceneRef.current?.setSpawnPlacementActive(false);
-                }
-                if (id !== "tracks") {
-                  const activeTrack = tracksRef.current.find(
-                    (track) => track.id === activeTrackIdRef.current,
-                  );
-                  if (activeTrack) {
-                    sceneRef.current?.setTrackToolState({
-                      mode: null,
-                      track: activeTrack,
-                      selectedPointId: selectedTrackPointIdRef.current,
-                    });
-                  }
-                }
-                setActivePanel(id);
-              }}
-            >
-              {label}
-            </NavItem>
-          ))}
-        </nav>
+        <LayerNavigator
+          config={config}
+          selectedLayer={selectedLayer}
+          activePlanetId={activePlanetId}
+          onSelectLayer={selectLayer}
+          onAddPlanet={addPlanet}
+        />
         <div className="border-t border-zinc-700 p-3 overflow-y-auto max-h-[55vh]">
           <PerformancePanel stats={performanceStats} />
         </div>
@@ -350,7 +421,7 @@ export function App() {
           onTrackPointSelectionChange={handleTrackPointSelectionChange}
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
-          onPlanetSelected={handleActivePlanetChange}
+          onPlanetSelected={handlePreviewPlanetSelected}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
           <button
@@ -484,41 +555,59 @@ export function App() {
 
       <aside className="w-72 border-l border-zinc-700 flex flex-col shrink-0">
         <div className="p-4 border-b border-zinc-700">
-          <h2 className="text-sm font-semibold text-zinc-300 capitalize">{activePanel}</h2>
-          {config.planets.length > 1 &&
-            (activePanel === "terrain" || activePanel === "shaders" || activePanel === "props") && (
-              <p className="text-xs text-cyan-500 mt-0.5">{activePlanetId}</p>
-            )}
+          <h2 className="text-sm font-semibold text-zinc-300">{getLayerTitle(selectedLayer)}</h2>
+          {selectedLayer.kind === "planet" && config.planets.length > 1 && (
+            <p className="text-xs text-cyan-500 mt-0.5">{selectedLayer.planetId}</p>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          {activePanel === "planets" && (
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "planet" && (
             <PlanetPanel
               config={config}
-              activePlanetId={activePlanetId}
+              activePlanetId={selectedLayer.planetId}
               onPlanetsChange={handlePlanetsChange}
               onActivePlanetChange={handleActivePlanetChange}
+              showPlanetList={false}
             />
           )}
-          {activePanel === "terrain" && (
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "terrain" && (
             <TerrainPanel
-              planet={config.planets.find((p) => p.id === activePlanetId) ?? config.planets[0]!}
+              planet={
+                config.planets.find((p) => p.id === selectedLayer.planetId) ?? config.planets[0]!
+              }
               onTerrainChange={handleTerrainChange}
               onColorsChange={handleColorsChange}
               onBrushChange={handleBrushChange}
             />
           )}
-          {activePanel === "shaders" && (
+          {selectedLayer.kind === "global" && selectedLayer.panel === "cel" && (
             <ShadersPanel
               planet={config.planets.find((p) => p.id === activePlanetId) ?? config.planets[0]!}
               shaders={config.shaders}
               onPlanetChange={handlePlanetChange}
               onShadersChange={handleShadersChange}
+              mode="cel"
             />
           )}
-          {activePanel === "props" && <PropsPanel onPropBrushChange={handlePropBrushChange} />}
-          {activePanel === "tracks" && (
+          {selectedLayer.kind === "planet" &&
+            (selectedLayer.panel === "atmosphere" || selectedLayer.panel === "lighting") && (
+              <ShadersPanel
+                planet={
+                  config.planets.find((p) => p.id === selectedLayer.planetId) ?? config.planets[0]!
+                }
+                shaders={config.shaders}
+                onPlanetChange={handlePlanetChange}
+                onShadersChange={handleShadersChange}
+                mode={selectedLayer.panel}
+              />
+            )}
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "props" && (
+            <PropsPanel onPropBrushChange={handlePropBrushChange} />
+          )}
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "tracks" && (
             <TracksPanel
               tracks={tracks}
+              planetId={selectedLayer.planetId}
               activeTrackId={activeTrackId}
               selectedPointId={selectedTrackPointId}
               onActiveTrackChange={setActiveTrack}
@@ -528,7 +617,7 @@ export function App() {
               onPointSelectionChange={handleTrackPointSelectionChange}
             />
           )}
-          {activePanel === "spawns" && (
+          {selectedLayer.kind === "global" && selectedLayer.panel === "spawns" && (
             <SpawnsPanel
               spawn={previewSpawn}
               placementActive={spawnPlacementActive}
@@ -696,12 +785,23 @@ function loadEditorState(): EditorSaveState | null {
       cfg.planets = [{ ...base, ...legacyPlanet, id: "planet-0" }];
       delete cfg.planet;
     }
+    parsed.config = normalizeEditorConfig(parsed.config as EditorConfig);
+
+    const planetIds = new Set(parsed.config.planets.map((planet) => planet.id));
+    const fallbackPlanetId = parsed.config.planets[0]?.id ?? "planet-0";
+    const migratedTracks = parsed.tracks.tracks.map((track) => ({
+      ...track,
+      planetId:
+        typeof track.planetId === "string" && planetIds.has(track.planetId)
+          ? track.planetId
+          : fallbackPlanetId,
+    }));
 
     const activeTrackId =
       typeof parsed.activeTrackId === "string" &&
-      parsed.tracks.tracks.some((track) => track.id === parsed.activeTrackId)
+      migratedTracks.some((track) => track.id === parsed.activeTrackId)
         ? parsed.activeTrackId
-        : parsed.tracks.tracks[0].id;
+        : migratedTracks[0].id;
 
     return {
       version: 1,
@@ -709,9 +809,10 @@ function loadEditorState(): EditorSaveState | null {
       config: parsed.config,
       tracks: {
         version: 1,
-        tracks: parsed.tracks.tracks,
+        tracks: migratedTracks,
       },
       activeTrackId,
+      previewSpawn: parsed.previewSpawn,
       mapName: typeof parsed.mapName === "string" ? parsed.mapName : undefined,
     };
   } catch {
@@ -719,23 +820,350 @@ function loadEditorState(): EditorSaveState | null {
   }
 }
 
-function NavItem({
-  children,
+function normalizeEditorConfig(config: EditorConfig): EditorConfig {
+  const baseConfig = defaultEditorConfig();
+  return {
+    ...config,
+    shaders: {
+      ...baseConfig.shaders,
+      ...config.shaders,
+      cel: {
+        ...baseConfig.shaders.cel,
+        ...config.shaders?.cel,
+      },
+    },
+    planets: config.planets.map((planet, index) => {
+      const id = typeof planet.id === "string" ? planet.id : `planet-${index}`;
+      const base = defaultEditorPlanet(id);
+      const savedPuffs = planet.atmosphere?.clouds?.puffs;
+      const puffsWereOldDefaults =
+        (savedPuffs?.density === 0.38 &&
+          savedPuffs.opacity === 0.58 &&
+          savedPuffs.thickness === 6) ||
+        (savedPuffs?.density === 0.68 && savedPuffs.height === 10 && savedPuffs.size === 6);
+      return {
+        ...base,
+        ...planet,
+        id,
+        terrain: { ...base.terrain, ...planet.terrain },
+        colors: { ...base.colors, ...planet.colors },
+        atmosphere: {
+          ...base.atmosphere,
+          ...planet.atmosphere,
+          blendMode: planet.atmosphere?.blendMode ?? base.atmosphere.blendMode,
+          clouds: {
+            ...base.atmosphere.clouds,
+            ...planet.atmosphere?.clouds,
+            blendMode: planet.atmosphere?.clouds?.blendMode ?? base.atmosphere.clouds.blendMode,
+            puffs: {
+              ...base.atmosphere.clouds.puffs,
+              ...planet.atmosphere?.clouds?.puffs,
+              ...(puffsWereOldDefaults ? base.atmosphere.clouds.puffs : {}),
+              blendMode:
+                planet.atmosphere?.clouds?.puffs?.blendMode ??
+                base.atmosphere.clouds.puffs.blendMode,
+            },
+          },
+        },
+        lighting: { ...base.lighting, ...planet.lighting },
+        props: { ...base.props, ...planet.props },
+      };
+    }),
+  };
+}
+
+function nextPlanetId(planets: EditorPlanet[]): string {
+  const ids = new Set(planets.map((p) => p.id));
+  for (let i = 0; ; i++) {
+    const candidate = `planet-${i}`;
+    if (!ids.has(candidate)) return candidate;
+  }
+}
+
+function getLayerTitle(layer: LayerSelection): string {
+  if (layer.kind === "global") {
+    return layer.panel === "cel" ? "Cel Shading" : "Spawns";
+  }
+  if (layer.panel === "planet") return "Planet";
+  if (layer.panel === "atmosphere") return "Atmosphere";
+  return layer.panel[0].toUpperCase() + layer.panel.slice(1);
+}
+
+function isLayerSelected(current: LayerSelection, target: LayerSelection): boolean {
+  if (current.kind !== target.kind) return false;
+  if (current.kind === "global" && target.kind === "global") return current.panel === target.panel;
+  if (current.kind === "planet" && target.kind === "planet") {
+    return current.planetId === target.planetId && current.panel === target.panel;
+  }
+  return false;
+}
+
+function LayerNavigator({
+  config,
+  selectedLayer,
+  activePlanetId,
+  onSelectLayer,
+  onAddPlanet,
+}: {
+  config: EditorConfig;
+  selectedLayer: LayerSelection;
+  activePlanetId: string;
+  onSelectLayer: (layer: LayerSelection) => void;
+  onAddPlanet: () => void;
+}) {
+  const [expandedPlanets, setExpandedPlanets] = useState<Set<string>>(
+    () => new Set([config.planets[0]?.id ?? "planet-0"]),
+  );
+  const [expandedAtmospheres, setExpandedAtmospheres] = useState<Set<string>>(
+    () => new Set([config.planets[0]?.id ?? "planet-0"]),
+  );
+
+  useEffect(() => {
+    if (selectedLayer.kind !== "planet") return;
+    setExpandedPlanets((current) => {
+      if (current.has(selectedLayer.planetId)) return current;
+      return new Set(current).add(selectedLayer.planetId);
+    });
+    if (selectedLayer.panel === "atmosphere" || selectedLayer.panel === "lighting") {
+      setExpandedAtmospheres((current) => {
+        if (current.has(selectedLayer.planetId)) return current;
+        return new Set(current).add(selectedLayer.planetId);
+      });
+    }
+  }, [selectedLayer]);
+
+  function togglePlanet(planetId: string) {
+    setExpandedPlanets((current) => toggleSetValue(current, planetId));
+  }
+
+  function toggleAtmosphere(planetId: string) {
+    setExpandedAtmospheres((current) => toggleSetValue(current, planetId));
+  }
+
+  return (
+    <nav className="flex-1 p-2 overflow-y-auto">
+      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        Map
+      </div>
+      <div className="space-y-0.5">
+        <LayerButton
+          label="Solar System"
+          active={false}
+          depth={0}
+          onClick={() => onSelectLayer({ kind: "global", panel: "cel" })}
+        />
+        <LayerButton
+          label="Cel Shading"
+          active={isLayerSelected(selectedLayer, { kind: "global", panel: "cel" })}
+          depth={1}
+          onClick={() => onSelectLayer({ kind: "global", panel: "cel" })}
+        />
+        <LayerButton
+          label="Spawns"
+          active={isLayerSelected(selectedLayer, { kind: "global", panel: "spawns" })}
+          depth={1}
+          onClick={() => onSelectLayer({ kind: "global", panel: "spawns" })}
+        />
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {config.planets.map((planet, index) => (
+          <div key={planet.id} className="space-y-0.5">
+            <LayerGroupButton
+              label={`${planet.id}${index === 0 ? " (default)" : ""}`}
+              active={
+                expandedPlanets.has(planet.id) ||
+                isLayerSelected(selectedLayer, {
+                  kind: "planet",
+                  planetId: planet.id,
+                  panel: "planet",
+                })
+              }
+              depth={0}
+              accent={planet.id === activePlanetId}
+              open={expandedPlanets.has(planet.id)}
+              onToggle={() => togglePlanet(planet.id)}
+            />
+            {expandedPlanets.has(planet.id) && (
+              <>
+                <LayerButton
+                  label="Terrain"
+                  active={isLayerSelected(selectedLayer, {
+                    kind: "planet",
+                    planetId: planet.id,
+                    panel: "terrain",
+                  })}
+                  depth={1}
+                  onClick={() =>
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "terrain" })
+                  }
+                />
+                <LayerButton
+                  label="Props"
+                  active={isLayerSelected(selectedLayer, {
+                    kind: "planet",
+                    planetId: planet.id,
+                    panel: "props",
+                  })}
+                  depth={1}
+                  onClick={() =>
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "props" })
+                  }
+                />
+                <LayerButton
+                  label="Tracks"
+                  active={isLayerSelected(selectedLayer, {
+                    kind: "planet",
+                    planetId: planet.id,
+                    panel: "tracks",
+                  })}
+                  depth={1}
+                  onClick={() =>
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "tracks" })
+                  }
+                />
+                <LayerGroupButton
+                  label="Atmosphere"
+                  active={
+                    expandedAtmospheres.has(planet.id) ||
+                    isLayerSelected(selectedLayer, {
+                      kind: "planet",
+                      planetId: planet.id,
+                      panel: "atmosphere",
+                    })
+                  }
+                  depth={1}
+                  open={expandedAtmospheres.has(planet.id)}
+                  onToggle={() => toggleAtmosphere(planet.id)}
+                />
+                {expandedAtmospheres.has(planet.id) && (
+                  <>
+                    <LayerButton
+                      label="Atmosphere Shader"
+                      active={isLayerSelected(selectedLayer, {
+                        kind: "planet",
+                        planetId: planet.id,
+                        panel: "atmosphere",
+                      })}
+                      depth={2}
+                      onClick={() =>
+                        onSelectLayer({
+                          kind: "planet",
+                          planetId: planet.id,
+                          panel: "atmosphere",
+                        })
+                      }
+                    />
+                    <LayerButton
+                      label="Lighting"
+                      active={isLayerSelected(selectedLayer, {
+                        kind: "planet",
+                        planetId: planet.id,
+                        panel: "lighting",
+                      })}
+                      depth={2}
+                      onClick={() =>
+                        onSelectLayer({ kind: "planet", planetId: planet.id, panel: "lighting" })
+                      }
+                    />
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onAddPlanet}
+        className="mt-3 w-full px-3 py-2 rounded border border-zinc-700 bg-zinc-800 text-left text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+      >
+        + Planet
+      </button>
+    </nav>
+  );
+}
+
+function toggleSetValue(current: Set<string>, value: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+}
+
+function LayerGroupButton({
+  label,
   active,
+  depth,
+  open,
+  accent = false,
+  onToggle,
+}: {
+  label: string;
+  active: boolean;
+  depth: 0 | 1 | 2;
+  open: boolean;
+  accent?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex w-full items-center rounded transition-colors ${
+        active
+          ? "bg-cyan-900/45 text-cyan-200"
+          : accent
+            ? "text-cyan-400 hover:bg-zinc-800"
+            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+      }`}
+      title={open ? "Collapse" : "Expand"}
+    >
+      <span
+        className={`py-1.5 text-zinc-500 transition-colors ${
+          depth === 0 ? "pl-2" : depth === 1 ? "pl-5" : "pl-8"
+        }`}
+      >
+        <span
+          className={`inline-block transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+        >
+          ›
+        </span>
+      </span>
+      <span className="min-w-0 flex-1 py-1.5 pr-2 text-left text-xs">{label}</span>
+    </button>
+  );
+}
+
+function LayerButton({
+  label,
+  active,
+  depth,
+  accent = false,
   onClick,
 }: {
-  children: ReactNode;
-  active?: boolean;
-  onClick?: () => void;
+  label: string;
+  active: boolean;
+  depth: 0 | 1 | 2;
+  accent?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-        active ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+      className={`w-full text-left py-1.5 rounded text-xs transition-colors ${
+        depth === 0 ? "pl-2 pr-2" : depth === 1 ? "pl-5 pr-2" : "pl-8 pr-2"
+      } ${
+        active
+          ? "bg-cyan-900/45 text-cyan-200"
+          : accent
+            ? "text-cyan-400 hover:bg-zinc-800"
+            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
       }`}
     >
-      {children}
+      {label}
     </button>
   );
 }

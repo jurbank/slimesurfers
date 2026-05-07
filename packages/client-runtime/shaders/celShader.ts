@@ -3,8 +3,10 @@ export const celCommonChunks = `
   uniform float celSoftness;
   uniform float celHatchStrength;
   uniform float celHatchScale;
+  uniform float celEnabled;
 
   float getCelLighting(float diffuse) {
+    if (celEnabled <= 0.0) return diffuse;
     float b = floor(diffuse * celBands);
     float f = fract(diffuse * celBands);
     float soft = smoothstep(0.5 - celSoftness, 0.5 + celSoftness, f);
@@ -12,6 +14,7 @@ export const celCommonChunks = `
   }
 
   float getHatching(vec2 pos, float lighting) {
+    if (celEnabled <= 0.0) return 1.0;
     float hatch = sin((pos.x + pos.y) * celHatchScale * 100.0);
     hatch += sin((pos.x - pos.y) * celHatchScale * 70.0);
     hatch = smoothstep(-0.1, 0.1, hatch);

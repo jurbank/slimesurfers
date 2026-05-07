@@ -21,26 +21,28 @@ export function editorStateToRuntimeMap(
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ): RuntimeMapData {
-  const planetId = config.planets[0]?.id ?? "planet-0";
-  const { radius: planetRadius } = config.planets[0] ?? { radius: 100 };
   const [sx, sy, sz] = previewSpawn.normal;
+  const planetIds = new Set(config.planets.map((p) => p.id));
 
   const rails = tracks
-    .filter((t) => t.points.length >= 2)
-    .map((t, i) => ({
-      id: i,
-      planetId,
-      paintCorridorRadius: t.width,
-      controlPoints: t.points.map((pt) => ({
-        nx: pt.normal[0],
-        ny: pt.normal[1],
-        nz: pt.normal[2],
-        // If the point was moved with the gizmo it has an explicit 3D position;
-        // otherwise it was placed directly on the surface (heightOffset ≈ 0).
-        heightOffset:
-          pt.position != null ? Math.max(0, dot(pt.position, pt.normal) - planetRadius) : 0,
-      })),
-    }));
+    .filter((t) => t.points.length >= 2 && planetIds.has(t.planetId))
+    .map((t, i) => {
+      const planetRadius = config.planets.find((p) => p.id === t.planetId)?.radius ?? 100;
+      return {
+        id: i,
+        planetId: t.planetId,
+        paintCorridorRadius: t.width,
+        controlPoints: t.points.map((pt) => ({
+          nx: pt.normal[0],
+          ny: pt.normal[1],
+          nz: pt.normal[2],
+          // If the point was moved with the gizmo it has an explicit 3D position;
+          // otherwise it was placed directly on the surface (heightOffset ≈ 0).
+          heightOffset:
+            pt.position != null ? Math.max(0, dot(pt.position, pt.normal) - planetRadius) : 0,
+        })),
+      };
+    });
 
   return {
     version: 1,
@@ -70,7 +72,7 @@ export function editorStateToRuntimeMap(
       dev: {
         kind: "cluster",
         radius: 7,
-        anchor: { planetId, normal: { x: sx, y: sy, z: sz } },
+        anchor: { planetId: config.planets[0]?.id ?? "planet-0", normal: { x: sx, y: sy, z: sz } },
       },
     },
   };

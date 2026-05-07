@@ -10,6 +10,7 @@ export interface TrackPoint {
 
 export interface TrackState {
   id: string;
+  planetId: string;
   name: string;
   closed: boolean;
   width: number;
@@ -31,10 +32,11 @@ export interface TrackExport {
 
 let nextTrackId = 1;
 
-export function createDefaultTrackState(name?: string): TrackState {
+export function createDefaultTrackState(name?: string, planetId = "planet-0"): TrackState {
   const index = nextTrackId++;
   return {
     id: `track-${index}`,
+    planetId,
     name: name ?? `Track ${index}`,
     closed: true,
     width: 8,

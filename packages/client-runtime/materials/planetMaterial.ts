@@ -22,6 +22,14 @@ export interface PlanetMaterialOptions {
   colors: RuntimeMapColors;
   cel: RuntimeMapCel;
   lighting: RuntimeMapLighting;
+  puffyCloudShadows?: {
+    enabled: boolean;
+    density: number;
+    height: number;
+    size: number;
+    strength: number;
+    movementSpeed: number;
+  };
 }
 
 function hexToVec3(hex: number): THREE.Vector3 {
@@ -72,6 +80,7 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       slimeSpecularPower: { value: GAME_CONFIG.paint.slimeSpecularPower },
       slimeEdgeWetness: { value: GAME_CONFIG.paint.slimeEdgeWetness },
       slimePoolDarkening: { value: GAME_CONFIG.paint.slimePoolDarkening },
+      celEnabled: { value: "enabled" in cel && cel.enabled === false ? 0 : 1 },
       celBands: { value: cel.bands },
       celSoftness: { value: cel.softness },
       celHatchStrength: { value: cel.hatchStrength },
@@ -82,6 +91,15 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       rimColor: { value: new THREE.Color(lighting.rimColor) },
       rimStrength: { value: lighting.rimStrength },
       rimPower: { value: lighting.rimPower },
+      puffyCloudShadowStrength: {
+        value: options.puffyCloudShadows?.enabled ? options.puffyCloudShadows.strength : 0,
+      },
+      puffyCloudShadowDensity: { value: options.puffyCloudShadows?.density ?? 0 },
+      puffyCloudShadowHeight: { value: options.puffyCloudShadows?.height ?? 0 },
+      puffyCloudShadowSize: { value: options.puffyCloudShadows?.size ?? 0 },
+      puffyCloudShadowMovementSpeed: {
+        value: options.puffyCloudShadows?.movementSpeed ?? 0,
+      },
     },
     vertexShader: planetVertexShader,
     fragmentShader: planetFragmentShader,
