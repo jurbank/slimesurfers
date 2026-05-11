@@ -1,34 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createDefaultTrackState,
-  type TrackEditMode,
-  type TrackPoint,
-  type TrackState,
-  type TrackToolState,
+  createDefaultRailState,
+  type RailEditMode,
+  type RailPoint,
+  type RailState,
+  type RailToolState,
 } from "../tools/tracks/TrackTypes.ts";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
 import { GridSelector } from "./ui/GridSelector.tsx";
 
-const EDIT_MODES: { id: TrackEditMode; label: string }[] = [
+const EDIT_MODES: { id: RailEditMode; label: string }[] = [
   { id: "add", label: "Add" },
   { id: "move", label: "Move" },
   { id: "delete", label: "Delete" },
 ];
 
 interface TracksPanelProps {
-  tracks: TrackState[];
+  tracks: RailState[];
   planetId: string;
   activeTrackId: string;
   selectedPointId: string | null;
   onActiveTrackChange: (trackId: string) => void;
   onTracksChange: (
-    tracks: TrackState[],
+    tracks: RailState[],
     activeTrackId: string,
     selectedPointId: string | null,
   ) => void;
-  onTrackChange: (track: TrackState) => void;
-  onTrackToolChange: (state: TrackToolState) => void;
+  onTrackChange: (track: RailState) => void;
+  onTrackToolChange: (state: RailToolState) => void;
   onPointSelectionChange: (pointId: string | null) => void;
 }
 
@@ -43,10 +43,10 @@ export function TracksPanel({
   onTrackToolChange,
   onPointSelectionChange,
 }: TracksPanelProps) {
-  const [mode, setMode] = useState<TrackEditMode | null>("add");
+  const [mode, setMode] = useState<RailEditMode | null>("add");
   const planetTracks = tracks.filter((track) => track.planetId === planetId);
   const activeTrack = planetTracks.find((track) => track.id === activeTrackId) ?? planetTracks[0];
-  const trackRef = useRef<TrackState | null>(activeTrack ?? null);
+  const trackRef = useRef<RailState | null>(activeTrack ?? null);
   const selectedPoint = activeTrack?.points.find((point) => point.id === selectedPointId) ?? null;
 
   useEffect(() => {
@@ -67,13 +67,13 @@ export function TracksPanel({
     };
   }, [onTrackToolChange]);
 
-  function updateActiveTrack(nextTrack: TrackState, nextSelectedPointId = selectedPointId) {
+  function updateActiveTrack(nextTrack: RailState, nextSelectedPointId = selectedPointId) {
     onTrackChange(nextTrack);
     onTrackToolChange({ mode, track: nextTrack, selectedPointId: nextSelectedPointId });
   }
 
   function replaceTracks(
-    nextPlanetTracks: TrackState[],
+    nextPlanetTracks: RailState[],
     nextActiveTrackId = activeTrackId,
     nextSelectedPointId: string | null = selectedPointId,
   ) {
@@ -90,20 +90,20 @@ export function TracksPanel({
     }
   }
 
-  function handleModeClick(nextMode: TrackEditMode) {
+  function handleModeClick(nextMode: RailEditMode) {
     setMode((current) => (current === nextMode ? null : nextMode));
   }
 
   function addTrack() {
-    const track = createDefaultTrackState(undefined, planetId);
+    const track = createDefaultRailState(undefined, planetId);
     replaceTracks([...planetTracks, track], track.id, null);
   }
 
   function duplicateTrack() {
     if (!activeTrack) return;
-    const duplicate: TrackState = {
+    const duplicate: RailState = {
       ...activeTrack,
-      id: createDefaultTrackState(undefined, planetId).id,
+      id: createDefaultRailState(undefined, planetId).id,
       planetId,
       name: `${activeTrack.name} Copy`,
       points: activeTrack.points.map((point) => ({ ...point, id: createPointId() })),
@@ -128,7 +128,7 @@ export function TracksPanel({
     if (activeTrack) onTrackToolChange({ mode, track: activeTrack, selectedPointId: pointId });
   }
 
-  function updatePoint(pointId: string, patch: Partial<TrackPoint>) {
+  function updatePoint(pointId: string, patch: Partial<RailPoint>) {
     if (!activeTrack) return;
     const nextTrack = {
       ...activeTrack,
@@ -146,7 +146,7 @@ export function TracksPanel({
     const next = activeTrack.points[(index + 1) % activeTrack.points.length];
     if (!next) return;
     const normal = averageNormal(selectedPoint.normal, next.normal);
-    const inserted: TrackPoint = {
+    const inserted: RailPoint = {
       id: createPointId(),
       normal,
       width: selectedPoint.width,
@@ -174,7 +174,7 @@ export function TracksPanel({
 
   return (
     <div className="space-y-4">
-      <Section title="Tracks">
+      <Section title="Rails">
         <GridSelector
           items={planetTracks.map((t) => ({
             id: t.id,
@@ -217,7 +217,7 @@ export function TracksPanel({
         <GridSelector
           items={EDIT_MODES}
           selectedId={mode}
-          onSelect={(id) => handleModeClick(id as TrackEditMode)}
+          onSelect={(id) => handleModeClick(id as RailEditMode)}
           columns={3}
         />
         <div className="grid grid-cols-2 gap-1 pt-2">
@@ -243,7 +243,7 @@ export function TracksPanel({
 
       <Section title="Shape">
         <Slider
-          label="Track Width"
+          label="Rail Width"
           value={activeTrack.width}
           min={2}
           max={24}

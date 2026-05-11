@@ -1,6 +1,6 @@
-export type TrackEditMode = "add" | "move" | "delete";
+export type RailEditMode = "add" | "move" | "delete";
 
-export interface TrackPoint {
+export interface RailPoint {
   id: string;
   normal: [number, number, number];
   position?: [number, number, number];
@@ -8,7 +8,7 @@ export interface TrackPoint {
   bank?: number;
 }
 
-export interface TrackState {
+export interface RailState {
   id: string;
   planetId: string;
   name: string;
@@ -16,28 +16,38 @@ export interface TrackState {
   width: number;
   bank: number;
   segmentsPerCurve: number;
-  points: TrackPoint[];
+  points: RailPoint[];
 }
 
-export interface TrackToolState {
-  mode: TrackEditMode | null;
-  track: TrackState;
+export interface RailToolState {
+  mode: RailEditMode | null;
+  track: RailState;
   selectedPointId: string | null;
 }
 
-export interface TrackExport {
+export interface RailExport {
   version: 1;
-  tracks: TrackState[];
+  rails: RailState[];
 }
 
-let nextTrackId = 1;
+export type TrackEditMode = RailEditMode;
+export type TrackPoint = RailPoint;
+export type TrackState = RailState;
+export type TrackToolState = RailToolState;
 
-export function createDefaultTrackState(name?: string, planetId = "planet-0"): TrackState {
-  const index = nextTrackId++;
+export interface TrackExport {
+  version: 1;
+  tracks: RailState[];
+}
+
+let nextRailId = 1;
+
+export function createDefaultRailState(name?: string, planetId = "planet-0"): RailState {
+  const index = nextRailId++;
   return {
     id: `track-${index}`,
     planetId,
-    name: name ?? `Track ${index}`,
+    name: name ?? `Rail ${index}`,
     closed: true,
     width: 8,
     bank: 0,
@@ -45,3 +55,5 @@ export function createDefaultTrackState(name?: string, planetId = "planet-0"): T
     points: [],
   };
 }
+
+export const createDefaultTrackState = createDefaultRailState;

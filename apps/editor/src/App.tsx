@@ -10,9 +10,11 @@ import { TracksPanel } from "./panels/TracksPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
 import type { EditorScene } from "./preview/EditorScene.ts";
 import {
-  createDefaultTrackState,
-  type TrackState,
-  type TrackToolState,
+  createDefaultRailState,
+  type RailExport,
+  type RailState,
+  type RailToolState,
+  type TrackExport,
 } from "./tools/tracks/TrackTypes.ts";
 import type { TerrainStampState } from "./tools/terrain/TerrainStampTypes.ts";
 import {
@@ -44,10 +46,8 @@ interface EditorSaveState {
   version: 1;
   savedAt: string;
   config: EditorConfig;
-  tracks: {
-    version: 1;
-    tracks: TrackState[];
-  };
+  rails: RailExport;
+  tracks?: TrackExport;
   activeTrackId: string;
   previewSpawn?: PreviewSpawnState;
   mapName?: string;
@@ -55,7 +55,7 @@ interface EditorSaveState {
 
 interface InitialEditorState {
   config: EditorConfig;
-  tracks: TrackState[];
+  tracks: RailState[];
   activeTrackId: string;
   previewSpawn: PreviewSpawnState;
   mapName: string;
@@ -64,7 +64,7 @@ interface InitialEditorState {
 export function App() {
   const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
   const [config, setConfig] = useState<EditorConfig>(initialState.config);
-  const [tracks, setTracks] = useState<TrackState[]>(initialState.tracks);
+  const [tracks, setTracks] = useState<RailState[]>(initialState.tracks);
   const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
   const [previewSpawn, setPreviewSpawn] = useState<PreviewSpawnState>(initialState.previewSpawn);
   const [mapName, setMapName] = useState(initialState.mapName);
@@ -82,7 +82,7 @@ export function App() {
     panel: "terrain",
   }));
   const configRef = useRef<EditorConfig>(config);
-  const tracksRef = useRef<TrackState[]>(tracks);
+  const tracksRef = useRef<RailState[]>(tracks);
   const activeTrackIdRef = useRef(activeTrackId);
   const previewSpawnRef = useRef<PreviewSpawnState>(previewSpawn);
   const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
@@ -118,7 +118,7 @@ export function App() {
     sceneRef.current?.setPropBrushState(state);
   }, []);
 
-  const handleTrackChange = useCallback((nextTrack: TrackState) => {
+  const handleTrackChange = useCallback((nextTrack: RailState) => {
     setSaveStatus("idle");
     const nextTracks = tracksRef.current.map((track) =>
       track.id === nextTrack.id ? nextTrack : track,
@@ -128,7 +128,7 @@ export function App() {
     setTracks(nextTracks);
   }, []);
 
-  const handleTrackToolChange = useCallback((state: TrackToolState) => {
+  const handleTrackToolChange = useCallback((state: RailToolState) => {
     sceneRef.current?.setTrackToolState(state);
   }, []);
 
@@ -191,7 +191,7 @@ export function App() {
     let nextTracks = tracksRef.current;
     let activeTrack = nextTracks.find((track) => track.planetId === planetId);
     if (!activeTrack) {
-      activeTrack = createDefaultTrackState(undefined, planetId);
+      activeTrack = createDefaultRailState(undefined, planetId);
       nextTracks = [...nextTracks, activeTrack];
       tracksRef.current = nextTracks;
       setTracks(nextTracks);
@@ -253,7 +253,7 @@ export function App() {
   }, []);
 
   const handleTracksChange = useCallback(
-    (nextTracks: TrackState[], nextActiveTrackId: string, nextSelectedPointId: string | null) => {
+    (nextTracks: RailState[], nextActiveTrackId: string, nextSelectedPointId: string | null) => {
       setSaveStatus("idle");
       tracksRef.current = nextTracks;
       activeTrackIdRef.current = nextActiveTrackId;
@@ -700,12 +700,12 @@ export function App() {
   );
 }
 
-function exportConfig(config: EditorConfig, tracks: TrackState[], previewSpawn: PreviewSpawnState) {
+function exportConfig(config: EditorConfig, rails: RailState[], previewSpawn: PreviewSpawnState) {
   const payload = {
     ...config,
-    tracks: {
+    rails: {
       version: 1,
-      tracks,
+      rails,
     },
     previewSpawn,
   };
@@ -722,11 +722,11 @@ function exportConfig(config: EditorConfig, tracks: TrackState[], previewSpawn: 
 
 function exportMap(
   config: EditorConfig,
-  tracks: TrackState[],
+  rails: RailState[],
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ) {
-  const map = editorStateToRuntimeMap(config, tracks, previewSpawn, mapName || "Untitled Map");
+  const map = editorStateToRuntimeMap(config, rails, previewSpawn, mapName || "Untitled Map");
   const result = validateRuntimeMapData(map);
   if (!result.valid) {
     alert(`Export failed:\n${result.errors.map((e) => `${e.field}: ${e.message}`).join("\n")}`);
@@ -746,7 +746,7 @@ function createInitialEditorState(): InitialEditorState {
   if (saved) {
     return {
       config: saved.config,
-      tracks: saved.tracks.tracks,
+      tracks: saved.rails.rails,
       activeTrackId: saved.activeTrackId,
       previewSpawn: saved.previewSpawn ?? {
         planetId: saved.config.planets[0]?.id,
@@ -756,7 +756,7 @@ function createInitialEditorState(): InitialEditorState {
     };
   }
 
-  const track = createDefaultTrackState();
+  const track = createDefaultRailState();
   return {
     config: defaultEditorConfig(),
     tracks: [track],
@@ -768,7 +768,7 @@ function createInitialEditorState(): InitialEditorState {
 
 function createEditorSaveState(
   config: EditorConfig,
-  tracks: TrackState[],
+  rails: RailState[],
   activeTrackId: string,
   previewSpawn: PreviewSpawnState,
   mapName: string,
@@ -777,9 +777,9 @@ function createEditorSaveState(
     version: 1,
     savedAt: new Date().toISOString(),
     config,
-    tracks: {
+    rails: {
       version: 1,
-      tracks,
+      rails,
     },
     activeTrackId,
     previewSpawn,
@@ -789,7 +789,7 @@ function createEditorSaveState(
 
 function saveEditorState(
   config: EditorConfig,
-  tracks: TrackState[],
+  rails: RailState[],
   activeTrackId: string,
   previewSpawn: PreviewSpawnState,
   mapName: string,
@@ -797,7 +797,7 @@ function saveEditorState(
   try {
     localStorage.setItem(
       LOCAL_SAVE_KEY,
-      JSON.stringify(createEditorSaveState(config, tracks, activeTrackId, previewSpawn, mapName)),
+      JSON.stringify(createEditorSaveState(config, rails, activeTrackId, previewSpawn, mapName)),
     );
     return true;
   } catch {
@@ -814,6 +814,16 @@ function clearEditorState(): boolean {
   }
 }
 
+function getSavedRails(parsed: Partial<EditorSaveState>): RailState[] | null {
+  if (parsed.rails?.version === 1 && Array.isArray(parsed.rails.rails)) {
+    return parsed.rails.rails;
+  }
+  if (parsed.tracks?.version === 1 && Array.isArray(parsed.tracks.tracks)) {
+    return parsed.tracks.tracks;
+  }
+  return null;
+}
+
 function loadEditorState(): EditorSaveState | null {
   const raw = localStorage.getItem(LOCAL_SAVE_KEY);
   if (!raw) return null;
@@ -821,8 +831,9 @@ function loadEditorState(): EditorSaveState | null {
   try {
     const parsed = JSON.parse(raw) as Partial<EditorSaveState>;
     if (parsed.version !== 1) return null;
-    if (!parsed.config || !parsed.tracks || parsed.tracks.version !== 1) return null;
-    if (!Array.isArray(parsed.tracks.tracks) || parsed.tracks.tracks.length === 0) return null;
+    if (!parsed.config) return null;
+    const savedRails = getSavedRails(parsed);
+    if (!savedRails || savedRails.length === 0) return null;
 
     const cfg = parsed.config as unknown as Record<string, unknown>;
     if (!Array.isArray(cfg.planets)) {
@@ -837,7 +848,7 @@ function loadEditorState(): EditorSaveState | null {
 
     const planetIds = new Set(parsed.config.planets.map((planet) => planet.id));
     const fallbackPlanetId = parsed.config.planets[0]?.id ?? "planet-0";
-    const migratedTracks = parsed.tracks.tracks.map((track) => ({
+    const migratedTracks = savedRails.map((track) => ({
       ...track,
       planetId:
         typeof track.planetId === "string" && planetIds.has(track.planetId)
@@ -855,9 +866,9 @@ function loadEditorState(): EditorSaveState | null {
       version: 1,
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
       config: parsed.config,
-      tracks: {
+      rails: {
         version: 1,
-        tracks: migratedTracks,
+        rails: migratedTracks,
       },
       activeTrackId,
       previewSpawn: parsed.previewSpawn,
@@ -955,6 +966,7 @@ function getLayerTitle(layer: LayerSelection): string {
   }
   if (layer.panel === "planet") return "Planet";
   if (layer.panel === "atmosphere") return "Atmosphere";
+  if (layer.panel === "tracks") return "Rails";
   return layer.panel[0].toUpperCase() + layer.panel.slice(1);
 }
 
@@ -1080,7 +1092,7 @@ function LayerNavigator({
                   }
                 />
                 <LayerButton
-                  label="Tracks"
+                  label="Rails"
                   active={isLayerSelected(selectedLayer, {
                     kind: "planet",
                     planetId: planet.id,

@@ -1,6 +1,6 @@
 import type { RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import type { EditorConfig, PreviewSpawnState } from "./types.ts";
-import type { TrackState } from "./tools/tracks/TrackTypes.ts";
+import type { RailState } from "./tools/tracks/TrackTypes.ts";
 
 function dot(a: [number, number, number], b: [number, number, number]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -17,7 +17,7 @@ function slugify(name: string): string {
 
 export function editorStateToRuntimeMap(
   config: EditorConfig,
-  tracks: TrackState[],
+  rails: RailState[],
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ): RuntimeMapData {
@@ -27,7 +27,7 @@ export function editorStateToRuntimeMap(
     ? previewSpawn.planetId!
     : (config.planets[0]?.id ?? "planet-0");
 
-  const rails = tracks
+  const runtimeRails = rails
     .filter((t) => t.points.length >= 2 && planetIds.has(t.planetId))
     .map((t, i) => {
       const planetRadius = config.planets.find((p) => p.id === t.planetId)?.radius ?? 100;
@@ -68,7 +68,7 @@ export function editorStateToRuntimeMap(
       hatchStrength: config.shaders.cel.hatchStrength,
       hatchScale: config.shaders.cel.hatchScale,
     },
-    rails,
+    rails: runtimeRails,
     spawns: {
       ffa: { kind: "ffa-spread" },
       teams: { kind: "ffa-spread" },

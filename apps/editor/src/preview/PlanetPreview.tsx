@@ -5,15 +5,15 @@ import type {
   PerformanceStats,
   PreviewSpawnState,
 } from "../types.ts";
-import type { TrackState } from "../tools/tracks/TrackTypes.ts";
+import type { RailState } from "../tools/tracks/TrackTypes.ts";
 import { EditorScene } from "./EditorScene.ts";
 
 interface PlanetPreviewProps {
   initialConfig: EditorConfig;
-  initialTracks: TrackState[];
+  initialTracks: RailState[];
   initialPreviewSpawn: PreviewSpawnState;
   onScene: (scene: EditorScene) => void;
-  onTrackChange: (track: TrackState) => void;
+  onTrackChange: (track: RailState) => void;
   onTrackPointSelectionChange: (pointId: string | null) => void;
   onSculptChange: (planetId: string, sculpt: EditorSculptState) => void;
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;

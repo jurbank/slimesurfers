@@ -2,6 +2,20 @@
 
 Agent-maintained notes for changes that touch `apps/editor`.
 
+## 2026-05-11
+
+- Added rail export coverage in `src/export.test.ts`.
+- User-visible behavior: no direct editor UI change; authored rails now have explicit tests for runtime rail export, skipped incomplete rails, skipped unknown-planet rails, corridor radius, control point normals, and height offsets.
+- Validation: `vp fmt apps/editor/src/export.test.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp check --no-fmt`.
+
+- Changed rail-native editor model aliases and save/export boundaries in `src/tools/tracks/TrackTypes.ts`, `src/App.tsx`, `src/panels/TracksPanel.tsx`, `src/preview/PlanetPreview.tsx`, and `src/export.ts`.
+- User-visible behavior: no direct visual change beyond the Rails labels; new local/editor config saves now use a primary `rails` block while older `tracks` saves still load.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/panels/TracksPanel.tsx apps/editor/src/tools/tracks/TrackTypes.ts apps/editor/src/preview/PlanetPreview.tsx apps/editor/src/export.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/tracks/trackCarving.test.ts`; `vp check --no-fmt`. Full `vp check` is still blocked by pre-existing formatting issues in hidden agent skill files and `apps/game/server/my-map.json`.
+
+- Changed rail authoring labels in `src/App.tsx`, `src/panels/TracksPanel.tsx`, and `src/tools/tracks/TrackTypes.ts`.
+- User-visible behavior: the planet layer tree and authoring panel now present the existing spline tool as Rails, and newly created authored paths default to `Rail N` names while old saves remain compatible.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/panels/TracksPanel.tsx apps/editor/src/tools/tracks/TrackTypes.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/tracks/trackCarving.test.ts`; `vp check --no-fmt`. Full `vp check` is still blocked by pre-existing formatting issues in hidden agent skill files and `apps/game/server/my-map.json`.
+
 ## 2026-05-07
 
 - Changed spawn preview wiring in `src/types.ts`, `src/App.tsx`, `src/panels/SpawnsPanel.tsx`, `src/preview/EditorScene.ts`, `src/preview/PlayerPreviewController.ts`, and `src/export.ts`.
