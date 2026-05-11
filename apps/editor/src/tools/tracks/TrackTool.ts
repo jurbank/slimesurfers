@@ -1,15 +1,12 @@
 import * as THREE from "three";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { type TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
 import { createMetricGroup } from "../../performance/geometryStats.ts";
 import type { PerformanceMetricGroup } from "../../types.ts";
 import { Gizmo } from "../Gizmo.ts";
 import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
 import type { EditorConfig } from "../../types.ts";
-import {
-  TRACK_BRIDGE_THRESHOLD,
-  TRACK_SURFACE_OFFSET,
-  TRACK_TUNNEL_TERRAIN_THRESHOLD,
-} from "./trackConstants.ts";
+import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
 
 export interface TrackConnectOptions {
   canvas: HTMLCanvasElement;
@@ -34,6 +31,10 @@ interface TrackSample {
 
 const HANDLE_RADIUS = 1.25;
 const HANDLE_PICK_RADIUS = 0.12;
+const RAIL_TUBE_SEGMENTS = 12;
+const RAIL_SUPPORT_SPACING = 18;
+const RAIL_SUPPORT_RADIUS = 0.18;
+const RAIL_SUPPORT_SEGMENTS = 6;
 
 export class TrackTool {
   private canvas: HTMLCanvasElement | null = null;
@@ -63,22 +64,18 @@ export class TrackTool {
     color: 0xfacc15,
     depthTest: false,
     transparent: true,
-    opacity: 0.95,
+    opacity: 0.45,
   });
-  private readonly trackMaterial = new THREE.MeshLambertMaterial({
-    color: 0x2f343b,
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
+  private readonly railMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd0d8e8,
+    emissive: 0x06111f,
+    metalness: 0.72,
+    roughness: 0.32,
   });
-  private readonly edgeMaterial = new THREE.LineBasicMaterial({
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.8,
-  });
-  private readonly bridgeMaterial = new THREE.MeshLambertMaterial({
-    color: 0x64748b,
+  private readonly supportMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8090a8,
+    metalness: 0.7,
+    roughness: 0.4,
   });
   private readonly tunnelMaterial = new THREE.MeshLambertMaterial({
     color: 0x1e293b,
@@ -87,9 +84,8 @@ export class TrackTool {
 
   private state: TrackToolState | null = null;
   private centerLine: THREE.Line | null = null;
-  private edgeLines: THREE.LineSegments | null = null;
-  private trackMesh: THREE.Mesh | null = null;
-  private bridgeMesh: THREE.InstancedMesh | null = null;
+  private railMesh: THREE.Mesh | null = null;
+  private supportMesh: THREE.InstancedMesh | null = null;
   private tunnelMesh: THREE.Mesh | null = null;
   private gizmo: Gizmo | null = null;
   private selectedPointId: string | null = null;
@@ -147,14 +143,14 @@ export class TrackTool {
   getPerformanceStats(): PerformanceMetricGroup[] {
     return [
       createMetricGroup(
-        "track-ribbon",
-        "Track Surface",
-        [this.trackMesh, this.centerLine, this.edgeLines],
-        "Ribbon mesh plus visible center and edge guide lines",
+        "rail-authoring",
+        "Rail Authoring",
+        [this.railMesh, this.supportMesh, this.centerLine],
+        "Editable rail tube, support columns, and center guide line",
       ),
       createMetricGroup(
-        "track-handles",
-        "Track Handles",
+        "rail-handles",
+        "Rail Handles",
         this.handlesGroup.children.filter(
           (child): child is THREE.Mesh => child instanceof THREE.Mesh,
         ),
@@ -175,18 +171,16 @@ export class TrackTool {
     if (this.scene) this.scene.remove(this.group);
 
     this.disposeLine(this.centerLine);
-    this.disposeLine(this.edgeLines);
-    if (this.trackMesh) this.trackMesh.geometry.dispose();
-    if (this.bridgeMesh) this.bridgeMesh.geometry.dispose();
+    if (this.railMesh) this.railMesh.geometry.dispose();
+    if (this.supportMesh) this.supportMesh.geometry.dispose();
     if (this.tunnelMesh) this.tunnelMesh.geometry.dispose();
     this.gizmo?.dispose();
     this.handleGeometry.dispose();
     this.handleMaterial.dispose();
     this.selectedHandleMaterial.dispose();
     this.lineMaterial.dispose();
-    this.trackMaterial.dispose();
-    this.edgeMaterial.dispose();
-    this.bridgeMaterial.dispose();
+    this.railMaterial.dispose();
+    this.supportMaterial.dispose();
     this.tunnelMaterial.dispose();
   }
 
@@ -230,8 +224,8 @@ export class TrackTool {
   private updateTrackGeometry(): void {
     const samples = this.getSurfaceSamples();
     this.updateCenterLine(samples);
-    this.updateRibbon(samples);
-    this.updateBridgeSupports(samples);
+    this.updateRailTube(samples);
+    this.updateRailSupports(samples);
     this.updateTunnelShell(samples);
   }
 
@@ -262,101 +256,40 @@ export class TrackTool {
     }
   }
 
-  private updateRibbon(samples: TrackSample[]): void {
+  private updateRailTube(samples: TrackSample[]): void {
     if (!this.state || samples.length < 2) {
-      if (this.trackMesh) this.trackMesh.visible = false;
-      if (this.edgeLines) this.edgeLines.visible = false;
+      if (this.railMesh) this.railMesh.visible = false;
       return;
     }
 
     const closed = this.state.track.closed && this.state.track.points.length >= 3;
-    const rings = closed ? samples.length - 1 : samples.length;
-    if (rings < 2) return;
-
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const edgePositions: number[] = [];
-    const left: THREE.Vector3[] = [];
-    const right: THREE.Vector3[] = [];
-
-    for (let i = 0; i < rings; i++) {
-      const center = samples[i].position;
-      const prev = closed
-        ? samples[(i - 1 + rings) % rings].position
-        : samples[Math.max(0, i - 1)].position;
-      const next = closed
-        ? samples[(i + 1) % rings].position
-        : samples[Math.min(rings - 1, i + 1)].position;
-      const surfaceNormal = center.clone().normalize();
-      const tangent = next.clone().sub(prev);
-      tangent.addScaledVector(surfaceNormal, -tangent.dot(surfaceNormal)).normalize();
-      const side = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
-      const width = samples[i].width;
-      const bankRad = (samples[i].bank * Math.PI) / 180;
-      side.applyAxisAngle(tangent, bankRad);
-
-      left.push(center.clone().addScaledVector(side, -width * 0.5));
-      right.push(center.clone().addScaledVector(side, width * 0.5));
-      normals.push(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
-      normals.push(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
+    const curveSamples = closed ? samples.slice(0, -1) : samples;
+    if (curveSamples.length < (closed ? 3 : 2)) {
+      if (this.railMesh) this.railMesh.visible = false;
+      return;
     }
 
-    for (let i = 0; i < rings; i++) {
-      positions.push(left[i].x, left[i].y, left[i].z, right[i].x, right[i].y, right[i].z);
-      const nextIndex = (i + 1) % rings;
-      if (!closed && i === rings - 1) continue;
-      edgePositions.push(
-        left[i].x,
-        left[i].y,
-        left[i].z,
-        left[nextIndex].x,
-        left[nextIndex].y,
-        left[nextIndex].z,
-        right[i].x,
-        right[i].y,
-        right[i].z,
-        right[nextIndex].x,
-        right[nextIndex].y,
-        right[nextIndex].z,
-      );
-    }
+    const curve = new THREE.CatmullRomCurve3(
+      curveSamples.map((sample) => sample.position),
+      closed,
+      "centripetal",
+    );
+    const geometry = new THREE.TubeGeometry(
+      curve,
+      Math.max(2, curveSamples.length - 1),
+      GAME_CONFIG.rail.visualRadius,
+      RAIL_TUBE_SEGMENTS,
+      closed,
+    );
 
-    const indices: number[] = [];
-    const segmentCount = closed ? rings : rings - 1;
-    for (let i = 0; i < segmentCount; i++) {
-      const nextIndex = (i + 1) % rings;
-      const leftA = i * 2;
-      const rightA = leftA + 1;
-      const leftB = nextIndex * 2;
-      const rightB = leftB + 1;
-      indices.push(leftA, rightA, rightB, leftA, rightB, leftB);
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-    geometry.setIndex(indices);
-
-    if (!this.trackMesh) {
-      this.trackMesh = new THREE.Mesh(geometry, this.trackMaterial);
-      this.trackMesh.renderOrder = 4;
-      this.group.add(this.trackMesh);
+    if (!this.railMesh) {
+      this.railMesh = new THREE.Mesh(geometry, this.railMaterial);
+      this.railMesh.renderOrder = 4;
+      this.group.add(this.railMesh);
     } else {
-      this.trackMesh.geometry.dispose();
-      this.trackMesh.geometry = geometry;
-      this.trackMesh.visible = true;
-    }
-
-    const edgeGeometry = new THREE.BufferGeometry();
-    edgeGeometry.setAttribute("position", new THREE.Float32BufferAttribute(edgePositions, 3));
-    if (!this.edgeLines) {
-      this.edgeLines = new THREE.LineSegments(edgeGeometry, this.edgeMaterial);
-      this.edgeLines.renderOrder = 13;
-      this.group.add(this.edgeLines);
-    } else {
-      this.edgeLines.geometry.dispose();
-      this.edgeLines.geometry = edgeGeometry;
-      this.edgeLines.visible = true;
+      this.railMesh.geometry.dispose();
+      this.railMesh.geometry = geometry;
+      this.railMesh.visible = true;
     }
   }
 
@@ -642,62 +575,57 @@ export class TrackTool {
     line.geometry.dispose();
   }
 
-  private updateBridgeSupports(samples: TrackSample[]): void {
+  private updateRailSupports(samples: TrackSample[]): void {
     if (!this.state || samples.length < 2) {
-      if (this.bridgeMesh) this.bridgeMesh.visible = false;
+      if (this.supportMesh) this.supportMesh.visible = false;
       return;
     }
 
-    const bridgeData: { matrix: THREE.Matrix4 }[] = [];
-    const pillarSpacing = 4;
-    const waterLevel = this.config?.planets[0]?.terrain.waterLevel ?? 0;
-    const planetRadius = this.config?.planets[0]?.radius ?? 120;
-    const waterRadius = planetRadius + waterLevel;
+    const supportData: THREE.Matrix4[] = [];
+    let distanceSinceSupport = RAIL_SUPPORT_SPACING;
 
-    for (let i = 0; i < samples.length; i += pillarSpacing) {
-      const sample = samples[i];
-      const distToTerrain = sample.position.length() - sample.terrainRadius;
-      const isOverWater =
-        sample.position.length() > waterRadius + 0.1 && sample.terrainRadius < waterRadius;
+    for (let i = 0; i < samples.length; i++) {
+      const sample = samples[i]!;
+      if (i > 0) distanceSinceSupport += sample.position.distanceTo(samples[i - 1]!.position);
+      if (distanceSinceSupport < RAIL_SUPPORT_SPACING) continue;
+      distanceSinceSupport = 0;
 
-      if (distToTerrain > TRACK_BRIDGE_THRESHOLD || isOverWater) {
-        const targetRadius = isOverWater ? waterRadius : sample.terrainRadius;
-        const height = sample.position.length() - targetRadius - TRACK_SURFACE_OFFSET;
-        if (height <= 0) continue;
+      const railRadius = sample.position.length();
+      const baseRadius = Math.max(sample.terrainRadius, sample.waterRadius);
+      const height = railRadius - baseRadius - GAME_CONFIG.rail.visualRadius;
+      if (height <= 0.5) continue;
 
-        const normal = sample.position.clone().normalize();
-        const pos = normal.clone().multiplyScalar(targetRadius + height * 0.5);
-
-        const matrix = new THREE.Matrix4();
-        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-        const scale = new THREE.Vector3(1.2, height, 1.2);
-        matrix.compose(pos, quat, scale);
-        bridgeData.push({ matrix });
-      }
+      const normal = sample.position.clone().normalize();
+      const pos = normal.clone().multiplyScalar(baseRadius + height * 0.5);
+      const matrix = new THREE.Matrix4();
+      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      const scale = new THREE.Vector3(RAIL_SUPPORT_RADIUS, height, RAIL_SUPPORT_RADIUS);
+      matrix.compose(pos, quat, scale);
+      supportData.push(matrix);
     }
 
-    if (bridgeData.length === 0) {
-      if (this.bridgeMesh) this.bridgeMesh.visible = false;
+    if (supportData.length === 0) {
+      if (this.supportMesh) this.supportMesh.visible = false;
       return;
     }
 
-    if (!this.bridgeMesh || this.bridgeMesh.instanceMatrix.count < bridgeData.length) {
-      if (this.bridgeMesh) {
-        this.bridgeMesh.geometry.dispose();
-        this.group.remove(this.bridgeMesh);
+    if (!this.supportMesh || this.supportMesh.instanceMatrix.count < supportData.length) {
+      if (this.supportMesh) {
+        this.supportMesh.geometry.dispose();
+        this.group.remove(this.supportMesh);
       }
-      const geo = new THREE.CylinderGeometry(1, 1, 1, 8);
-      this.bridgeMesh = new THREE.InstancedMesh(geo, this.bridgeMaterial, bridgeData.length + 50);
-      this.bridgeMesh.renderOrder = 3;
-      this.group.add(this.bridgeMesh);
+      const geo = new THREE.CylinderGeometry(1, 1, 1, RAIL_SUPPORT_SEGMENTS);
+      this.supportMesh = new THREE.InstancedMesh(geo, this.supportMaterial, supportData.length);
+      this.supportMesh.renderOrder = 3;
+      this.group.add(this.supportMesh);
     }
 
-    for (let i = 0; i < bridgeData.length; i++) {
-      this.bridgeMesh.setMatrixAt(i, bridgeData[i].matrix);
+    for (let i = 0; i < supportData.length; i++) {
+      this.supportMesh.setMatrixAt(i, supportData[i]!);
     }
-    this.bridgeMesh.count = bridgeData.length;
-    this.bridgeMesh.instanceMatrix.needsUpdate = true;
-    this.bridgeMesh.visible = true;
+    this.supportMesh.count = supportData.length;
+    this.supportMesh.instanceMatrix.needsUpdate = true;
+    this.supportMesh.visible = true;
   }
 
   private updateTunnelShell(samples: TrackSample[]): void {

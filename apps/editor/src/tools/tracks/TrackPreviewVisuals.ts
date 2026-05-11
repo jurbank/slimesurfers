@@ -1,11 +1,8 @@
 import * as THREE from "three";
+import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type { EditorConfig } from "../../types.ts";
 import type { TrackPoint, TrackState } from "./TrackTypes.ts";
-import {
-  TRACK_BRIDGE_THRESHOLD,
-  TRACK_SURFACE_OFFSET,
-  TRACK_TUNNEL_TERRAIN_THRESHOLD,
-} from "./trackConstants.ts";
+import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
 
 interface TrackSample {
   position: THREE.Vector3;
@@ -17,30 +14,32 @@ interface TrackSample {
 
 export type TrackPreviewRadiusSampler = (nx: number, ny: number, nz: number) => number;
 
+const RAIL_TUBE_SEGMENTS = 12;
+const RAIL_SUPPORT_SPACING = 18;
+const RAIL_SUPPORT_RADIUS = 0.18;
+const RAIL_SUPPORT_SEGMENTS = 6;
+
 export class TrackPreviewVisuals {
   private config: EditorConfig;
   private tracks: readonly TrackState[];
   private readonly group = new THREE.Group();
-  private readonly trackMaterial = new THREE.MeshLambertMaterial({
-    color: 0x2f343b,
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
+  private readonly railMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd0d8e8,
+    emissive: 0x06111f,
+    metalness: 0.72,
+    roughness: 0.32,
   });
-  private readonly edgeMaterial = new THREE.LineBasicMaterial({
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.75,
+  private readonly supportMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8090a8,
+    metalness: 0.7,
+    roughness: 0.4,
   });
-  private readonly bridgeMaterial = new THREE.MeshLambertMaterial({ color: 0x64748b });
   private readonly tunnelMaterial = new THREE.MeshLambertMaterial({
     color: 0x1e293b,
     side: THREE.BackSide,
   });
-  private trackMesh: THREE.Mesh | null = null;
-  private edgeLines: THREE.LineSegments | null = null;
-  private bridgeMesh: THREE.InstancedMesh | null = null;
+  private railMeshes: THREE.Mesh[] = [];
+  private supportMesh: THREE.InstancedMesh | null = null;
   private tunnelMesh: THREE.Mesh | null = null;
 
   constructor(
@@ -71,14 +70,12 @@ export class TrackPreviewVisuals {
   }
 
   dispose(): void {
-    this.disposeMesh(this.trackMesh);
-    this.disposeLine(this.edgeLines);
-    this.disposeMesh(this.bridgeMesh);
+    this.clearRailMeshes();
+    this.disposeMesh(this.supportMesh);
     this.disposeMesh(this.tunnelMesh);
     this.group.removeFromParent();
-    this.trackMaterial.dispose();
-    this.edgeMaterial.dispose();
-    this.bridgeMaterial.dispose();
+    this.railMaterial.dispose();
+    this.supportMaterial.dispose();
     this.tunnelMaterial.dispose();
   }
 
@@ -87,130 +84,100 @@ export class TrackPreviewVisuals {
       .map((track) => ({ track, samples: this.getSurfaceSamples(track) }))
       .filter(({ samples }) => samples.length >= 2);
 
-    this.updateTrackSurface(samplesByTrack);
-    this.updateBridgeSupports(samplesByTrack.flatMap(({ samples }) => samples));
+    this.updateRailTubes(samplesByTrack);
+    this.updateRailSupports(samplesByTrack);
     this.updateTunnelShell(samplesByTrack);
   }
 
-  private updateTrackSurface(tracks: { track: TrackState; samples: TrackSample[] }[]): void {
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const indices: number[] = [];
-    const edgePositions: number[] = [];
-    let vertexOffset = 0;
+  private updateRailTubes(tracks: { track: TrackState; samples: TrackSample[] }[]): void {
+    this.clearRailMeshes();
 
     for (const { track, samples } of tracks) {
       const closed = track.closed && track.points.length >= 3;
-      const rings = closed ? samples.length - 1 : samples.length;
-      if (rings < 2) continue;
+      const curvePoints = closed ? samples.slice(0, -1) : samples;
+      if (curvePoints.length < (closed ? 3 : 2)) continue;
 
-      const left: THREE.Vector3[] = [];
-      const right: THREE.Vector3[] = [];
-      for (let i = 0; i < rings; i++) {
-        const center = samples[i]!.position;
-        const prev = closed
-          ? samples[(i - 1 + rings) % rings]!.position
-          : samples[Math.max(0, i - 1)]!.position;
-        const next = closed
-          ? samples[(i + 1) % rings]!.position
-          : samples[Math.min(rings - 1, i + 1)]!.position;
-        const surfaceNormal = center.clone().normalize();
-        const tangent = next.clone().sub(prev);
-        tangent.addScaledVector(surfaceNormal, -tangent.dot(surfaceNormal)).normalize();
-        const side = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
-        side.applyAxisAngle(tangent, (samples[i]!.bank * Math.PI) / 180);
-
-        left.push(center.clone().addScaledVector(side, -samples[i]!.width * 0.5));
-        right.push(center.clone().addScaledVector(side, samples[i]!.width * 0.5));
-        normals.push(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
-        normals.push(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
-      }
-
-      for (let i = 0; i < rings; i++) {
-        positions.push(left[i]!.x, left[i]!.y, left[i]!.z);
-        positions.push(right[i]!.x, right[i]!.y, right[i]!.z);
-        const nextIndex = (i + 1) % rings;
-        if (!closed && i === rings - 1) continue;
-        edgePositions.push(
-          left[i]!.x,
-          left[i]!.y,
-          left[i]!.z,
-          left[nextIndex]!.x,
-          left[nextIndex]!.y,
-          left[nextIndex]!.z,
-          right[i]!.x,
-          right[i]!.y,
-          right[i]!.z,
-          right[nextIndex]!.x,
-          right[nextIndex]!.y,
-          right[nextIndex]!.z,
-        );
-      }
-
-      const segmentCount = closed ? rings : rings - 1;
-      for (let i = 0; i < segmentCount; i++) {
-        const nextIndex = (i + 1) % rings;
-        const leftA = vertexOffset + i * 2;
-        const rightA = leftA + 1;
-        const leftB = vertexOffset + nextIndex * 2;
-        const rightB = leftB + 1;
-        indices.push(leftA, rightA, rightB, leftA, rightB, leftB);
-      }
-      vertexOffset += rings * 2;
+      const curve = new THREE.CatmullRomCurve3(
+        curvePoints.map((sample) => sample.position),
+        closed,
+        "centripetal",
+      );
+      const geometry = new THREE.TubeGeometry(
+        curve,
+        Math.max(2, curvePoints.length - 1),
+        GAME_CONFIG.rail.visualRadius,
+        RAIL_TUBE_SEGMENTS,
+        closed,
+      );
+      const mesh = new THREE.Mesh(geometry, this.railMaterial);
+      mesh.renderOrder = 4;
+      this.group.add(mesh);
+      this.railMeshes.push(mesh);
     }
-
-    this.replaceMesh("trackMesh", positions, normals, indices, this.trackMaterial, 4);
-    this.replaceLineSegments("edgeLines", edgePositions, this.edgeMaterial, 13);
   }
 
-  private updateBridgeSupports(samples: TrackSample[]): void {
-    const bridgeData: THREE.Matrix4[] = [];
-    const pillarSpacing = 4;
+  private updateRailSupports(tracks: { samples: TrackSample[] }[]): void {
+    const supportData: THREE.Matrix4[] = [];
 
-    for (let i = 0; i < samples.length; i += pillarSpacing) {
-      const sample = samples[i]!;
-      const distToTerrain = sample.position.length() - sample.terrainRadius;
-      const isOverWater =
-        sample.position.length() > sample.waterRadius + 0.1 &&
-        sample.terrainRadius < sample.waterRadius;
+    for (const { samples } of tracks) {
+      let distanceSinceSupport = RAIL_SUPPORT_SPACING;
+      for (let i = 0; i < samples.length; i++) {
+        const sample = samples[i]!;
+        if (i > 0) {
+          distanceSinceSupport += sample.position.distanceTo(samples[i - 1]!.position);
+        }
+        if (distanceSinceSupport < RAIL_SUPPORT_SPACING) continue;
+        distanceSinceSupport = 0;
 
-      if (distToTerrain <= TRACK_BRIDGE_THRESHOLD && !isOverWater) continue;
+        const railRadius = sample.position.length();
+        const baseRadius = Math.max(sample.terrainRadius, sample.waterRadius);
+        const height = railRadius - baseRadius - GAME_CONFIG.rail.visualRadius;
+        if (height <= 0.5) continue;
 
-      const targetRadius = isOverWater ? sample.waterRadius : sample.terrainRadius;
-      const height = sample.position.length() - targetRadius - TRACK_SURFACE_OFFSET;
-      if (height <= 0) continue;
-
-      const normal = sample.position.clone().normalize();
-      const pos = normal.clone().multiplyScalar(targetRadius + height * 0.5);
-      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-      const matrix = new THREE.Matrix4();
-      matrix.compose(pos, quat, new THREE.Vector3(1.2, height, 1.2));
-      bridgeData.push(matrix);
+        const normal = sample.position.clone().normalize();
+        const pos = normal.clone().multiplyScalar(baseRadius + height * 0.5);
+        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+        const matrix = new THREE.Matrix4();
+        matrix.compose(
+          pos,
+          quat,
+          new THREE.Vector3(RAIL_SUPPORT_RADIUS, height, RAIL_SUPPORT_RADIUS),
+        );
+        supportData.push(matrix);
+      }
     }
 
-    if (bridgeData.length === 0) {
-      if (this.bridgeMesh) this.bridgeMesh.visible = false;
+    if (supportData.length === 0) {
+      if (this.supportMesh) this.supportMesh.visible = false;
       return;
     }
 
-    if (!this.bridgeMesh || this.bridgeMesh.instanceMatrix.count < bridgeData.length) {
-      if (this.bridgeMesh) {
-        this.bridgeMesh.geometry.dispose();
-        this.group.remove(this.bridgeMesh);
+    if (!this.supportMesh || this.supportMesh.instanceMatrix.count < supportData.length) {
+      if (this.supportMesh) {
+        this.supportMesh.geometry.dispose();
+        this.group.remove(this.supportMesh);
       }
-      this.bridgeMesh = new THREE.InstancedMesh(
-        new THREE.CylinderGeometry(1, 1, 1, 8),
-        this.bridgeMaterial,
-        bridgeData.length,
+      this.supportMesh = new THREE.InstancedMesh(
+        new THREE.CylinderGeometry(1, 1, 1, RAIL_SUPPORT_SEGMENTS),
+        this.supportMaterial,
+        supportData.length,
       );
-      this.bridgeMesh.renderOrder = 3;
-      this.group.add(this.bridgeMesh);
+      this.supportMesh.renderOrder = 3;
+      this.group.add(this.supportMesh);
     }
 
-    bridgeData.forEach((matrix, index) => this.bridgeMesh?.setMatrixAt(index, matrix));
-    this.bridgeMesh.count = bridgeData.length;
-    this.bridgeMesh.instanceMatrix.needsUpdate = true;
-    this.bridgeMesh.visible = true;
+    supportData.forEach((matrix, index) => this.supportMesh?.setMatrixAt(index, matrix));
+    this.supportMesh.count = supportData.length;
+    this.supportMesh.instanceMatrix.needsUpdate = true;
+    this.supportMesh.visible = true;
+  }
+
+  private clearRailMeshes(): void {
+    for (const mesh of this.railMeshes) {
+      this.group.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    this.railMeshes = [];
   }
 
   private updateTunnelShell(tracks: { track: TrackState; samples: TrackSample[] }[]): void {
@@ -348,7 +315,7 @@ export class TrackPreviewVisuals {
   }
 
   private replaceMesh(
-    key: "trackMesh" | "tunnelMesh",
+    key: "tunnelMesh",
     positions: number[],
     normals: number[] | null,
     indices: number[],
@@ -382,39 +349,8 @@ export class TrackPreviewVisuals {
     }
   }
 
-  private replaceLineSegments(
-    key: "edgeLines",
-    positions: number[],
-    material: THREE.Material,
-    renderOrder: number,
-  ): void {
-    const existing = this[key];
-    if (positions.length === 0) {
-      if (existing) existing.visible = false;
-      return;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    if (!existing) {
-      const line = new THREE.LineSegments(geometry, material);
-      line.renderOrder = renderOrder;
-      this[key] = line;
-      this.group.add(line);
-    } else {
-      existing.geometry.dispose();
-      existing.geometry = geometry;
-      existing.visible = true;
-    }
-  }
-
   private disposeMesh(mesh: THREE.Mesh | THREE.InstancedMesh | null): void {
     if (!mesh) return;
     mesh.geometry.dispose();
-  }
-
-  private disposeLine(line: THREE.LineSegments | null): void {
-    if (!line) return;
-    line.geometry.dispose();
   }
 }

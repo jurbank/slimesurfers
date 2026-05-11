@@ -130,6 +130,11 @@ Progress:
 - Covered corridor radius, control point normals, explicit `heightOffset`
   conversion, incomplete rail skipping, unknown-planet rail skipping, and runtime
   map validation.
+- Updated editor preview rendering so authored rails look like slim runtime-style
+  rail tubes with supports instead of broad track ribbons, while preserving tunnel
+  shell preview behavior.
+- Updated active editor authoring visuals so the rail being edited also uses the
+  slim tube/support style; handles and transform gizmo remain as editing affordances.
 
 Validation:
 

@@ -4,6 +4,14 @@ Agent-maintained notes for changes that touch `apps/editor`.
 
 ## 2026-05-11
 
+- Changed active rail authoring visuals in `src/tools/tracks/TrackTool.ts`.
+- User-visible behavior: rails now look like slim metallic rail tubes with rail-sized support columns while actively editing, not only in the passive editor preview; editable control handles and the selected-point transform gizmo remain available.
+- Validation: `vp fmt apps/editor/src/tools/tracks/TrackTool.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/tracks/trackCarving.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp check --no-fmt`.
+
+- Changed rail preview rendering in `src/tools/tracks/TrackPreviewVisuals.ts`.
+- User-visible behavior: authored rails now render as slim metallic rail tubes with support columns in the editor preview instead of broad track ribbons with cyan edges; tunnel shell preview remains available for carved sections.
+- Validation: `vp fmt apps/editor/src/tools/tracks/TrackPreviewVisuals.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/tracks/trackCarving.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp check --no-fmt`.
+
 - Added rail export coverage in `src/export.test.ts`.
 - User-visible behavior: no direct editor UI change; authored rails now have explicit tests for runtime rail export, skipped incomplete rails, skipped unknown-planet rails, corridor radius, control point normals, and height offsets.
 - Validation: `vp fmt apps/editor/src/export.test.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp check --no-fmt`.
