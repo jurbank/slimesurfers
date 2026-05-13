@@ -3,6 +3,7 @@ import { MessageType } from "@splat/protocol/network/messageTypes.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
 import { MatchRoom } from "./matchRoom.ts";
 
@@ -203,6 +204,28 @@ describe("MatchRoom", () => {
     expect(harness.broadcasts).toHaveLength(1);
     expect(harness.broadcasts[0]?.type).toBe(MessageType.Snapshot);
     expect(harness.broadcasts[0]?.options).toEqual({ except: alpha.client });
+  });
+
+  it("sends map-provided rails to joining clients", () => {
+    const rail = { ...DEV_MAP.rails[0]!, id: 99 };
+    const harness = createRoomHarness({
+      mapData: {
+        ...DEV_MAP,
+        mapId: "map-owned-rails",
+        name: "Map Owned Rails",
+        rails: [rail],
+      },
+    });
+    const alpha = createFakeClient("session-1");
+
+    harness.room.onJoin(alpha.client as never, { name: "Alpha" });
+
+    const mapMessage = alpha.sent.find((message) => message.type === MessageType.MapData);
+    expect(mapMessage?.payload).toMatchObject({
+      mapId: "map-owned-rails",
+      name: "Map Owned Rails",
+      rails: [rail],
+    });
   });
 
   it("honors a requested team in teams mode", () => {

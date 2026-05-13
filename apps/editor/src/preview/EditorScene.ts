@@ -14,17 +14,17 @@ import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
 import { TerrainStampTool } from "../tools/terrain/TerrainStampTool.ts";
 import type { TerrainStampState } from "../tools/terrain/TerrainStampTypes.ts";
-import { TrackTool } from "../tools/tracks/TrackTool.ts";
-import { TrackPreviewVisuals } from "../tools/tracks/TrackPreviewVisuals.ts";
+import { RailTool } from "../tools/rails/RailTool.ts";
+import { RailPreviewVisuals } from "../tools/rails/RailPreviewVisuals.ts";
 import {
-  buildTrackCarveSamples,
-  buildTrackSurfaceSamples,
-  getTrackCarvedRadius,
-  getTrackRaisedRadius,
-  type TrackCarveSample,
-  type TrackSurfaceSample,
-} from "../tools/tracks/trackCarving.ts";
-import type { TrackState, TrackToolState } from "../tools/tracks/TrackTypes.ts";
+  buildRailCarveSamples,
+  buildRailSurfaceSamples,
+  getRailCarvedRadius,
+  getRailRaisedRadius,
+  type RailCarveSample,
+  type RailSurfaceSample,
+} from "../tools/rails/railCarving.ts";
+import type { RailState, RailToolState } from "../tools/rails/RailTypes.ts";
 import type {
   BrushState,
   EditorConfig,
@@ -90,8 +90,8 @@ export class EditorScene {
   private readonly brushTool: BrushTool;
   private readonly terrainStampTool: TerrainStampTool;
   private readonly propPaintTool: PropPaintTool;
-  private readonly trackTool: TrackTool;
-  private readonly trackPreviewVisuals: TrackPreviewVisuals;
+  private readonly railTool: RailTool;
+  private readonly railPreviewVisuals: RailPreviewVisuals;
   private readonly baseTerrainProvider: TerrainSurfaceProvider;
   private readonly previewTerrainProvider: TerrainSurfaceProvider;
   private readonly playerPreview: PlayerPreviewController;
@@ -106,9 +106,9 @@ export class EditorScene {
   });
   private readonly spawnRaycaster = new THREE.Raycaster();
   private readonly selectRaycaster = new THREE.Raycaster();
-  private tracks: TrackState[];
-  private trackCarveSamples: TrackCarveSample[] = [];
-  private trackSurfaceSamples: TrackSurfaceSample[] = [];
+  private rails: RailState[];
+  private railCarveSamples: RailCarveSample[] = [];
+  private railSurfaceSamples: RailSurfaceSample[] = [];
   private previewSpawn: PreviewSpawnState;
   private spawnPlacementActive = false;
   private isSpaceHeld = false;
@@ -117,7 +117,7 @@ export class EditorScene {
   private hasBrush = false;
   private hasTerrainStamp = false;
   private hasPropBrush = false;
-  private hasTrackMode = false;
+  private hasRailMode = false;
   private selectionPointerStart: { x: number; y: number } | null = null;
 
   constructor(
@@ -125,10 +125,10 @@ export class EditorScene {
     width: number,
     height: number,
     config: EditorConfig,
-    tracks: TrackState[],
+    rails: RailState[],
     previewSpawn: PreviewSpawnState,
-    onTrackChange: (track: TrackState) => void,
-    onTrackPointSelectionChange: (pointId: string | null) => void,
+    onRailChange: (rail: RailState) => void,
+    onRailPointSelectionChange: (pointId: string | null) => void,
     private readonly onSculptChange: (planetId: string, sculpt: EditorSculptState) => void,
     private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
@@ -136,7 +136,7 @@ export class EditorScene {
   ) {
     this.canvas = canvas;
     this.currentConfig = config;
-    this.tracks = tracks;
+    this.rails = rails;
     this.previewSpawn = previewSpawn;
     this.activePlanetId = config.planets[0]!.id;
 
@@ -166,7 +166,7 @@ export class EditorScene {
     this.brushTool = new BrushTool(config);
     this.terrainStampTool = new TerrainStampTool();
     this.propPaintTool = new PropPaintTool();
-    this.trackTool = new TrackTool();
+    this.railTool = new RailTool();
     this.baseTerrainProvider = {
       getHeight: (nx, ny, nz, cfg) => getTerrainHeight(nx, ny, nz, cfg),
       getRadius: (nx, ny, nz, cfg) => getTerrainRadius(nx, ny, nz, cfg),
@@ -183,10 +183,10 @@ export class EditorScene {
       config,
       this.previewTerrainProvider,
     );
-    this.trackPreviewVisuals = new TrackPreviewVisuals(
+    this.railPreviewVisuals = new RailPreviewVisuals(
       this.scene,
       config,
-      this.getActivePlanetTracks(),
+      this.getActivePlanetRails(),
       (nx, ny, nz) => {
         const planet = this.getPlanetById(this.activePlanetId);
         return (
@@ -214,7 +214,7 @@ export class EditorScene {
     canvas.addEventListener("pointerup", this.onSelectionPointerUp);
 
     // Phase 2: connect tools to active planet meshes
-    this.rebuildTrackCarveSamples();
+    this.rebuildRailCarveSamples();
     this.brushTool.connect({
       canvas,
       camera: this.camera,
@@ -245,14 +245,14 @@ export class EditorScene {
       planetMesh: activeRender.terrainMesh,
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
     });
-    this.trackTool.connect({
+    this.railTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
       planetMesh: activeRender.terrainMesh,
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
-      onTrackChange,
-      onPointSelectionChange: onTrackPointSelectionChange,
+      onRailChange,
+      onPointSelectionChange: onRailPointSelectionChange,
       onGizmoDragChange: (dragging) => {
         this.controls.enabled = !dragging;
       },
@@ -283,10 +283,10 @@ export class EditorScene {
     this.propPaintTool.setBrushState(state);
   }
 
-  setTrackToolState(state: TrackToolState | null): void {
+  setRailToolState(state: RailToolState | null): void {
     if (this.isPreviewActive) return;
-    this.hasTrackMode = state?.mode != null;
-    this.trackTool.setTrackToolState(state);
+    this.hasRailMode = state?.mode != null;
+    this.railTool.setRailToolState(state);
   }
 
   setSpawnPlacementActive(active: boolean): void {
@@ -295,7 +295,7 @@ export class EditorScene {
       this.brushTool.setBrushState(null);
       this.terrainStampTool.setStampState(null);
       this.propPaintTool.setBrushState(null);
-      this.trackTool.setTrackToolState(null);
+      this.railTool.setRailToolState(null);
       this.canvas.style.cursor = "crosshair";
     } else if (!this.isPreviewActive) {
       this.canvas.style.cursor = "";
@@ -308,10 +308,10 @@ export class EditorScene {
     this.updateSpawnMarker();
   }
 
-  setTracks(tracks: TrackState[]): void {
-    this.tracks = tracks;
-    this.rebuildTrackCarveSamples();
-    this.trackPreviewVisuals.setTracks(this.getActivePlanetTracks());
+  setRails(rails: RailState[]): void {
+    this.rails = rails;
+    this.rebuildRailCarveSamples();
+    this.railPreviewVisuals.setRails(this.getActivePlanetRails());
     this.playerPreview.setConfig(this.currentConfig);
   }
 
@@ -323,8 +323,8 @@ export class EditorScene {
     this.brushTool.setBrushState(null);
     this.terrainStampTool.setStampState(null);
     this.propPaintTool.setBrushState(null);
-    if (active) this.trackTool.setTrackToolState(null);
-    this.trackPreviewVisuals.setActive(active);
+    if (active) this.railTool.setRailToolState(null);
+    this.railPreviewVisuals.setActive(active);
     this.playerPreview.setActive(active);
   }
 
@@ -336,9 +336,9 @@ export class EditorScene {
       this.brushTool.setPlanetMeshes([render.terrainMesh, render.outlineMesh]);
       this.terrainStampTool.setPlanetMesh(render.terrainMesh);
       this.propPaintTool.setPlanetMesh(render.terrainMesh);
-      this.trackTool.setPlanetMesh(render.terrainMesh);
+      this.railTool.setPlanetMesh(render.terrainMesh);
       this.brushTool.resetSculptBase(this.getPlanetById(id));
-      this.trackPreviewVisuals.setTracks(this.getActivePlanetTracks());
+      this.railPreviewVisuals.setRails(this.getActivePlanetRails());
     }
     const prevTarget = this.controls.target.clone();
     const camOffset = this.camera.position.clone().sub(prevTarget);
@@ -355,7 +355,7 @@ export class EditorScene {
     this.playerPreview.setConfig(config);
     this.syncPlanetRenders(config);
     this.rebuildPlanetMeshes();
-    this.trackPreviewVisuals.setConfig(config);
+    this.railPreviewVisuals.setConfig(config);
     this.rebuildWater(config);
     this.updateUniforms(config);
   }
@@ -363,7 +363,7 @@ export class EditorScene {
   rebuildWater(_config: EditorConfig): void {
     const activeRender = this.planetRenders.get(this.activePlanetId);
     if (!activeRender?.waterMesh) return;
-    this.rebuildTrackCarveSamples();
+    this.rebuildRailCarveSamples();
     const planet = this.getPlanetById(this.activePlanetId);
     const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
     const waterRadius = planet.radius + planet.terrain.waterLevel;
@@ -426,7 +426,7 @@ export class EditorScene {
         "Transparent fresnel shell around the planet",
       ),
       ...this.propPaintTool.getPerformanceStats(),
-      ...this.trackTool.getPerformanceStats(),
+      ...this.railTool.getPerformanceStats(),
     ];
 
     const materialStats = this.getMaterialStats();
@@ -460,8 +460,8 @@ export class EditorScene {
     this.brushTool.dispose();
     this.terrainStampTool.dispose();
     this.propPaintTool.dispose();
-    this.trackTool.dispose();
-    this.trackPreviewVisuals.dispose();
+    this.railTool.dispose();
+    this.railPreviewVisuals.dispose();
     this.playerPreview.dispose();
     this.disposeSpawnMarker();
     for (const render of this.planetRenders.values()) {
@@ -482,8 +482,8 @@ export class EditorScene {
     return this.currentConfig.planets.find((p) => p.id === id) ?? this.currentConfig.planets[0]!;
   }
 
-  private getActivePlanetTracks(): TrackState[] {
-    return this.tracks.filter((track) => track.planetId === this.activePlanetId);
+  private getActivePlanetRails(): RailState[] {
+    return this.rails.filter((rail) => rail.planetId === this.activePlanetId);
   }
 
   private buildPlanetRender(planet: EditorPlanet): PlanetRenderState {
@@ -667,7 +667,7 @@ export class EditorScene {
   private rebuildPlanetMeshes(): void {
     const activeRender = this.planetRenders.get(this.activePlanetId);
     if (!activeRender) return;
-    this.rebuildTrackCarveSamples();
+    this.rebuildRailCarveSamples();
     const planet = this.getPlanetById(this.activePlanetId);
     const cfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
     const newGeo = buildPlanetGeometry(
@@ -679,12 +679,12 @@ export class EditorScene {
     activeRender.terrainMesh.geometry = newGeo;
     activeRender.outlineMesh.geometry = newGeo;
     oldGeo.dispose();
-    this.trackPreviewVisuals.setConfig(this.currentConfig);
-    this.trackTool.syncSurface();
+    this.railPreviewVisuals.setConfig(this.currentConfig);
+    this.railTool.syncSurface();
     this.emitPerformanceStats(true);
   }
 
-  private rebuildTrackCarveSamples(): void {
+  private rebuildRailCarveSamples(): void {
     const getRadiusAtNormal = (nx: number, ny: number, nz: number) => {
       const planet = this.getPlanetById(this.activePlanetId);
       return (
@@ -694,13 +694,13 @@ export class EditorScene {
         }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
       );
     };
-    this.trackCarveSamples = buildTrackCarveSamples(
-      this.getActivePlanetTracks(),
+    this.railCarveSamples = buildRailCarveSamples(
+      this.getActivePlanetRails(),
       this.currentConfig,
       getRadiusAtNormal,
     );
-    this.trackSurfaceSamples = buildTrackSurfaceSamples(
-      this.getActivePlanetTracks(),
+    this.railSurfaceSamples = buildRailSurfaceSamples(
+      this.getActivePlanetRails(),
       this.currentConfig,
       getRadiusAtNormal,
     );
@@ -714,10 +714,10 @@ export class EditorScene {
   ): number {
     const baseRadius =
       getTerrainRadius(nx, ny, nz, config) + this.brushTool.getDisplacementAtNormal(nx, ny, nz);
-    const carvedRadius = getTrackCarvedRadius(nx, ny, nz, baseRadius, this.trackCarveSamples);
+    const carvedRadius = getRailCarvedRadius(nx, ny, nz, baseRadius, this.railCarveSamples);
     // Track ribbons are playable floors. Apply them after tunnel carving so tunnel
-    // entrances stay hollow around the track without dropping the player to water.
-    return getTrackRaisedRadius(nx, ny, nz, carvedRadius, this.trackSurfaceSamples);
+    // entrances stay hollow around the rail without dropping the player to water.
+    return getRailRaisedRadius(nx, ny, nz, carvedRadius, this.railSurfaceSamples);
   }
 
   private createSpawnMarker(): void {
@@ -854,7 +854,7 @@ export class EditorScene {
 
     if (dx * dx + dy * dy > 25) return; // orbit drag, not a click
     if (!this.onPlanetSelected || this.isPreviewActive || this.spawnPlacementActive) return;
-    if (this.hasBrush || this.hasTerrainStamp || this.hasPropBrush || this.hasTrackMode) return;
+    if (this.hasBrush || this.hasTerrainStamp || this.hasPropBrush || this.hasRailMode) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;

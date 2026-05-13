@@ -122,7 +122,172 @@
     "hatchStrength": 0.15,
     "hatchScale": 5
   },
-  "rails": [],
+  "rails": [
+    {
+      "id": 0,
+      "planetId": "planet-0",
+      "paintCorridorRadius": 8,
+      "controlPoints": [
+        {
+          "nx": 0.5,
+          "ny": 0.866,
+          "nz": 0,
+          "heightOffset": 4.5
+        },
+        {
+          "nx": 0.4698,
+          "ny": 0.866,
+          "nz": 0.171,
+          "heightOffset": 6
+        },
+        {
+          "nx": 0.383,
+          "ny": 0.866,
+          "nz": 0.3214,
+          "heightOffset": 10
+        },
+        {
+          "nx": 0.25,
+          "ny": 0.866,
+          "nz": 0.433,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.0868,
+          "ny": 0.866,
+          "nz": 0.4924,
+          "heightOffset": 12
+        },
+        {
+          "nx": -0.0868,
+          "ny": 0.866,
+          "nz": 0.4924,
+          "heightOffset": 12
+        },
+        {
+          "nx": -0.25,
+          "ny": 0.866,
+          "nz": 0.433,
+          "heightOffset": 12
+        },
+        {
+          "nx": -0.383,
+          "ny": 0.866,
+          "nz": 0.3214,
+          "heightOffset": 10
+        },
+        {
+          "nx": -0.4698,
+          "ny": 0.866,
+          "nz": 0.171,
+          "heightOffset": 6
+        },
+        {
+          "nx": -0.5,
+          "ny": 0.866,
+          "nz": 0,
+          "heightOffset": 4.5
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "planetId": "planet-0",
+      "paintCorridorRadius": 8,
+      "controlPoints": [
+        {
+          "nx": -0.383,
+          "ny": -0.866,
+          "nz": -0.321,
+          "heightOffset": 4.5
+        },
+        {
+          "nx": -0.25,
+          "ny": -0.866,
+          "nz": -0.433,
+          "heightOffset": 6
+        },
+        {
+          "nx": -0.087,
+          "ny": -0.866,
+          "nz": -0.492,
+          "heightOffset": 10
+        },
+        {
+          "nx": 0.087,
+          "ny": -0.866,
+          "nz": -0.492,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.25,
+          "ny": -0.866,
+          "nz": -0.433,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.383,
+          "ny": -0.866,
+          "nz": -0.321,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.47,
+          "ny": -0.866,
+          "nz": -0.171,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.5,
+          "ny": -0.866,
+          "nz": 0,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.47,
+          "ny": -0.866,
+          "nz": 0.171,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.383,
+          "ny": -0.866,
+          "nz": 0.321,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.25,
+          "ny": -0.866,
+          "nz": 0.433,
+          "heightOffset": 12
+        },
+        {
+          "nx": 0.087,
+          "ny": -0.866,
+          "nz": 0.492,
+          "heightOffset": 12
+        },
+        {
+          "nx": -0.087,
+          "ny": -0.866,
+          "nz": 0.492,
+          "heightOffset": 10
+        },
+        {
+          "nx": -0.25,
+          "ny": -0.866,
+          "nz": 0.433,
+          "heightOffset": 6
+        },
+        {
+          "nx": -0.383,
+          "ny": -0.866,
+          "nz": 0.321,
+          "heightOffset": 40.5
+        }
+      ]
+    }
+  ],
   "spawns": {
     "ffa": {
       "kind": "ffa-spread"

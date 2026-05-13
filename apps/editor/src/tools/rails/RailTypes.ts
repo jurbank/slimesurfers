@@ -21,7 +21,7 @@ export interface RailState {
 
 export interface RailToolState {
   mode: RailEditMode | null;
-  track: RailState;
+  rail: RailState;
   selectedPointId: string | null;
 }
 

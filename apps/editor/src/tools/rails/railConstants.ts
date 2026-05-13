@@ -1,0 +1,3 @@
+export const RAIL_SURFACE_OFFSET = 0.18;
+export const RAIL_BRIDGE_THRESHOLD = 1.5;
+export const RAIL_TUNNEL_TERRAIN_THRESHOLD = -0.5;

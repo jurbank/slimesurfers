@@ -5,7 +5,7 @@ import {
   type RailPoint,
   type RailState,
   type RailToolState,
-} from "../tools/tracks/TrackTypes.ts";
+} from "../tools/rails/RailTypes.ts";
 import { Section } from "./ui/Section.tsx";
 import { Slider } from "./ui/Slider.tsx";
 import { GridSelector } from "./ui/GridSelector.tsx";
@@ -16,75 +16,71 @@ const EDIT_MODES: { id: RailEditMode; label: string }[] = [
   { id: "delete", label: "Delete" },
 ];
 
-interface TracksPanelProps {
-  tracks: RailState[];
+interface RailsPanelProps {
+  rails: RailState[];
   planetId: string;
-  activeTrackId: string;
+  activeRailId: string;
   selectedPointId: string | null;
-  onActiveTrackChange: (trackId: string) => void;
-  onTracksChange: (
-    tracks: RailState[],
-    activeTrackId: string,
-    selectedPointId: string | null,
-  ) => void;
-  onTrackChange: (track: RailState) => void;
-  onTrackToolChange: (state: RailToolState) => void;
+  onActiveRailChange: (railId: string) => void;
+  onRailsChange: (rails: RailState[], activeRailId: string, selectedPointId: string | null) => void;
+  onRailChange: (rail: RailState) => void;
+  onRailToolChange: (state: RailToolState) => void;
   onPointSelectionChange: (pointId: string | null) => void;
 }
 
-export function TracksPanel({
-  tracks,
+export function RailsPanel({
+  rails,
   planetId,
-  activeTrackId,
+  activeRailId,
   selectedPointId,
-  onActiveTrackChange,
-  onTracksChange,
-  onTrackChange,
-  onTrackToolChange,
+  onActiveRailChange,
+  onRailsChange,
+  onRailChange,
+  onRailToolChange,
   onPointSelectionChange,
-}: TracksPanelProps) {
+}: RailsPanelProps) {
   const [mode, setMode] = useState<RailEditMode | null>("add");
-  const planetTracks = tracks.filter((track) => track.planetId === planetId);
-  const activeTrack = planetTracks.find((track) => track.id === activeTrackId) ?? planetTracks[0];
-  const trackRef = useRef<RailState | null>(activeTrack ?? null);
-  const selectedPoint = activeTrack?.points.find((point) => point.id === selectedPointId) ?? null;
+  const planetRails = rails.filter((rail) => rail.planetId === planetId);
+  const activeRail = planetRails.find((rail) => rail.id === activeRailId) ?? planetRails[0];
+  const railRef = useRef<RailState | null>(activeRail ?? null);
+  const selectedPoint = activeRail?.points.find((point) => point.id === selectedPointId) ?? null;
 
   useEffect(() => {
-    if (activeTrack && activeTrack.id !== activeTrackId) onActiveTrackChange(activeTrack.id);
-  }, [activeTrack, activeTrackId, onActiveTrackChange]);
+    if (activeRail && activeRail.id !== activeRailId) onActiveRailChange(activeRail.id);
+  }, [activeRail, activeRailId, onActiveRailChange]);
 
   useEffect(() => {
-    if (!activeTrack) return;
-    trackRef.current = activeTrack;
-    onTrackToolChange({ mode, track: activeTrack, selectedPointId });
-  }, [activeTrack, mode, onTrackToolChange, selectedPointId]);
+    if (!activeRail) return;
+    railRef.current = activeRail;
+    onRailToolChange({ mode, rail: activeRail, selectedPointId });
+  }, [activeRail, mode, onRailToolChange, selectedPointId]);
 
   useEffect(() => {
     return () => {
-      if (trackRef.current) {
-        onTrackToolChange({ mode: null, track: trackRef.current, selectedPointId: null });
+      if (railRef.current) {
+        onRailToolChange({ mode: null, rail: railRef.current, selectedPointId: null });
       }
     };
-  }, [onTrackToolChange]);
+  }, [onRailToolChange]);
 
-  function updateActiveTrack(nextTrack: RailState, nextSelectedPointId = selectedPointId) {
-    onTrackChange(nextTrack);
-    onTrackToolChange({ mode, track: nextTrack, selectedPointId: nextSelectedPointId });
+  function updateActiveRail(nextRail: RailState, nextSelectedPointId = selectedPointId) {
+    onRailChange(nextRail);
+    onRailToolChange({ mode, rail: nextRail, selectedPointId: nextSelectedPointId });
   }
 
-  function replaceTracks(
-    nextPlanetTracks: RailState[],
-    nextActiveTrackId = activeTrackId,
+  function replaceRails(
+    nextPlanetRails: RailState[],
+    nextActiveRailId = activeRailId,
     nextSelectedPointId: string | null = selectedPointId,
   ) {
-    const otherTracks = tracks.filter((track) => track.planetId !== planetId);
-    const nextTracks = [...otherTracks, ...nextPlanetTracks];
-    onTracksChange(nextTracks, nextActiveTrackId, nextSelectedPointId);
-    const nextActiveTrack = nextPlanetTracks.find((track) => track.id === nextActiveTrackId);
-    if (nextActiveTrack) {
-      onTrackToolChange({
+    const otherRails = rails.filter((rail) => rail.planetId !== planetId);
+    const nextRails = [...otherRails, ...nextPlanetRails];
+    onRailsChange(nextRails, nextActiveRailId, nextSelectedPointId);
+    const nextActiveRail = nextPlanetRails.find((rail) => rail.id === nextActiveRailId);
+    if (nextActiveRail) {
+      onRailToolChange({
         mode,
-        track: nextActiveTrack,
+        rail: nextActiveRail,
         selectedPointId: nextSelectedPointId,
       });
     }
@@ -94,56 +90,56 @@ export function TracksPanel({
     setMode((current) => (current === nextMode ? null : nextMode));
   }
 
-  function addTrack() {
-    const track = createDefaultRailState(undefined, planetId);
-    replaceTracks([...planetTracks, track], track.id, null);
+  function addRail() {
+    const rail = createDefaultRailState(undefined, planetId);
+    replaceRails([...planetRails, rail], rail.id, null);
   }
 
-  function duplicateTrack() {
-    if (!activeTrack) return;
+  function duplicateRail() {
+    if (!activeRail) return;
     const duplicate: RailState = {
-      ...activeTrack,
+      ...activeRail,
       id: createDefaultRailState(undefined, planetId).id,
       planetId,
-      name: `${activeTrack.name} Copy`,
-      points: activeTrack.points.map((point) => ({ ...point, id: createPointId() })),
+      name: `${activeRail.name} Copy`,
+      points: activeRail.points.map((point) => ({ ...point, id: createPointId() })),
     };
-    replaceTracks([...planetTracks, duplicate], duplicate.id, null);
+    replaceRails([...planetRails, duplicate], duplicate.id, null);
   }
 
-  function deleteTrack() {
-    if (planetTracks.length <= 1 || !activeTrack) return;
-    const nextTracks = planetTracks.filter((track) => track.id !== activeTrack.id);
-    replaceTracks(nextTracks, nextTracks[0].id, null);
+  function deleteRail() {
+    if (planetRails.length <= 1 || !activeRail) return;
+    const nextRails = planetRails.filter((rail) => rail.id !== activeRail.id);
+    replaceRails(nextRails, nextRails[0].id, null);
   }
 
-  function clearTrack() {
-    if (!activeTrack) return;
-    updateActiveTrack({ ...activeTrack, points: [] }, null);
+  function clearRail() {
+    if (!activeRail) return;
+    updateActiveRail({ ...activeRail, points: [] }, null);
     onPointSelectionChange(null);
   }
 
   function selectPoint(pointId: string | null) {
     onPointSelectionChange(pointId);
-    if (activeTrack) onTrackToolChange({ mode, track: activeTrack, selectedPointId: pointId });
+    if (activeRail) onRailToolChange({ mode, rail: activeRail, selectedPointId: pointId });
   }
 
   function updatePoint(pointId: string, patch: Partial<RailPoint>) {
-    if (!activeTrack) return;
-    const nextTrack = {
-      ...activeTrack,
-      points: activeTrack.points.map((point) =>
+    if (!activeRail) return;
+    const nextRail = {
+      ...activeRail,
+      points: activeRail.points.map((point) =>
         point.id === pointId ? { ...point, ...patch } : point,
       ),
     };
-    updateActiveTrack(nextTrack, pointId);
+    updateActiveRail(nextRail, pointId);
   }
 
   function insertAfterSelected() {
-    if (!activeTrack || !selectedPoint) return;
-    const index = activeTrack.points.findIndex((point) => point.id === selectedPoint.id);
+    if (!activeRail || !selectedPoint) return;
+    const index = activeRail.points.findIndex((point) => point.id === selectedPoint.id);
     if (index < 0) return;
-    const next = activeTrack.points[(index + 1) % activeTrack.points.length];
+    const next = activeRail.points[(index + 1) % activeRail.points.length];
     if (!next) return;
     const normal = averageNormal(selectedPoint.normal, next.normal);
     const inserted: RailPoint = {
@@ -152,55 +148,55 @@ export function TracksPanel({
       width: selectedPoint.width,
       bank: selectedPoint.bank,
     };
-    const points = [...activeTrack.points];
+    const points = [...activeRail.points];
     points.splice(index + 1, 0, inserted);
-    updateActiveTrack({ ...activeTrack, points }, inserted.id);
+    updateActiveRail({ ...activeRail, points }, inserted.id);
     onPointSelectionChange(inserted.id);
   }
 
   function deleteSelectedPoint() {
-    if (!activeTrack || !selectedPointId) return;
-    updateActiveTrack(
+    if (!activeRail || !selectedPointId) return;
+    updateActiveRail(
       {
-        ...activeTrack,
-        points: activeTrack.points.filter((point) => point.id !== selectedPointId),
+        ...activeRail,
+        points: activeRail.points.filter((point) => point.id !== selectedPointId),
       },
       null,
     );
     onPointSelectionChange(null);
   }
 
-  if (!activeTrack) return null;
+  if (!activeRail) return null;
 
   return (
     <div className="space-y-4">
       <Section title="Rails">
         <GridSelector
-          items={planetTracks.map((t) => ({
+          items={planetRails.map((t) => ({
             id: t.id,
             label: t.name,
             description: `${t.points.length} pts`,
           }))}
-          selectedId={activeTrackId}
-          onSelect={onActiveTrackChange}
+          selectedId={activeRailId}
+          onSelect={onActiveRailChange}
           columns={2}
         />
         <div className="grid grid-cols-3 gap-1 pt-1">
           <button
-            onClick={addTrack}
+            onClick={addRail}
             className="py-1 text-xs rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
           >
             New
           </button>
           <button
-            onClick={duplicateTrack}
+            onClick={duplicateRail}
             className="py-1 text-xs rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
           >
             Duplicate
           </button>
           <button
-            onClick={deleteTrack}
-            disabled={planetTracks.length <= 1}
+            onClick={deleteRail}
+            disabled={planetRails.length <= 1}
             className="py-1 text-xs rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 transition-colors"
           >
             Delete
@@ -210,8 +206,8 @@ export function TracksPanel({
 
       <Section title="Builder">
         <input
-          value={activeTrack.name}
-          onChange={(e) => updateActiveTrack({ ...activeTrack, name: e.target.value })}
+          value={activeRail.name}
+          onChange={(e) => updateActiveRail({ ...activeRail, name: e.target.value })}
           className="w-full px-2 py-1 text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 rounded focus:outline-none focus:border-cyan-500 mb-2"
         />
         <GridSelector
@@ -222,9 +218,9 @@ export function TracksPanel({
         />
         <div className="grid grid-cols-2 gap-1 pt-2">
           <button
-            onClick={() => updateActiveTrack({ ...activeTrack, closed: !activeTrack.closed })}
+            onClick={() => updateActiveRail({ ...activeRail, closed: !activeRail.closed })}
             className={`py-1 text-xs rounded transition-colors ${
-              activeTrack.closed
+              activeRail.closed
                 ? "bg-cyan-500 text-black font-semibold"
                 : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
             }`}
@@ -232,7 +228,7 @@ export function TracksPanel({
             Closed Loop
           </button>
           <button
-            onClick={clearTrack}
+            onClick={clearRail}
             className="py-1 text-xs rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
           >
             Clear
@@ -244,36 +240,36 @@ export function TracksPanel({
       <Section title="Shape">
         <Slider
           label="Rail Width"
-          value={activeTrack.width}
+          value={activeRail.width}
           min={2}
           max={24}
           step={0.5}
           decimals={1}
-          onChange={(width) => updateActiveTrack({ ...activeTrack, width })}
+          onChange={(width) => updateActiveRail({ ...activeRail, width })}
         />
         <Slider
           label="Banking"
-          value={activeTrack.bank}
+          value={activeRail.bank}
           min={-25}
           max={25}
           step={1}
           decimals={0}
-          onChange={(bank) => updateActiveTrack({ ...activeTrack, bank })}
+          onChange={(bank) => updateActiveRail({ ...activeRail, bank })}
         />
         <Slider
           label="Segments"
-          value={activeTrack.segmentsPerCurve}
+          value={activeRail.segmentsPerCurve}
           min={4}
           max={32}
           step={1}
           decimals={0}
-          onChange={(segmentsPerCurve) => updateActiveTrack({ ...activeTrack, segmentsPerCurve })}
+          onChange={(segmentsPerCurve) => updateActiveRail({ ...activeRail, segmentsPerCurve })}
         />
       </Section>
 
       <Section title="Points">
         <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
-          {activeTrack.points.map((point, index) => (
+          {activeRail.points.map((point, index) => (
             <button
               key={point.id}
               onClick={() => selectPoint(point.id)}
@@ -285,14 +281,14 @@ export function TracksPanel({
             >
               <span>Point {index + 1}</span>
               <span className="font-mono">
-                {point.width ?? activeTrack.width}/{point.bank ?? activeTrack.bank}
+                {point.width ?? activeRail.width}/{point.bank ?? activeRail.bank}
               </span>
             </button>
           ))}
         </div>
         <div className="flex items-center justify-between text-xs">
           <span className="text-zinc-500">Control Points</span>
-          <span className="font-mono text-zinc-300">{activeTrack.points.length}</span>
+          <span className="font-mono text-zinc-300">{activeRail.points.length}</span>
         </div>
       </Section>
 
@@ -300,7 +296,7 @@ export function TracksPanel({
         <Section title="Selected Point">
           <Slider
             label="Point Width"
-            value={selectedPoint.width ?? activeTrack.width}
+            value={selectedPoint.width ?? activeRail.width}
             min={2}
             max={24}
             step={0.5}
@@ -309,7 +305,7 @@ export function TracksPanel({
           />
           <Slider
             label="Point Bank"
-            value={selectedPoint.bank ?? activeTrack.bank}
+            value={selectedPoint.bank ?? activeRail.bank}
             min={-25}
             max={25}
             step={1}
@@ -331,7 +327,7 @@ export function TracksPanel({
             </button>
             <button
               onClick={insertAfterSelected}
-              disabled={activeTrack.points.length < 2}
+              disabled={activeRail.points.length < 2}
               className="py-1 text-xs rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 disabled:opacity-40 transition-colors"
             >
               Insert

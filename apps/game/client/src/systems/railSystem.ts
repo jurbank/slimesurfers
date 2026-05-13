@@ -1,7 +1,5 @@
 import * as THREE from "three";
-import { RAIL_DEFS } from "@splat/content/config/railDefs.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { buildComputedRail, sampleRailAt } from "@splat/simulation/movement/railSpline.ts";
 import { getTerrainRadius, type TerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
 import { railVertexShader, railFragmentShader } from "../shaders/railShader.ts";
@@ -26,14 +24,6 @@ export class RailSystem {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
-    const devTerrainCfg = {
-      planet: { radius: DEV_MAP.planets[0]!.radius },
-      terrain: DEV_MAP.planets[0]!.terrain,
-    };
-    for (const def of RAIL_DEFS) {
-      const planet = DEV_MAP.planets.find((p) => p.id === def.planetId) ?? DEV_MAP.planets[0]!;
-      this.buildRailMeshes(def, planet.center, devTerrainCfg);
-    }
   }
 
   setMapData(msg: MapDataMessage): void {

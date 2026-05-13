@@ -2,11 +2,11 @@ import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import type { EditorConfig } from "../../types.ts";
 import {
-  buildTrackSurfaceSamples,
-  getTrackRaisedRadius,
-  type TrackSurfaceSample,
-} from "./trackCarving.ts";
-import type { TrackState } from "./TrackTypes.ts";
+  buildRailSurfaceSamples,
+  getRailRaisedRadius,
+  type RailSurfaceSample,
+} from "./railCarving.ts";
+import type { RailState } from "./RailTypes.ts";
 
 const TEST_CONFIG: EditorConfig = {
   planets: [
@@ -83,11 +83,11 @@ const TEST_CONFIG: EditorConfig = {
   },
 };
 
-function makeTrack(pointRadius: number): TrackState {
+function makeRail(pointRadius: number): RailState {
   return {
-    id: "track-1",
+    id: "rail-1",
     planetId: "planet-0",
-    name: "Track 1",
+    name: "Rail 1",
     closed: false,
     width: 8,
     bank: 0,
@@ -99,24 +99,24 @@ function makeTrack(pointRadius: number): TrackState {
   };
 }
 
-describe("track carving", () => {
-  it("keeps elevated bridge-like track sections walkable in preview", () => {
-    const samples = buildTrackSurfaceSamples([makeTrack(105)], TEST_CONFIG, () => 100);
+describe("rail carving", () => {
+  it("keeps elevated bridge-like rail sections walkable in preview", () => {
+    const samples = buildRailSurfaceSamples([makeRail(105)], TEST_CONFIG, () => 100);
 
     expect(samples.length).toBeGreaterThan(0);
   });
 
-  it("keeps tunnel track ribbons available as playable floors", () => {
-    const samples = buildTrackSurfaceSamples([makeTrack(99)], TEST_CONFIG, () => 100);
+  it("keeps tunnel rail paths available as playable floors", () => {
+    const samples = buildRailSurfaceSamples([makeRail(99)], TEST_CONFIG, () => 100);
 
     expect(samples.length).toBeGreaterThan(0);
   });
 
-  it("raises track collision toward the banked ribbon surface", () => {
+  it("raises rail collision toward the banked ribbon surface", () => {
     const side = new THREE.Vector3(1, 1, 0).normalize();
     const surfacePoint = new THREE.Vector3(0, 100, 0).addScaledVector(side, 3);
     const normal = surfacePoint.clone().normalize();
-    const sample: TrackSurfaceSample = {
+    const sample: RailSurfaceSample = {
       position: new THREE.Vector3(0, 100, 0),
       tangent: new THREE.Vector3(0, 0, 1),
       side,
@@ -125,13 +125,13 @@ describe("track carving", () => {
       influenceAlong: 10,
     };
 
-    const raised = getTrackRaisedRadius(normal.x, normal.y, normal.z, 100, [sample]);
+    const raised = getRailRaisedRadius(normal.x, normal.y, normal.z, 100, [sample]);
 
     expect(raised).toBeGreaterThan(101);
   });
 
-  it("can raise a carved tunnel floor back to the playable track ribbon", () => {
-    const sample: TrackSurfaceSample = {
+  it("can raise a carved tunnel floor back to the playable rail path", () => {
+    const sample: RailSurfaceSample = {
       position: new THREE.Vector3(0, 100, 0),
       tangent: new THREE.Vector3(0, 0, 1),
       side: new THREE.Vector3(1, 0, 0),
@@ -140,7 +140,7 @@ describe("track carving", () => {
       influenceAlong: 10,
     };
 
-    const raised = getTrackRaisedRadius(0, 1, 0, 98.5, [sample]);
+    const raised = getRailRaisedRadius(0, 1, 0, 98.5, [sample]);
 
     expect(raised).toBeCloseTo(100, 5);
   });

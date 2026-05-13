@@ -6,7 +6,7 @@ import { PropsPanel } from "./panels/PropsPanel.tsx";
 import { ShadersPanel } from "./panels/ShadersPanel.tsx";
 import { SpawnsPanel } from "./panels/SpawnsPanel.tsx";
 import { TerrainPanel } from "./panels/TerrainPanel.tsx";
-import { TracksPanel } from "./panels/TracksPanel.tsx";
+import { RailsPanel } from "./panels/RailsPanel.tsx";
 import { PlanetPreview } from "./preview/PlanetPreview.tsx";
 import type { EditorScene } from "./preview/EditorScene.ts";
 import {
@@ -15,7 +15,7 @@ import {
   type RailState,
   type RailToolState,
   type TrackExport,
-} from "./tools/tracks/TrackTypes.ts";
+} from "./tools/rails/RailTypes.ts";
 import type { TerrainStampState } from "./tools/terrain/TerrainStampTypes.ts";
 import {
   defaultEditorConfig,
@@ -36,7 +36,7 @@ type LayerSelection =
   | {
       kind: "planet";
       planetId: string;
-      panel: "planet" | "terrain" | "props" | "tracks" | "atmosphere" | "lighting";
+      panel: "planet" | "terrain" | "props" | "rails" | "atmosphere" | "lighting";
     };
 
 const REBUILD_DELAY_MS = 600;
@@ -48,15 +48,16 @@ interface EditorSaveState {
   config: EditorConfig;
   rails: RailExport;
   tracks?: TrackExport;
-  activeTrackId: string;
+  activeRailId: string;
+  activeTrackId?: string;
   previewSpawn?: PreviewSpawnState;
   mapName?: string;
 }
 
 interface InitialEditorState {
   config: EditorConfig;
-  tracks: RailState[];
-  activeTrackId: string;
+  rails: RailState[];
+  activeRailId: string;
   previewSpawn: PreviewSpawnState;
   mapName: string;
 }
@@ -64,12 +65,12 @@ interface InitialEditorState {
 export function App() {
   const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
   const [config, setConfig] = useState<EditorConfig>(initialState.config);
-  const [tracks, setTracks] = useState<RailState[]>(initialState.tracks);
-  const [activeTrackId, setActiveTrackId] = useState(initialState.activeTrackId);
+  const [rails, setRails] = useState<RailState[]>(initialState.rails);
+  const [activeRailId, setActiveRailId] = useState(initialState.activeRailId);
   const [previewSpawn, setPreviewSpawn] = useState<PreviewSpawnState>(initialState.previewSpawn);
   const [mapName, setMapName] = useState(initialState.mapName);
   const [spawnPlacementActive, setSpawnPlacementActive] = useState(false);
-  const [selectedTrackPointId, setSelectedTrackPointId] = useState<string | null>(null);
+  const [selectedRailPointId, setSelectedRailPointId] = useState<string | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
   const [previewActive, setPreviewActive] = useState(false);
@@ -82,10 +83,10 @@ export function App() {
     panel: "terrain",
   }));
   const configRef = useRef<EditorConfig>(config);
-  const tracksRef = useRef<RailState[]>(tracks);
-  const activeTrackIdRef = useRef(activeTrackId);
+  const railsRef = useRef<RailState[]>(rails);
+  const activeRailIdRef = useRef(activeRailId);
   const previewSpawnRef = useRef<PreviewSpawnState>(previewSpawn);
-  const selectedTrackPointIdRef = useRef<string | null>(selectedTrackPointId);
+  const selectedRailPointIdRef = useRef<string | null>(selectedRailPointId);
   const previewActiveRef = useRef(false);
   const activePlanetIdRef = useRef(activePlanetId);
   const sceneRef = useRef<EditorScene | null>(null);
@@ -93,15 +94,15 @@ export function App() {
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
-    scene.setTracks(tracksRef.current);
+    scene.setRails(railsRef.current);
     scene.setPreviewSpawn(previewSpawnRef.current);
     scene.setPreviewActive(previewActiveRef.current);
-    const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
-    if (activeTrack) {
-      scene.setTrackToolState({
+    const activeRail = railsRef.current.find((rail) => rail.id === activeRailIdRef.current);
+    if (activeRail) {
+      scene.setRailToolState({
         mode: null,
-        track: activeTrack,
-        selectedPointId: selectedTrackPointIdRef.current,
+        rail: activeRail,
+        selectedPointId: selectedRailPointIdRef.current,
       });
     }
   }, []);
@@ -118,23 +119,21 @@ export function App() {
     sceneRef.current?.setPropBrushState(state);
   }, []);
 
-  const handleTrackChange = useCallback((nextTrack: RailState) => {
+  const handleRailChange = useCallback((nextRail: RailState) => {
     setSaveStatus("idle");
-    const nextTracks = tracksRef.current.map((track) =>
-      track.id === nextTrack.id ? nextTrack : track,
-    );
-    tracksRef.current = nextTracks;
-    sceneRef.current?.setTracks(nextTracks);
-    setTracks(nextTracks);
+    const nextRails = railsRef.current.map((rail) => (rail.id === nextRail.id ? nextRail : rail));
+    railsRef.current = nextRails;
+    sceneRef.current?.setRails(nextRails);
+    setRails(nextRails);
   }, []);
 
-  const handleTrackToolChange = useCallback((state: RailToolState) => {
-    sceneRef.current?.setTrackToolState(state);
+  const handleRailToolChange = useCallback((state: RailToolState) => {
+    sceneRef.current?.setRailToolState(state);
   }, []);
 
-  const handleTrackPointSelectionChange = useCallback((pointId: string | null) => {
-    selectedTrackPointIdRef.current = pointId;
-    setSelectedTrackPointId(pointId);
+  const handleRailPointSelectionChange = useCallback((pointId: string | null) => {
+    selectedRailPointIdRef.current = pointId;
+    setSelectedRailPointId(pointId);
   }, []);
 
   const handleSculptChange = useCallback((planetId: string, sculpt: EditorSculptState) => {
@@ -187,26 +186,26 @@ export function App() {
     togglePreview();
   }, [togglePreview]);
 
-  const ensureActiveTrackForPlanet = useCallback((planetId: string) => {
-    let nextTracks = tracksRef.current;
-    let activeTrack = nextTracks.find((track) => track.planetId === planetId);
-    if (!activeTrack) {
-      activeTrack = createDefaultRailState(undefined, planetId);
-      nextTracks = [...nextTracks, activeTrack];
-      tracksRef.current = nextTracks;
-      setTracks(nextTracks);
-      sceneRef.current?.setTracks(nextTracks);
+  const ensureActiveRailForPlanet = useCallback((planetId: string) => {
+    let nextRails = railsRef.current;
+    let activeRail = nextRails.find((rail) => rail.planetId === planetId);
+    if (!activeRail) {
+      activeRail = createDefaultRailState(undefined, planetId);
+      nextRails = [...nextRails, activeRail];
+      railsRef.current = nextRails;
+      setRails(nextRails);
+      sceneRef.current?.setRails(nextRails);
       setSaveStatus("idle");
     }
 
-    if (activeTrackIdRef.current !== activeTrack.id) {
-      activeTrackIdRef.current = activeTrack.id;
-      selectedTrackPointIdRef.current = null;
-      setActiveTrackId(activeTrack.id);
-      setSelectedTrackPointId(null);
-      sceneRef.current?.setTrackToolState({
+    if (activeRailIdRef.current !== activeRail.id) {
+      activeRailIdRef.current = activeRail.id;
+      selectedRailPointIdRef.current = null;
+      setActiveRailId(activeRail.id);
+      setSelectedRailPointId(null);
+      sceneRef.current?.setRailToolState({
         mode: null,
-        track: activeTrack,
+        rail: activeRail,
         selectedPointId: null,
       });
     }
@@ -224,44 +223,44 @@ export function App() {
       setSpawnPlacementActive(false);
       sceneRef.current?.setSpawnPlacementActive(false);
     }
-    if (nextLayer.kind !== "planet" || nextLayer.panel !== "tracks") {
-      const activeTrack = tracksRef.current.find((track) => track.id === activeTrackIdRef.current);
-      if (activeTrack) {
-        sceneRef.current?.setTrackToolState({
+    if (nextLayer.kind !== "planet" || nextLayer.panel !== "rails") {
+      const activeRail = railsRef.current.find((rail) => rail.id === activeRailIdRef.current);
+      if (activeRail) {
+        sceneRef.current?.setRailToolState({
           mode: null,
-          track: activeTrack,
-          selectedPointId: selectedTrackPointIdRef.current,
+          rail: activeRail,
+          selectedPointId: selectedRailPointIdRef.current,
         });
       }
     }
   }, []);
 
-  const setActiveTrack = useCallback((trackId: string) => {
+  const setActiveRail = useCallback((railId: string) => {
     setSaveStatus("idle");
-    activeTrackIdRef.current = trackId;
-    selectedTrackPointIdRef.current = null;
-    setActiveTrackId(trackId);
-    setSelectedTrackPointId(null);
-    const activeTrack = tracksRef.current.find((track) => track.id === trackId);
-    if (activeTrack) {
-      sceneRef.current?.setTrackToolState({
+    activeRailIdRef.current = railId;
+    selectedRailPointIdRef.current = null;
+    setActiveRailId(railId);
+    setSelectedRailPointId(null);
+    const activeRail = railsRef.current.find((rail) => rail.id === railId);
+    if (activeRail) {
+      sceneRef.current?.setRailToolState({
         mode: null,
-        track: activeTrack,
+        rail: activeRail,
         selectedPointId: null,
       });
     }
   }, []);
 
-  const handleTracksChange = useCallback(
-    (nextTracks: RailState[], nextActiveTrackId: string, nextSelectedPointId: string | null) => {
+  const handleRailsChange = useCallback(
+    (nextRails: RailState[], nextActiveRailId: string, nextSelectedPointId: string | null) => {
       setSaveStatus("idle");
-      tracksRef.current = nextTracks;
-      activeTrackIdRef.current = nextActiveTrackId;
-      selectedTrackPointIdRef.current = nextSelectedPointId;
-      sceneRef.current?.setTracks(nextTracks);
-      setTracks(nextTracks);
-      setActiveTrackId(nextActiveTrackId);
-      setSelectedTrackPointId(nextSelectedPointId);
+      railsRef.current = nextRails;
+      activeRailIdRef.current = nextActiveRailId;
+      selectedRailPointIdRef.current = nextSelectedPointId;
+      sceneRef.current?.setRails(nextRails);
+      setRails(nextRails);
+      setActiveRailId(nextActiveRailId);
+      setSelectedRailPointId(nextSelectedPointId);
     },
     [],
   );
@@ -277,11 +276,11 @@ export function App() {
     (id: string) => {
       activePlanetIdRef.current = id;
       setActivePlanetId(id);
-      ensureActiveTrackForPlanet(id);
+      ensureActiveRailForPlanet(id);
       const planet = configRef.current.planets.find((p) => p.id === id);
       if (planet) sceneRef.current?.setActivePlanet(id, planet.center);
     },
-    [ensureActiveTrackForPlanet],
+    [ensureActiveRailForPlanet],
   );
 
   const selectLayer = useCallback(
@@ -289,11 +288,11 @@ export function App() {
       clearTransientTools(nextLayer);
       if (nextLayer.kind === "planet") {
         handleActivePlanetChange(nextLayer.planetId);
-        if (nextLayer.panel === "tracks") ensureActiveTrackForPlanet(nextLayer.planetId);
+        if (nextLayer.panel === "rails") ensureActiveRailForPlanet(nextLayer.planetId);
       }
       setSelectedLayer(nextLayer);
     },
-    [clearTransientTools, ensureActiveTrackForPlanet, handleActivePlanetChange],
+    [clearTransientTools, ensureActiveRailForPlanet, handleActivePlanetChange],
   );
 
   const handlePreviewPlanetSelected = useCallback(
@@ -332,11 +331,11 @@ export function App() {
     }
 
     const planetIds = new Set(planets.map((planet) => planet.id));
-    const nextTracks = tracksRef.current.filter((track) => planetIds.has(track.planetId));
-    if (nextTracks.length !== tracksRef.current.length) {
-      tracksRef.current = nextTracks;
-      setTracks(nextTracks);
-      sceneRef.current?.setTracks(nextTracks);
+    const nextRails = railsRef.current.filter((rail) => planetIds.has(rail.planetId));
+    if (nextRails.length !== railsRef.current.length) {
+      railsRef.current = nextRails;
+      setRails(nextRails);
+      sceneRef.current?.setRails(nextRails);
     }
 
     setConfig(next);
@@ -417,8 +416,8 @@ export function App() {
   function handleSaveLocal() {
     const saved = saveEditorState(
       configRef.current,
-      tracksRef.current,
-      activeTrackIdRef.current,
+      railsRef.current,
+      activeRailIdRef.current,
       previewSpawnRef.current,
       mapName,
     );
@@ -455,11 +454,11 @@ export function App() {
       <main className="flex-1 relative bg-zinc-950 min-w-0">
         <PlanetPreview
           initialConfig={config}
-          initialTracks={tracks}
+          initialRails={rails}
           initialPreviewSpawn={previewSpawn}
           onScene={handleScene}
-          onTrackChange={handleTrackChange}
-          onTrackPointSelectionChange={handleTrackPointSelectionChange}
+          onRailChange={handleRailChange}
+          onRailPointSelectionChange={handleRailPointSelectionChange}
           onSculptChange={handleSculptChange}
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
@@ -647,17 +646,17 @@ export function App() {
           {selectedLayer.kind === "planet" && selectedLayer.panel === "props" && (
             <PropsPanel onPropBrushChange={handlePropBrushChange} />
           )}
-          {selectedLayer.kind === "planet" && selectedLayer.panel === "tracks" && (
-            <TracksPanel
-              tracks={tracks}
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "rails" && (
+            <RailsPanel
+              rails={rails}
               planetId={selectedLayer.planetId}
-              activeTrackId={activeTrackId}
-              selectedPointId={selectedTrackPointId}
-              onActiveTrackChange={setActiveTrack}
-              onTracksChange={handleTracksChange}
-              onTrackChange={handleTrackChange}
-              onTrackToolChange={handleTrackToolChange}
-              onPointSelectionChange={handleTrackPointSelectionChange}
+              activeRailId={activeRailId}
+              selectedPointId={selectedRailPointId}
+              onActiveRailChange={setActiveRail}
+              onRailsChange={handleRailsChange}
+              onRailChange={handleRailChange}
+              onRailToolChange={handleRailToolChange}
+              onPointSelectionChange={handleRailPointSelectionChange}
             />
           )}
           {selectedLayer.kind === "global" && selectedLayer.panel === "spawns" && (
@@ -680,7 +679,7 @@ export function App() {
           />
           <button
             onClick={() =>
-              exportMap(configRef.current, tracksRef.current, previewSpawnRef.current, mapName)
+              exportMap(configRef.current, railsRef.current, previewSpawnRef.current, mapName)
             }
             className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
           >
@@ -688,7 +687,7 @@ export function App() {
           </button>
           <button
             onClick={() =>
-              exportConfig(configRef.current, tracksRef.current, previewSpawnRef.current)
+              exportConfig(configRef.current, railsRef.current, previewSpawnRef.current)
             }
             className="w-full px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-xs transition-colors"
           >
@@ -746,8 +745,8 @@ function createInitialEditorState(): InitialEditorState {
   if (saved) {
     return {
       config: saved.config,
-      tracks: saved.rails.rails,
-      activeTrackId: saved.activeTrackId,
+      rails: saved.rails.rails,
+      activeRailId: saved.activeRailId,
       previewSpawn: saved.previewSpawn ?? {
         planetId: saved.config.planets[0]?.id,
         normal: [0, 1, 0],
@@ -756,11 +755,11 @@ function createInitialEditorState(): InitialEditorState {
     };
   }
 
-  const track = createDefaultRailState();
+  const rail = createDefaultRailState();
   return {
     config: defaultEditorConfig(),
-    tracks: [track],
-    activeTrackId: track.id,
+    rails: [rail],
+    activeRailId: rail.id,
     previewSpawn: { planetId: "planet-0", normal: [0, 1, 0] },
     mapName: "My Map",
   };
@@ -769,7 +768,7 @@ function createInitialEditorState(): InitialEditorState {
 function createEditorSaveState(
   config: EditorConfig,
   rails: RailState[],
-  activeTrackId: string,
+  activeRailId: string,
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ): EditorSaveState {
@@ -781,7 +780,7 @@ function createEditorSaveState(
       version: 1,
       rails,
     },
-    activeTrackId,
+    activeRailId,
     previewSpawn,
     mapName,
   };
@@ -790,14 +789,14 @@ function createEditorSaveState(
 function saveEditorState(
   config: EditorConfig,
   rails: RailState[],
-  activeTrackId: string,
+  activeRailId: string,
   previewSpawn: PreviewSpawnState,
   mapName: string,
 ): boolean {
   try {
     localStorage.setItem(
       LOCAL_SAVE_KEY,
-      JSON.stringify(createEditorSaveState(config, rails, activeTrackId, previewSpawn, mapName)),
+      JSON.stringify(createEditorSaveState(config, rails, activeRailId, previewSpawn, mapName)),
     );
     return true;
   } catch {
@@ -848,19 +847,21 @@ function loadEditorState(): EditorSaveState | null {
 
     const planetIds = new Set(parsed.config.planets.map((planet) => planet.id));
     const fallbackPlanetId = parsed.config.planets[0]?.id ?? "planet-0";
-    const migratedTracks = savedRails.map((track) => ({
-      ...track,
+    const migratedRails = savedRails.map((rail) => ({
+      ...rail,
       planetId:
-        typeof track.planetId === "string" && planetIds.has(track.planetId)
-          ? track.planetId
+        typeof rail.planetId === "string" && planetIds.has(rail.planetId)
+          ? rail.planetId
           : fallbackPlanetId,
     }));
 
-    const activeTrackId =
-      typeof parsed.activeTrackId === "string" &&
-      migratedTracks.some((track) => track.id === parsed.activeTrackId)
-        ? parsed.activeTrackId
-        : migratedTracks[0].id;
+    const savedActiveRailId =
+      typeof parsed.activeRailId === "string" ? parsed.activeRailId : parsed.activeTrackId;
+    const activeRailId =
+      typeof savedActiveRailId === "string" &&
+      migratedRails.some((rail) => rail.id === savedActiveRailId)
+        ? savedActiveRailId
+        : migratedRails[0].id;
 
     return {
       version: 1,
@@ -868,9 +869,9 @@ function loadEditorState(): EditorSaveState | null {
       config: parsed.config,
       rails: {
         version: 1,
-        rails: migratedTracks,
+        rails: migratedRails,
       },
-      activeTrackId,
+      activeRailId,
       previewSpawn: parsed.previewSpawn,
       mapName: typeof parsed.mapName === "string" ? parsed.mapName : undefined,
     };
@@ -966,7 +967,7 @@ function getLayerTitle(layer: LayerSelection): string {
   }
   if (layer.panel === "planet") return "Planet";
   if (layer.panel === "atmosphere") return "Atmosphere";
-  if (layer.panel === "tracks") return "Rails";
+  if (layer.panel === "rails") return "Rails";
   return layer.panel[0].toUpperCase() + layer.panel.slice(1);
 }
 
@@ -1096,11 +1097,11 @@ function LayerNavigator({
                   active={isLayerSelected(selectedLayer, {
                     kind: "planet",
                     planetId: planet.id,
-                    panel: "tracks",
+                    panel: "rails",
                   })}
                   depth={1}
                   onClick={() =>
-                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "tracks" })
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "rails" })
                   }
                 />
                 <LayerGroupButton

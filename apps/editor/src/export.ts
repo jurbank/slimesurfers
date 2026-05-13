@@ -1,6 +1,6 @@
 import type { RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import type { EditorConfig, PreviewSpawnState } from "./types.ts";
-import type { RailState } from "./tools/tracks/TrackTypes.ts";
+import type { RailState } from "./tools/rails/RailTypes.ts";
 
 function dot(a: [number, number, number], b: [number, number, number]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
 import { defaultEditorConfig } from "./types.ts";
-import type { RailState } from "./tools/tracks/TrackTypes.ts";
+import type { RailState } from "./tools/rails/RailTypes.ts";
 
 describe("editorStateToRuntimeMap rail export", () => {
   test("exports authored rails into runtime rail definitions", () => {

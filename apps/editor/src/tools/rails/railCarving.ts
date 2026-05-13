@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import type { EditorConfig } from "../../types.ts";
-import type { TrackState } from "./TrackTypes.ts";
-import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
+import type { RailState } from "./RailTypes.ts";
+import { RAIL_SURFACE_OFFSET, RAIL_TUNNEL_TERRAIN_THRESHOLD } from "./railConstants.ts";
 
-export interface TrackCarveSample {
+export interface RailCarveSample {
   position: THREE.Vector3;
   tangent: THREE.Vector3;
   side: THREE.Vector3;
@@ -14,13 +14,13 @@ export interface TrackCarveSample {
   targetRadius: number;
 }
 
-export interface TrackCutterSegment {
+export interface RailCutterSegment {
   start: THREE.Vector3;
   end: THREE.Vector3;
   radius: number;
 }
 
-export type TrackRadiusSampler = (nx: number, ny: number, nz: number) => number;
+export type RailRadiusSampler = (nx: number, ny: number, nz: number) => number;
 
 export const MAX_TUNNEL_SHADER_SEGMENTS = 64;
 
@@ -29,12 +29,12 @@ const TUNNEL_FLOOR_CLEARANCE = 1.5;
 const TUNNEL_WATER_THRESHOLD = -0.1;
 const MIN_ALONG_INFLUENCE = 3;
 
-export function buildTrackCarveSamples(
-  tracks: readonly TrackState[],
+export function buildRailCarveSamples(
+  tracks: readonly RailState[],
   config: EditorConfig,
-  getRadiusAtNormal: TrackRadiusSampler,
-): TrackCarveSample[] {
-  const samples: TrackCarveSample[] = [];
+  getRadiusAtNormal: RailRadiusSampler,
+): RailCarveSample[] {
+  const samples: RailCarveSample[] = [];
 
   for (const track of tracks) {
     if (track.points.length < 2) continue;
@@ -46,7 +46,7 @@ export function buildTrackCarveSamples(
 
       const normal = new THREE.Vector3(...point.normal).normalize();
       const radius = getRadiusAtNormal(normal.x, normal.y, normal.z);
-      return normal.multiplyScalar(radius + TRACK_SURFACE_OFFSET);
+      return normal.multiplyScalar(radius + RAIL_SURFACE_OFFSET);
     });
 
     const closed = track.closed && controls.length >= 3;
@@ -80,7 +80,7 @@ export function buildTrackCarveSamples(
       const position = positions[i]!;
       const centerRadius = position.length();
       const isTunnel =
-        centerRadius - terrainRadii[i]! < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
+        centerRadius - terrainRadii[i]! < RAIL_TUNNEL_TERRAIN_THRESHOLD ||
         centerRadius - waterRadius < TUNNEL_WATER_THRESHOLD;
       if (!isTunnel) continue;
 
@@ -115,12 +115,12 @@ export function buildTrackCarveSamples(
   return samples;
 }
 
-export function getTrackCarvedRadius(
+export function getRailCarvedRadius(
   nx: number,
   ny: number,
   nz: number,
   radius: number,
-  samples: readonly TrackCarveSample[],
+  samples: readonly RailCarveSample[],
 ): number {
   if (samples.length === 0) return radius;
 
@@ -128,8 +128,8 @@ export function getTrackCarvedRadius(
   let carvedRadius = radius;
 
   for (const sample of samples) {
-    const pointAtTrackRadius = normal.clone().multiplyScalar(sample.centerRadius);
-    const offset = pointAtTrackRadius.sub(sample.position);
+    const pointAtRailRadius = normal.clone().multiplyScalar(sample.centerRadius);
+    const offset = pointAtRailRadius.sub(sample.position);
     const lateral = offset.dot(sample.side);
     const along = offset.dot(sample.tangent);
     const lateralT = Math.abs(lateral) / sample.halfWidth;
@@ -148,7 +148,7 @@ export function getTrackCarvedRadius(
 
 // -- Surface track samples (non-tunnel, near-ground sections) ----------------
 
-export interface TrackSurfaceSample {
+export interface RailSurfaceSample {
   position: THREE.Vector3;
   tangent: THREE.Vector3;
   side: THREE.Vector3;
@@ -158,16 +158,16 @@ export interface TrackSurfaceSample {
 }
 
 /**
- * Build samples for track sections that are usable as free-movement surfaces.
- * Tunnel carving can lower surrounding terrain, but the track ribbon itself
+ * Build samples for rail sections that are usable as free-movement surfaces.
+ * Tunnel carving can lower surrounding terrain, but the rail path itself
  * remains a playable floor.
  */
-export function buildTrackSurfaceSamples(
-  tracks: readonly TrackState[],
+export function buildRailSurfaceSamples(
+  tracks: readonly RailState[],
   config: EditorConfig,
-  getRadiusAtNormal: TrackRadiusSampler,
-): TrackSurfaceSample[] {
-  const samples: TrackSurfaceSample[] = [];
+  getRadiusAtNormal: RailRadiusSampler,
+): RailSurfaceSample[] {
+  const samples: RailSurfaceSample[] = [];
 
   for (const track of tracks) {
     if (track.points.length < 2) continue;
@@ -176,7 +176,7 @@ export function buildTrackSurfaceSamples(
       if (point.position) return new THREE.Vector3(...point.position);
       const normal = new THREE.Vector3(...point.normal).normalize();
       const radius = getRadiusAtNormal(normal.x, normal.y, normal.z);
-      return normal.multiplyScalar(radius + TRACK_SURFACE_OFFSET);
+      return normal.multiplyScalar(radius + RAIL_SURFACE_OFFSET);
     });
 
     const closed = track.closed && controls.length >= 3;
@@ -232,16 +232,16 @@ export function buildTrackSurfaceSamples(
 }
 
 /**
- * Raise the terrain radius in areas covered by surface track ribbons.
+ * Raise the terrain radius in areas covered by surface rail paths.
  * Returns the maximum of the base radius and the ribbon surface height,
  * with a smooth falloff at the ribbon edges.
  */
-export function getTrackRaisedRadius(
+export function getRailRaisedRadius(
   nx: number,
   ny: number,
   nz: number,
   radius: number,
-  samples: readonly TrackSurfaceSample[],
+  samples: readonly RailSurfaceSample[],
 ): number {
   if (samples.length === 0) return radius;
 
@@ -249,8 +249,8 @@ export function getTrackRaisedRadius(
   let raisedRadius = radius;
 
   for (const sample of samples) {
-    const pointAtTrackRadius = normal.clone().multiplyScalar(sample.centerRadius);
-    const offset = pointAtTrackRadius.sub(sample.position);
+    const pointAtRailRadius = normal.clone().multiplyScalar(sample.centerRadius);
+    const offset = pointAtRailRadius.sub(sample.position);
     const signedLateral = offset.dot(sample.side);
     const lateral = Math.abs(signedLateral);
     const along = Math.abs(offset.dot(sample.tangent));
@@ -272,10 +272,8 @@ export function getTrackRaisedRadius(
   return raisedRadius;
 }
 
-export function buildTrackCutterSegments(
-  samples: readonly TrackCarveSample[],
-): TrackCutterSegment[] {
-  const segments: TrackCutterSegment[] = [];
+export function buildRailCutterSegments(samples: readonly RailCarveSample[]): RailCutterSegment[] {
+  const segments: RailCutterSegment[] = [];
 
   for (let i = 0; i < samples.length - 1; i++) {
     const a = samples[i]!;
@@ -299,21 +297,21 @@ export function buildTrackCutterSegments(
 }
 
 function interpolatePointScalars(
-  track: TrackState,
+  rail: RailState,
   t: number,
   closed: boolean,
 ): { width: number; bank: number } {
-  const pointCount = track.points.length;
+  const pointCount = rail.points.length;
   const segmentCount = closed ? pointCount : Math.max(1, pointCount - 1);
   const scaled = Math.min(t * segmentCount, segmentCount - Number.EPSILON);
   const index = Math.floor(scaled);
   const localT = scaled - index;
-  const a = track.points[Math.min(index, pointCount - 1)];
-  const b = track.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
-  const widthA = a?.width ?? track.width;
-  const widthB = b?.width ?? track.width;
-  const bankA = a?.bank ?? track.bank;
-  const bankB = b?.bank ?? track.bank;
+  const a = rail.points[Math.min(index, pointCount - 1)];
+  const b = rail.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
+  const widthA = a?.width ?? rail.width;
+  const widthB = b?.width ?? rail.width;
+  const bankA = a?.bank ?? rail.bank;
+  const bankB = b?.bank ?? rail.bank;
 
   return {
     width: THREE.MathUtils.lerp(widthA, widthB, localT),

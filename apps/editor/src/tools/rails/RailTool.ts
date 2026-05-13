@@ -4,24 +4,24 @@ import { type TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTer
 import { createMetricGroup } from "../../performance/geometryStats.ts";
 import type { PerformanceMetricGroup } from "../../types.ts";
 import { Gizmo } from "../Gizmo.ts";
-import type { TrackPoint, TrackToolState } from "./TrackTypes.ts";
+import type { RailPoint, RailToolState } from "./RailTypes.ts";
 import type { EditorConfig } from "../../types.ts";
-import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
+import { RAIL_SURFACE_OFFSET, RAIL_TUNNEL_TERRAIN_THRESHOLD } from "./railConstants.ts";
 
-export interface TrackConnectOptions {
+export interface RailConnectOptions {
   canvas: HTMLCanvasElement;
   camera: THREE.Camera;
   scene: THREE.Scene;
   planetMesh: THREE.Mesh;
   shouldOrbit: () => boolean;
-  onTrackChange: (track: TrackToolState["track"]) => void;
+  onRailChange: (rail: RailToolState["rail"]) => void;
   onPointSelectionChange: (pointId: string | null) => void;
   onGizmoDragChange: (dragging: boolean) => void;
   config: EditorConfig;
   terrainProvider: TerrainSurfaceProvider;
 }
 
-interface TrackSample {
+interface RailSample {
   position: THREE.Vector3;
   width: number;
   bank: number;
@@ -36,13 +36,13 @@ const RAIL_SUPPORT_SPACING = 18;
 const RAIL_SUPPORT_RADIUS = 0.18;
 const RAIL_SUPPORT_SEGMENTS = 6;
 
-export class TrackTool {
+export class RailTool {
   private canvas: HTMLCanvasElement | null = null;
   private camera: THREE.Camera | null = null;
   private scene: THREE.Scene | null = null;
   private planetMesh: THREE.Mesh | null = null;
   private shouldOrbit: (() => boolean) | null = null;
-  private onTrackChange: ((track: TrackToolState["track"]) => void) | null = null;
+  private onRailChange: ((rail: RailToolState["rail"]) => void) | null = null;
   private onPointSelectionChange: ((pointId: string | null) => void) | null = null;
   private onGizmoDragChange: ((dragging: boolean) => void) | null = null;
   private config: EditorConfig | null = null;
@@ -82,7 +82,7 @@ export class TrackTool {
     side: THREE.BackSide,
   });
 
-  private state: TrackToolState | null = null;
+  private state: RailToolState | null = null;
   private centerLine: THREE.Line | null = null;
   private railMesh: THREE.Mesh | null = null;
   private supportMesh: THREE.InstancedMesh | null = null;
@@ -95,13 +95,13 @@ export class TrackTool {
     this.planetMesh = mesh;
   }
 
-  connect(options: TrackConnectOptions): void {
+  connect(options: RailConnectOptions): void {
     this.canvas = options.canvas;
     this.camera = options.camera;
     this.scene = options.scene;
     this.planetMesh = options.planetMesh;
     this.shouldOrbit = options.shouldOrbit;
-    this.onTrackChange = options.onTrackChange;
+    this.onRailChange = options.onRailChange;
     this.onPointSelectionChange = options.onPointSelectionChange;
     this.onGizmoDragChange = options.onGizmoDragChange;
     this.config = options.config;
@@ -127,7 +127,7 @@ export class TrackTool {
     window.addEventListener("keydown", this.onKeyDown);
   }
 
-  setTrackToolState(state: TrackToolState | null): void {
+  setRailToolState(state: RailToolState | null): void {
     this.state = state;
     this.selectedPointId = state?.selectedPointId ?? null;
     if (this.canvas) {
@@ -194,7 +194,7 @@ export class TrackTool {
     this.handlesGroup.clear();
     if (!this.state) return;
 
-    for (const point of this.state.track.points) {
+    for (const point of this.state.rail.points) {
       const position = this.positionFromPoint(point);
       if (!position) continue;
 
@@ -203,14 +203,14 @@ export class TrackTool {
       const handle = new THREE.Mesh(this.handleGeometry, material);
       handle.position.copy(position);
       handle.renderOrder = 11;
-      handle.userData.trackPointId = point.id;
+      handle.userData.railPointId = point.id;
       this.handlesGroup.add(handle);
     }
   }
 
   private updateTransformGizmo(): void {
     if (!this.gizmo || !this.state) return;
-    const point = this.state.track.points.find((item) => item.id === this.selectedPointId);
+    const point = this.state.rail.points.find((item) => item.id === this.selectedPointId);
     if (!point || this.state.mode !== "move") {
       this.gizmo.detach();
       return;
@@ -229,7 +229,7 @@ export class TrackTool {
     this.updateTunnelShell(samples);
   }
 
-  private updateCenterLine(samples: TrackSample[]): void {
+  private updateCenterLine(samples: RailSample[]): void {
     if (samples.length < 2) {
       if (this.centerLine) this.centerLine.visible = false;
       return;
@@ -256,13 +256,13 @@ export class TrackTool {
     }
   }
 
-  private updateRailTube(samples: TrackSample[]): void {
+  private updateRailTube(samples: RailSample[]): void {
     if (!this.state || samples.length < 2) {
       if (this.railMesh) this.railMesh.visible = false;
       return;
     }
 
-    const closed = this.state.track.closed && this.state.track.points.length >= 3;
+    const closed = this.state.rail.closed && this.state.rail.points.length >= 3;
     const curveSamples = closed ? samples.slice(0, -1) : samples;
     if (curveSamples.length < (closed ? 3 : 2)) {
       if (this.railMesh) this.railMesh.visible = false;
@@ -293,15 +293,15 @@ export class TrackTool {
     }
   }
 
-  private getSurfaceSamples(): TrackSample[] {
+  private getSurfaceSamples(): RailSample[] {
     if (!this.state) return [];
-    const { track } = this.state;
-    if (track.points.length < 2) return [];
+    const { rail } = this.state;
+    if (rail.points.length < 2) return [];
 
-    const controls = track.points.map((point) => this.positionFromPoint(point));
+    const controls = rail.points.map((point) => this.positionFromPoint(point));
     if (controls.some((point) => point === null)) return [];
     const controlPositions = controls as THREE.Vector3[];
-    const closed = track.closed && controlPositions.length >= 3;
+    const closed = rail.closed && controlPositions.length >= 3;
     if ((!closed && controlPositions.length < 2) || (closed && controlPositions.length < 3)) {
       return [];
     }
@@ -309,10 +309,10 @@ export class TrackTool {
     const curve = new THREE.CatmullRomCurve3(controlPositions, closed, "centripetal");
     const divisions = Math.max(
       2,
-      track.segmentsPerCurve * (closed ? controlPositions.length : controlPositions.length - 1),
+      rail.segmentsPerCurve * (closed ? controlPositions.length : controlPositions.length - 1),
     );
 
-    const samples: TrackSample[] = [];
+    const samples: RailSample[] = [];
     const p0 = this.config?.planets[0];
     const waterLevel = p0?.terrain.waterLevel ?? 0;
     const terrainCfg = p0
@@ -360,18 +360,18 @@ export class TrackTool {
 
   private interpolatePointScalars(t: number, closed: boolean): { width: number; bank: number } {
     if (!this.state) return { width: 8, bank: 0 };
-    const { track } = this.state;
-    const pointCount = track.points.length;
+    const { rail } = this.state;
+    const pointCount = rail.points.length;
     const segmentCount = closed ? pointCount : Math.max(1, pointCount - 1);
     const scaled = Math.min(t * segmentCount, segmentCount - Number.EPSILON);
     const index = Math.floor(scaled);
     const localT = scaled - index;
-    const a = track.points[Math.min(index, pointCount - 1)];
-    const b = track.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
-    const widthA = a?.width ?? track.width;
-    const widthB = b?.width ?? track.width;
-    const bankA = a?.bank ?? track.bank;
-    const bankB = b?.bank ?? track.bank;
+    const a = rail.points[Math.min(index, pointCount - 1)];
+    const b = rail.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
+    const widthA = a?.width ?? rail.width;
+    const widthB = b?.width ?? rail.width;
+    const bankA = a?.bank ?? rail.bank;
+    const bankB = b?.bank ?? rail.bank;
     return {
       width: THREE.MathUtils.lerp(widthA, widthB, localT),
       bank: THREE.MathUtils.lerp(bankA, bankB, localT),
@@ -386,11 +386,11 @@ export class TrackTool {
     const direction = normal.clone().negate();
     this.raycaster.set(origin, direction);
     const hits = this.raycaster.intersectObject(this.planetMesh);
-    if (hits.length === 0) return normal.multiplyScalar(radius + TRACK_SURFACE_OFFSET);
-    return hits[0].point.clone().addScaledVector(normal, TRACK_SURFACE_OFFSET);
+    if (hits.length === 0) return normal.multiplyScalar(radius + RAIL_SURFACE_OFFSET);
+    return hits[0].point.clone().addScaledVector(normal, RAIL_SURFACE_OFFSET);
   }
 
-  private positionFromPoint(point: TrackPoint): THREE.Vector3 | null {
+  private positionFromPoint(point: RailPoint): THREE.Vector3 | null {
     if (point.position) return new THREE.Vector3(...point.position);
     return this.surfacePointFromNormal(point.normal);
   }
@@ -415,45 +415,45 @@ export class TrackTool {
     return hits.length > 0 ? hits[0] : null;
   }
 
-  private raycastHandle(e: PointerEvent): TrackPoint | null {
+  private raycastHandle(e: PointerEvent): RailPoint | null {
     if (!this.canvas || !this.camera || !this.state) return null;
     const rect = this.canvas.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
     const hits = this.raycaster.intersectObjects(this.handlesGroup.children);
-    const id = hits[0]?.object.userData.trackPointId;
+    const id = hits[0]?.object.userData.railPointId;
     if (typeof id !== "string") return null;
-    return this.state.track.points.find((point) => point.id === id) ?? null;
+    return this.state.rail.points.find((point) => point.id === id) ?? null;
   }
 
   private addPoint(hit: THREE.Intersection): void {
     if (!this.state) return;
     const normal = hit.point.clone().normalize();
     const p = hit.point;
-    const point: TrackPoint = {
+    const point: RailPoint = {
       id: `point-${Date.now()}-${Math.round(Math.random() * 10000)}`,
       normal: [normal.x, normal.y, normal.z],
       position: [p.x, p.y, p.z],
     };
-    const nextTrack = { ...this.state.track, points: [...this.state.track.points, point] };
-    this.state = { ...this.state, track: nextTrack, selectedPointId: point.id };
+    const nextTrack = { ...this.state.rail, points: [...this.state.rail.points, point] };
+    this.state = { ...this.state, rail: nextTrack, selectedPointId: point.id };
     this.selectedPointId = point.id;
     this.onPointSelectionChange?.(point.id);
-    this.onTrackChange?.(nextTrack);
+    this.onRailChange?.(nextTrack);
     this.updateVisuals();
   }
 
   private movePointToSurface(pointId: string, normalTuple: [number, number, number]): void {
     if (!this.state) return;
     const nextTrack = {
-      ...this.state.track,
-      points: this.state.track.points.map((point) =>
+      ...this.state.rail,
+      points: this.state.rail.points.map((point) =>
         point.id === pointId ? { ...point, normal: normalTuple, position: undefined } : point,
       ),
     };
-    this.state = { ...this.state, track: nextTrack };
-    this.onTrackChange?.(nextTrack);
+    this.state = { ...this.state, rail: nextTrack };
+    this.onRailChange?.(nextTrack);
     this.updateHandles();
     this.updateTrackGeometry();
   }
@@ -464,13 +464,13 @@ export class TrackTool {
     const normalTuple: [number, number, number] = [normal.x, normal.y, normal.z];
     const positionTuple: [number, number, number] = [position.x, position.y, position.z];
     const nextTrack = {
-      ...this.state.track,
-      points: this.state.track.points.map((point) =>
+      ...this.state.rail,
+      points: this.state.rail.points.map((point) =>
         point.id === pointId ? { ...point, normal: normalTuple, position: positionTuple } : point,
       ),
     };
-    this.state = { ...this.state, track: nextTrack };
-    this.onTrackChange?.(nextTrack);
+    this.state = { ...this.state, rail: nextTrack };
+    this.onRailChange?.(nextTrack);
     this.updateHandles();
     this.updateTrackGeometry();
   }
@@ -478,13 +478,13 @@ export class TrackTool {
   private deletePoint(pointId: string): void {
     if (!this.state) return;
     const nextTrack = {
-      ...this.state.track,
-      points: this.state.track.points.filter((point) => point.id !== pointId),
+      ...this.state.rail,
+      points: this.state.rail.points.filter((point) => point.id !== pointId),
     };
     if (this.selectedPointId === pointId) this.selectedPointId = null;
-    this.state = { ...this.state, track: nextTrack, selectedPointId: this.selectedPointId };
+    this.state = { ...this.state, rail: nextTrack, selectedPointId: this.selectedPointId };
     this.onPointSelectionChange?.(this.selectedPointId);
-    this.onTrackChange?.(nextTrack);
+    this.onRailChange?.(nextTrack);
     this.updateVisuals();
   }
 
@@ -575,7 +575,7 @@ export class TrackTool {
     line.geometry.dispose();
   }
 
-  private updateRailSupports(samples: TrackSample[]): void {
+  private updateRailSupports(samples: RailSample[]): void {
     if (!this.state || samples.length < 2) {
       if (this.supportMesh) this.supportMesh.visible = false;
       return;
@@ -628,13 +628,13 @@ export class TrackTool {
     this.supportMesh.visible = true;
   }
 
-  private updateTunnelShell(samples: TrackSample[]): void {
+  private updateTunnelShell(samples: RailSample[]): void {
     if (!this.state || samples.length < 2) {
       if (this.tunnelMesh) this.tunnelMesh.visible = false;
       return;
     }
 
-    const closed = this.state.track.closed && this.state.track.points.length >= 3;
+    const closed = this.state.rail.closed && this.state.rail.points.length >= 3;
     const rings = closed ? samples.length - 1 : samples.length;
 
     const tunnelIndices: number[] = [];
@@ -642,7 +642,7 @@ export class TrackTool {
 
     const isTunnelRing = samples.map(
       (s) =>
-        s.position.length() - s.terrainRadius < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
+        s.position.length() - s.terrainRadius < RAIL_TUNNEL_TERRAIN_THRESHOLD ||
         s.position.length() < s.waterRadius,
     );
 

@@ -5,16 +5,16 @@ import type {
   PerformanceStats,
   PreviewSpawnState,
 } from "../types.ts";
-import type { RailState } from "../tools/tracks/TrackTypes.ts";
+import type { RailState } from "../tools/rails/RailTypes.ts";
 import { EditorScene } from "./EditorScene.ts";
 
 interface PlanetPreviewProps {
   initialConfig: EditorConfig;
-  initialTracks: RailState[];
+  initialRails: RailState[];
   initialPreviewSpawn: PreviewSpawnState;
   onScene: (scene: EditorScene) => void;
-  onTrackChange: (track: RailState) => void;
-  onTrackPointSelectionChange: (pointId: string | null) => void;
+  onRailChange: (rail: RailState) => void;
+  onRailPointSelectionChange: (pointId: string | null) => void;
   onSculptChange: (planetId: string, sculpt: EditorSculptState) => void;
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
@@ -23,11 +23,11 @@ interface PlanetPreviewProps {
 
 export function PlanetPreview({
   initialConfig,
-  initialTracks,
+  initialRails,
   initialPreviewSpawn,
   onScene,
-  onTrackChange,
-  onTrackPointSelectionChange,
+  onRailChange,
+  onRailPointSelectionChange,
   onSculptChange,
   onPreviewSpawnChange,
   onPerformanceStats,
@@ -47,10 +47,10 @@ export function PlanetPreview({
       width || container.clientWidth,
       height || container.clientHeight,
       initialConfig,
-      initialTracks,
+      initialRails,
       initialPreviewSpawn,
-      onTrackChange,
-      onTrackPointSelectionChange,
+      onRailChange,
+      onRailPointSelectionChange,
       onSculptChange,
       onPreviewSpawnChange,
       onPerformanceStats,

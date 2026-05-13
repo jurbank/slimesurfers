@@ -12,8 +12,8 @@ rails into the runtime map data used by the game.
 
 Current important paths:
 
-- `apps/editor/src/tools/tracks/*`: existing editor track spline, preview, and carving tools
-- `apps/editor/src/panels/TracksPanel.tsx`: current editor panel
+- `apps/editor/src/tools/rails/*`: editor rail spline, preview, and carving tools
+- `apps/editor/src/panels/RailsPanel.tsx`: current editor panel
 - `apps/editor/src/export.ts`: current editor-to-runtime map export
 - `packages/content/config/railDefs.ts`: current runtime rail definition type and fallback/dev rail data
 - `packages/content/map/runtimeMapData.ts`: runtime map schema and validation
@@ -48,7 +48,7 @@ Deliverable:
 
 Validation:
 
-- `vp test apps/editor/src/tools/tracks/trackCarving.test.ts`
+- `vp test apps/editor/src/tools/rails/railCarving.test.ts`
 - `vp check`
 - Add an `apps/editor/EDITOR_CHANGELOG.md` entry because this phase changes
   files under `apps/editor`.
@@ -89,6 +89,10 @@ Progress:
 - Legacy `Track*` aliases remain for lower-level spline/tooling compatibility.
 - New editor saves write a primary `rails` block.
 - Old `tracks` save blocks still load through migration.
+- The editor panel file/component has been renamed from `TracksPanel` to
+  `RailsPanel`.
+- The editor spline/tooling folder and core files have been renamed from
+  `tools/tracks/*` to `tools/rails/*`.
 
 Validation:
 
@@ -158,6 +162,18 @@ Scope:
 Deliverable:
 
 - Authored editor rails appear in runtime gameplay from `MAP_FILE=my-map.json`.
+
+Progress:
+
+- `apps/game/server/my-map.json` now contains map-owned rail definitions instead
+  of an empty `rails` array.
+- Added server coverage proving map-provided rails are included in the `MapData`
+  payload sent to joining clients.
+- The in-repo sync source for this pass is the existing runtime rail definitions;
+  replacing these with freshly editor-authored rails is the next content refresh
+  step once an editor export artifact is available.
+- Removed the client rail renderer's constructor-time `RAIL_DEFS` visual fallback;
+  active rail visuals now come from server `MapData` only.
 
 Validation:
 

@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type { EditorConfig } from "../../types.ts";
-import type { TrackPoint, TrackState } from "./TrackTypes.ts";
-import { TRACK_SURFACE_OFFSET, TRACK_TUNNEL_TERRAIN_THRESHOLD } from "./trackConstants.ts";
+import type { RailPoint, RailState } from "./RailTypes.ts";
+import { RAIL_SURFACE_OFFSET, RAIL_TUNNEL_TERRAIN_THRESHOLD } from "./railConstants.ts";
 
-interface TrackSample {
+interface RailSample {
   position: THREE.Vector3;
   width: number;
   bank: number;
@@ -12,16 +12,16 @@ interface TrackSample {
   waterRadius: number;
 }
 
-export type TrackPreviewRadiusSampler = (nx: number, ny: number, nz: number) => number;
+export type RailPreviewRadiusSampler = (nx: number, ny: number, nz: number) => number;
 
 const RAIL_TUBE_SEGMENTS = 12;
 const RAIL_SUPPORT_SPACING = 18;
 const RAIL_SUPPORT_RADIUS = 0.18;
 const RAIL_SUPPORT_SEGMENTS = 6;
 
-export class TrackPreviewVisuals {
+export class RailPreviewVisuals {
   private config: EditorConfig;
-  private tracks: readonly TrackState[];
+  private rails: readonly RailState[];
   private readonly group = new THREE.Group();
   private readonly railMaterial = new THREE.MeshStandardMaterial({
     color: 0xd0d8e8,
@@ -45,11 +45,11 @@ export class TrackPreviewVisuals {
   constructor(
     scene: THREE.Scene,
     config: EditorConfig,
-    tracks: readonly TrackState[],
-    private readonly getRadiusAtNormal: TrackPreviewRadiusSampler,
+    rails: readonly RailState[],
+    private readonly getRadiusAtNormal: RailPreviewRadiusSampler,
   ) {
     this.config = config;
-    this.tracks = tracks;
+    this.rails = rails;
     this.group.visible = false;
     scene.add(this.group);
     this.rebuild();
@@ -64,8 +64,8 @@ export class TrackPreviewVisuals {
     this.rebuild();
   }
 
-  setTracks(tracks: readonly TrackState[]): void {
-    this.tracks = tracks;
+  setRails(rails: readonly RailState[]): void {
+    this.rails = rails;
     this.rebuild();
   }
 
@@ -80,20 +80,20 @@ export class TrackPreviewVisuals {
   }
 
   private rebuild(): void {
-    const samplesByTrack = this.tracks
-      .map((track) => ({ track, samples: this.getSurfaceSamples(track) }))
+    const samplesByRail = this.rails
+      .map((rail) => ({ rail, samples: this.getSurfaceSamples(rail) }))
       .filter(({ samples }) => samples.length >= 2);
 
-    this.updateRailTubes(samplesByTrack);
-    this.updateRailSupports(samplesByTrack);
-    this.updateTunnelShell(samplesByTrack);
+    this.updateRailTubes(samplesByRail);
+    this.updateRailSupports(samplesByRail);
+    this.updateTunnelShell(samplesByRail);
   }
 
-  private updateRailTubes(tracks: { track: TrackState; samples: TrackSample[] }[]): void {
+  private updateRailTubes(rails: { rail: RailState; samples: RailSample[] }[]): void {
     this.clearRailMeshes();
 
-    for (const { track, samples } of tracks) {
-      const closed = track.closed && track.points.length >= 3;
+    for (const { rail, samples } of rails) {
+      const closed = rail.closed && rail.points.length >= 3;
       const curvePoints = closed ? samples.slice(0, -1) : samples;
       if (curvePoints.length < (closed ? 3 : 2)) continue;
 
@@ -116,7 +116,7 @@ export class TrackPreviewVisuals {
     }
   }
 
-  private updateRailSupports(tracks: { samples: TrackSample[] }[]): void {
+  private updateRailSupports(tracks: { samples: RailSample[] }[]): void {
     const supportData: THREE.Matrix4[] = [];
 
     for (const { samples } of tracks) {
@@ -180,17 +180,17 @@ export class TrackPreviewVisuals {
     this.railMeshes = [];
   }
 
-  private updateTunnelShell(tracks: { track: TrackState; samples: TrackSample[] }[]): void {
+  private updateTunnelShell(rails: { rail: RailState; samples: RailSample[] }[]): void {
     const positions: number[] = [];
     const indices: number[] = [];
     let vertexOffset = 0;
 
-    for (const { track, samples } of tracks) {
-      const closed = track.closed && track.points.length >= 3;
+    for (const { rail, samples } of rails) {
+      const closed = rail.closed && rail.points.length >= 3;
       const rings = closed ? samples.length - 1 : samples.length;
       const isTunnelRing = samples.map(
         (s) =>
-          s.position.length() - s.terrainRadius < TRACK_TUNNEL_TERRAIN_THRESHOLD ||
+          s.position.length() - s.terrainRadius < RAIL_TUNNEL_TERRAIN_THRESHOLD ||
           s.position.length() < s.waterRadius,
       );
 
@@ -220,7 +220,7 @@ export class TrackPreviewVisuals {
   }
 
   private buildTunnelArch(
-    samples: TrackSample[],
+    samples: RailSample[],
     idx: number,
     rings: number,
     closed: boolean,
@@ -256,26 +256,26 @@ export class TrackPreviewVisuals {
     ];
   }
 
-  private getSurfaceSamples(track: TrackState): TrackSample[] {
-    if (track.points.length < 2) return [];
-    const controls = track.points.map((point) => this.positionFromPoint(point));
-    const closed = track.closed && controls.length >= 3;
+  private getSurfaceSamples(rail: RailState): RailSample[] {
+    if (rail.points.length < 2) return [];
+    const controls = rail.points.map((point) => this.positionFromPoint(point));
+    const closed = rail.closed && controls.length >= 3;
     if ((!closed && controls.length < 2) || (closed && controls.length < 3)) return [];
 
     const curve = new THREE.CatmullRomCurve3(controls, closed, "centripetal");
     const divisions = Math.max(
       2,
-      track.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
+      rail.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
     );
     const p0 = this.config.planets[0]!;
     const waterRadius = p0.radius + p0.terrain.waterLevel;
-    const samples: TrackSample[] = [];
+    const samples: RailSample[] = [];
 
     for (let i = 0; i <= divisions; i++) {
       const t = i / divisions;
       const position = curve.getPoint(t);
       const normal = position.clone().normalize();
-      const scalars = this.interpolatePointScalars(track, t, closed);
+      const scalars = this.interpolatePointScalars(rail, t, closed);
       samples.push({
         position,
         width: scalars.width,
@@ -288,29 +288,29 @@ export class TrackPreviewVisuals {
     return samples;
   }
 
-  private positionFromPoint(point: TrackPoint): THREE.Vector3 {
+  private positionFromPoint(point: RailPoint): THREE.Vector3 {
     if (point.position) return new THREE.Vector3(...point.position);
     const normal = new THREE.Vector3(...point.normal).normalize();
     return normal.multiplyScalar(
-      this.getRadiusAtNormal(normal.x, normal.y, normal.z) + TRACK_SURFACE_OFFSET,
+      this.getRadiusAtNormal(normal.x, normal.y, normal.z) + RAIL_SURFACE_OFFSET,
     );
   }
 
   private interpolatePointScalars(
-    track: TrackState,
+    rail: RailState,
     t: number,
     closed: boolean,
   ): { width: number; bank: number } {
-    const pointCount = track.points.length;
+    const pointCount = rail.points.length;
     const segmentCount = closed ? pointCount : Math.max(1, pointCount - 1);
     const scaled = Math.min(t * segmentCount, segmentCount - Number.EPSILON);
     const index = Math.floor(scaled);
     const localT = scaled - index;
-    const a = track.points[Math.min(index, pointCount - 1)];
-    const b = track.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
+    const a = rail.points[Math.min(index, pointCount - 1)];
+    const b = rail.points[closed ? (index + 1) % pointCount : Math.min(index + 1, pointCount - 1)];
     return {
-      width: THREE.MathUtils.lerp(a?.width ?? track.width, b?.width ?? track.width, localT),
-      bank: THREE.MathUtils.lerp(a?.bank ?? track.bank, b?.bank ?? track.bank, localT),
+      width: THREE.MathUtils.lerp(a?.width ?? rail.width, b?.width ?? rail.width, localT),
+      bank: THREE.MathUtils.lerp(a?.bank ?? rail.bank, b?.bank ?? rail.bank, localT),
     };
   }
 
