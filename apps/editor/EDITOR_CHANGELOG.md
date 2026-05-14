@@ -4,6 +4,14 @@ Agent-maintained notes for changes that touch `apps/editor`.
 
 ## 2026-05-11
 
+- Removed the remaining pre-rail save compatibility fields from `src/App.tsx`, removed the legacy export type from `src/tools/rails/RailTypes.ts`, and updated the stale rail floor comment in `src/preview/EditorScene.ts`.
+- User-visible behavior: editor local saves are now rail-only; pre-rail local saves no longer migrate into the current editor state.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/tools/rails/RailTypes.ts apps/editor/src/preview/EditorScene.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/rails/railCarving.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp check --no-fmt`.
+
+- Removed broad pre-rail compatibility aliases from `src/tools/rails/RailTypes.ts` and renamed remaining active rail tooling internals in `src/export.ts`, `src/tools/rails/RailTool.ts`, `src/tools/rails/RailPreviewVisuals.ts`, and `src/tools/rails/railCarving.ts`.
+- User-visible behavior: newly created rail IDs now use a `rail-*` prefix.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/export.ts apps/editor/src/tools/rails/RailTypes.ts apps/editor/src/tools/rails/RailTool.ts apps/editor/src/tools/rails/RailPreviewVisuals.ts apps/editor/src/tools/rails/railCarving.ts apps/editor/src/tools/rails/railCarving.test.ts apps/editor/src/export.test.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/rails/railCarving.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test apps/game/server/src/rooms/matchRoom.test.ts`; `vp exec tsx -e "import { readFileSync } from 'node:fs'; import { validateRuntimeMapData } from './packages/content/map/runtimeMapData.ts'; const map = JSON.parse(readFileSync('apps/game/server/my-map.json', 'utf8')); const result = validateRuntimeMapData(map); console.log(JSON.stringify(result, null, 2)); if (!result.valid) process.exit(1);"`; `vp check --no-fmt`.
+
 - Renamed active rail state and callback locals in `src/App.tsx`, `src/panels/RailsPanel.tsx`, `src/tools/rails/RailPreviewVisuals.ts`, and `src/tools/rails/railCarving.ts`.
 - User-visible behavior: no intended behavior change; remaining non-compatibility editor internals now use rail terminology consistently.
 - Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/panels/RailsPanel.tsx apps/editor/src/preview/EditorScene.ts apps/editor/src/preview/PlanetPreview.tsx apps/editor/src/tools/rails/RailPreviewVisuals.ts apps/editor/src/tools/rails/RailTool.ts apps/editor/src/tools/rails/RailTypes.ts apps/editor/src/tools/rails/railCarving.ts apps/editor/src/tools/rails/railCarving.test.ts apps/editor/src/tools/rails/railConstants.ts apps/editor/EDITOR_CHANGELOG.md RailCreationRoadmap.md`; `vp test apps/editor/src/tools/rails/railCarving.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp check --no-fmt`.

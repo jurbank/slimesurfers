@@ -715,7 +715,7 @@ export class EditorScene {
     const baseRadius =
       getTerrainRadius(nx, ny, nz, config) + this.brushTool.getDisplacementAtNormal(nx, ny, nz);
     const carvedRadius = getRailCarvedRadius(nx, ny, nz, baseRadius, this.railCarveSamples);
-    // Track ribbons are playable floors. Apply them after tunnel carving so tunnel
+    // Rail ribbons are playable floors. Apply them after tunnel carving so tunnel
     // entrances stay hollow around the rail without dropping the player to water.
     return getRailRaisedRadius(nx, ny, nz, carvedRadius, this.railSurfaceSamples);
   }

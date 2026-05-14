@@ -116,10 +116,10 @@ export class RailPreviewVisuals {
     }
   }
 
-  private updateRailSupports(tracks: { samples: RailSample[] }[]): void {
+  private updateRailSupports(rails: { samples: RailSample[] }[]): void {
     const supportData: THREE.Matrix4[] = [];
 
-    for (const { samples } of tracks) {
+    for (const { samples } of rails) {
       let distanceSinceSupport = RAIL_SUPPORT_SPACING;
       for (let i = 0; i < samples.length; i++) {
         const sample = samples[i]!;

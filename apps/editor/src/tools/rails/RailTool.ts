@@ -186,7 +186,7 @@ export class RailTool {
 
   private updateVisuals(): void {
     this.updateHandles();
-    this.updateTrackGeometry();
+    this.updateRailGeometry();
     this.updateTransformGizmo();
   }
 
@@ -221,7 +221,7 @@ export class RailTool {
     this.gizmo.attach(position, this.getSphereBasisQuaternion(position));
   }
 
-  private updateTrackGeometry(): void {
+  private updateRailGeometry(): void {
     const samples = this.getSurfaceSamples();
     this.updateCenterLine(samples);
     this.updateRailTube(samples);
@@ -436,26 +436,26 @@ export class RailTool {
       normal: [normal.x, normal.y, normal.z],
       position: [p.x, p.y, p.z],
     };
-    const nextTrack = { ...this.state.rail, points: [...this.state.rail.points, point] };
-    this.state = { ...this.state, rail: nextTrack, selectedPointId: point.id };
+    const nextRail = { ...this.state.rail, points: [...this.state.rail.points, point] };
+    this.state = { ...this.state, rail: nextRail, selectedPointId: point.id };
     this.selectedPointId = point.id;
     this.onPointSelectionChange?.(point.id);
-    this.onRailChange?.(nextTrack);
+    this.onRailChange?.(nextRail);
     this.updateVisuals();
   }
 
   private movePointToSurface(pointId: string, normalTuple: [number, number, number]): void {
     if (!this.state) return;
-    const nextTrack = {
+    const nextRail = {
       ...this.state.rail,
       points: this.state.rail.points.map((point) =>
         point.id === pointId ? { ...point, normal: normalTuple, position: undefined } : point,
       ),
     };
-    this.state = { ...this.state, rail: nextTrack };
-    this.onRailChange?.(nextTrack);
+    this.state = { ...this.state, rail: nextRail };
+    this.onRailChange?.(nextRail);
     this.updateHandles();
-    this.updateTrackGeometry();
+    this.updateRailGeometry();
   }
 
   private movePointToPosition(pointId: string, position: THREE.Vector3): void {
@@ -463,28 +463,28 @@ export class RailTool {
     const normal = position.clone().normalize();
     const normalTuple: [number, number, number] = [normal.x, normal.y, normal.z];
     const positionTuple: [number, number, number] = [position.x, position.y, position.z];
-    const nextTrack = {
+    const nextRail = {
       ...this.state.rail,
       points: this.state.rail.points.map((point) =>
         point.id === pointId ? { ...point, normal: normalTuple, position: positionTuple } : point,
       ),
     };
-    this.state = { ...this.state, rail: nextTrack };
-    this.onRailChange?.(nextTrack);
+    this.state = { ...this.state, rail: nextRail };
+    this.onRailChange?.(nextRail);
     this.updateHandles();
-    this.updateTrackGeometry();
+    this.updateRailGeometry();
   }
 
   private deletePoint(pointId: string): void {
     if (!this.state) return;
-    const nextTrack = {
+    const nextRail = {
       ...this.state.rail,
       points: this.state.rail.points.filter((point) => point.id !== pointId),
     };
     if (this.selectedPointId === pointId) this.selectedPointId = null;
-    this.state = { ...this.state, rail: nextTrack, selectedPointId: this.selectedPointId };
+    this.state = { ...this.state, rail: nextRail, selectedPointId: this.selectedPointId };
     this.onPointSelectionChange?.(this.selectedPointId);
-    this.onRailChange?.(nextTrack);
+    this.onRailChange?.(nextRail);
     this.updateVisuals();
   }
 

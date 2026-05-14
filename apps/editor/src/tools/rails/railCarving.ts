@@ -30,18 +30,18 @@ const TUNNEL_WATER_THRESHOLD = -0.1;
 const MIN_ALONG_INFLUENCE = 3;
 
 export function buildRailCarveSamples(
-  tracks: readonly RailState[],
+  rails: readonly RailState[],
   config: EditorConfig,
   getRadiusAtNormal: RailRadiusSampler,
 ): RailCarveSample[] {
   const samples: RailCarveSample[] = [];
 
-  for (const track of tracks) {
-    if (track.points.length < 2) continue;
-    const planet = config.planets.find((p) => p.id === track.planetId) ?? config.planets[0]!;
+  for (const rail of rails) {
+    if (rail.points.length < 2) continue;
+    const planet = config.planets.find((p) => p.id === rail.planetId) ?? config.planets[0]!;
     const waterRadius = planet.radius + planet.terrain.waterLevel;
 
-    const controls = track.points.map((point) => {
+    const controls = rail.points.map((point) => {
       if (point.position) return new THREE.Vector3(...point.position);
 
       const normal = new THREE.Vector3(...point.normal).normalize();
@@ -49,13 +49,13 @@ export function buildRailCarveSamples(
       return normal.multiplyScalar(radius + RAIL_SURFACE_OFFSET);
     });
 
-    const closed = track.closed && controls.length >= 3;
+    const closed = rail.closed && controls.length >= 3;
     if ((!closed && controls.length < 2) || (closed && controls.length < 3)) continue;
 
     const curve = new THREE.CatmullRomCurve3(controls, closed, "centripetal");
     const divisions = Math.max(
       2,
-      track.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
+      rail.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
     );
 
     const positions: THREE.Vector3[] = [];
@@ -67,7 +67,7 @@ export function buildRailCarveSamples(
       const t = i / divisions;
       const position = curve.getPoint(t);
       const normal = position.clone().normalize();
-      const scalars = interpolatePointScalars(track, t, closed);
+      const scalars = interpolatePointScalars(rail, t, closed);
       positions.push(position);
       widths.push(scalars.width);
       banks.push(scalars.bank);
@@ -93,10 +93,10 @@ export function buildRailCarveSamples(
       tangent.normalize();
 
       const side = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
-      const bankRad = ((banks[i] ?? track.bank) * Math.PI) / 180;
+      const bankRad = ((banks[i] ?? rail.bank) * Math.PI) / 180;
       side.applyAxisAngle(tangent, bankRad);
       const up = surfaceNormal.clone().applyAxisAngle(tangent, bankRad).normalize();
-      const halfWidth = (widths[i] ?? track.width) * 0.5 + TUNNEL_SIDE_CLEARANCE;
+      const halfWidth = (widths[i] ?? rail.width) * 0.5 + TUNNEL_SIDE_CLEARANCE;
       const influenceAlong = Math.max(MIN_ALONG_INFLUENCE, next.distanceTo(prev) * 0.35);
 
       samples.push({
@@ -146,7 +146,7 @@ export function getRailCarvedRadius(
   return carvedRadius;
 }
 
-// -- Surface track samples (non-tunnel, near-ground sections) ----------------
+// -- Surface rail samples (non-tunnel, near-ground sections) -----------------
 
 export interface RailSurfaceSample {
   position: THREE.Vector3;
@@ -163,29 +163,29 @@ export interface RailSurfaceSample {
  * remains a playable floor.
  */
 export function buildRailSurfaceSamples(
-  tracks: readonly RailState[],
+  rails: readonly RailState[],
   config: EditorConfig,
   getRadiusAtNormal: RailRadiusSampler,
 ): RailSurfaceSample[] {
   const samples: RailSurfaceSample[] = [];
 
-  for (const track of tracks) {
-    if (track.points.length < 2) continue;
+  for (const rail of rails) {
+    if (rail.points.length < 2) continue;
 
-    const controls = track.points.map((point) => {
+    const controls = rail.points.map((point) => {
       if (point.position) return new THREE.Vector3(...point.position);
       const normal = new THREE.Vector3(...point.normal).normalize();
       const radius = getRadiusAtNormal(normal.x, normal.y, normal.z);
       return normal.multiplyScalar(radius + RAIL_SURFACE_OFFSET);
     });
 
-    const closed = track.closed && controls.length >= 3;
+    const closed = rail.closed && controls.length >= 3;
     if ((!closed && controls.length < 2) || (closed && controls.length < 3)) continue;
 
     const curve = new THREE.CatmullRomCurve3(controls, closed, "centripetal");
     const divisions = Math.max(
       2,
-      track.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
+      rail.segmentsPerCurve * (closed ? controls.length : controls.length - 1),
     );
 
     const positions: THREE.Vector3[] = [];
@@ -197,7 +197,7 @@ export function buildRailSurfaceSamples(
       const t = i / divisions;
       const position = curve.getPoint(t);
       const normal = position.clone().normalize();
-      const scalars = interpolatePointScalars(track, t, closed);
+      const scalars = interpolatePointScalars(rail, t, closed);
       positions.push(position);
       widths.push(scalars.width);
       banks.push(scalars.bank);
@@ -217,11 +217,11 @@ export function buildRailSurfaceSamples(
       if (tangent.lengthSq() < 1e-8) continue;
       tangent.normalize();
 
-      const bankRad = ((banks[i] ?? track.bank) * Math.PI) / 180;
+      const bankRad = ((banks[i] ?? rail.bank) * Math.PI) / 180;
       const side = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
       side.applyAxisAngle(tangent, bankRad);
 
-      const halfWidth = (widths[i] ?? track.width) * 0.5;
+      const halfWidth = (widths[i] ?? rail.width) * 0.5;
       const influenceAlong = Math.max(MIN_ALONG_INFLUENCE, next.distanceTo(prev) * 0.8);
 
       samples.push({ position, tangent, side, centerRadius, halfWidth, influenceAlong });

@@ -30,22 +30,12 @@ export interface RailExport {
   rails: RailState[];
 }
 
-export type TrackEditMode = RailEditMode;
-export type TrackPoint = RailPoint;
-export type TrackState = RailState;
-export type TrackToolState = RailToolState;
-
-export interface TrackExport {
-  version: 1;
-  tracks: RailState[];
-}
-
 let nextRailId = 1;
 
 export function createDefaultRailState(name?: string, planetId = "planet-0"): RailState {
   const index = nextRailId++;
   return {
-    id: `track-${index}`,
+    id: `rail-${index}`,
     planetId,
     name: name ?? `Rail ${index}`,
     closed: true,
@@ -55,5 +45,3 @@ export function createDefaultRailState(name?: string, planetId = "planet-0"): Ra
     points: [],
   };
 }
-
-export const createDefaultTrackState = createDefaultRailState;

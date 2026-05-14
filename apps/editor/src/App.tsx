@@ -14,7 +14,6 @@ import {
   type RailExport,
   type RailState,
   type RailToolState,
-  type TrackExport,
 } from "./tools/rails/RailTypes.ts";
 import type { TerrainStampState } from "./tools/terrain/TerrainStampTypes.ts";
 import {
@@ -47,9 +46,7 @@ interface EditorSaveState {
   savedAt: string;
   config: EditorConfig;
   rails: RailExport;
-  tracks?: TrackExport;
   activeRailId: string;
-  activeTrackId?: string;
   previewSpawn?: PreviewSpawnState;
   mapName?: string;
 }
@@ -817,9 +814,6 @@ function getSavedRails(parsed: Partial<EditorSaveState>): RailState[] | null {
   if (parsed.rails?.version === 1 && Array.isArray(parsed.rails.rails)) {
     return parsed.rails.rails;
   }
-  if (parsed.tracks?.version === 1 && Array.isArray(parsed.tracks.tracks)) {
-    return parsed.tracks.tracks;
-  }
   return null;
 }
 
@@ -855,8 +849,7 @@ function loadEditorState(): EditorSaveState | null {
           : fallbackPlanetId,
     }));
 
-    const savedActiveRailId =
-      typeof parsed.activeRailId === "string" ? parsed.activeRailId : parsed.activeTrackId;
+    const savedActiveRailId = parsed.activeRailId;
     const activeRailId =
       typeof savedActiveRailId === "string" &&
       migratedRails.some((rail) => rail.id === savedActiveRailId)

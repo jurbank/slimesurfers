@@ -28,14 +28,14 @@ export function editorStateToRuntimeMap(
     : (config.planets[0]?.id ?? "planet-0");
 
   const runtimeRails = rails
-    .filter((t) => t.points.length >= 2 && planetIds.has(t.planetId))
-    .map((t, i) => {
-      const planetRadius = config.planets.find((p) => p.id === t.planetId)?.radius ?? 100;
+    .filter((rail) => rail.points.length >= 2 && planetIds.has(rail.planetId))
+    .map((rail, i) => {
+      const planetRadius = config.planets.find((p) => p.id === rail.planetId)?.radius ?? 100;
       return {
         id: i,
-        planetId: t.planetId,
-        paintCorridorRadius: t.width,
-        controlPoints: t.points.map((pt) => ({
+        planetId: rail.planetId,
+        paintCorridorRadius: rail.width,
+        controlPoints: rail.points.map((pt) => ({
           nx: pt.normal[0],
           ny: pt.normal[1],
           nz: pt.normal[2],
