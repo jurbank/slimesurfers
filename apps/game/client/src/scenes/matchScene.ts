@@ -1044,10 +1044,14 @@ export class MatchScene {
               visual.slimeColor === stamp.color && visual.patternId === stamp.patternId
                 ? stamp
                 : { ...stamp, color: visual.slimeColor, patternId: visual.patternId };
-            this.paint.addStamp(visualStamp);
-            const planetState = this.planetPaint.get(stamp.planetId);
-            if (planetState) {
-              appendPaintStamp(planetState, visualStamp);
+            // PaintSystem is the single dedup authority for both visual and gameplay stamp state.
+            // Gate appendPaintStamp on the same check to prevent bootstrap+incremental overlap
+            // from applying the same stamp twice to stampBuckets.
+            if (this.paint.addStamp(visualStamp)) {
+              const planetState = this.planetPaint.get(stamp.planetId);
+              if (planetState) {
+                appendPaintStamp(planetState, visualStamp);
+              }
             }
           }
         },

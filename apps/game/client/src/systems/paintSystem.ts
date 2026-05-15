@@ -90,9 +90,9 @@ export class PaintSystem {
     return this.stampHistory.get(planetId) ?? [];
   }
 
-  addStamp(stamp: PaintStampMessage): void {
+  addStamp(stamp: PaintStampMessage): boolean {
     const stampKey = `${stamp.planetId}:${stamp.seq}`;
-    if (this.seenStamps.has(stampKey)) return;
+    if (this.seenStamps.has(stampKey)) return false;
     this.seenStamps.add(stampKey);
 
     const history = this.stampHistory.get(stamp.planetId) ?? [];
@@ -103,9 +103,10 @@ export class PaintSystem {
     this.stampHistory.set(stamp.planetId, history);
 
     const rt = this.renderTargets.get(stamp.planetId);
-    if (!rt) return;
+    if (!rt) return true;
 
     this.enqueueStampSplats(stamp, performance.now());
+    return true;
   }
 
   update(nowMs: number): void {
