@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Room, type Client } from "@colyseus/core";
-import { BOT_EMOTE_LEXICONS, EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
-import {
-  GAME_CONFIG,
-  resolveBotBehaviorProfile,
-  resolveConfiguredBotCount,
-  type BotConfigEntry,
-} from "@splat/content/config/gameConfig.ts";
+import { EMOTE_CONFIG, isEmoteId } from "@splat/content/emotes/emoteDefs.ts";
+import { GAME_CONFIG, resolveConfiguredBotCount } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
 import {
   DEFAULT_RUNTIME_CEL,
@@ -27,7 +22,6 @@ import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState } from "@splat/protocol/schemas/gameState.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
-import type { SimPlayerState } from "@splat/simulation/match/simState.ts";
 import {
   addSimPlayerToRoomState,
   buildJoinBootstrap,
@@ -188,7 +182,6 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   private emoteSeq = 0;
   private nextBotId = 0;
   private devClusterSpawns = false;
-  private readonly lastEmotePostMs = new Map<string, number>();
   private readonly db = new SupabaseService();
   private readonly playerUuids = new Map<string, string>();
   private readonly departedPlayers = new Map<string, DepartedEntry>();
@@ -270,7 +263,6 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     }
     this.simulation.removePlayer(client.sessionId);
     this.state.players.delete(client.sessionId);
-    this.lastEmotePostMs.delete(client.sessionId);
     this.playerUuids.delete(client.sessionId);
     this.evaluateBotPopulation();
     void this.updateRoomMetadata();
@@ -299,29 +291,12 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     return Math.max(0, Math.min(this.simulation.maxPlayers, targetPopulation));
   }
 
-  private pickGeneratedBotTemplate(): BotConfigEntry {
-    const mix = GAME_CONFIG.bot.generatedBots.mix;
-    if (mix.length === 0) return {};
-
-    const totalWeight = mix.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
-    if (totalWeight <= 0) return mix[0] ?? {};
-
-    let roll = Math.random() * totalWeight;
-    for (const entry of mix) {
-      const weight = Math.max(0, entry.weight);
-      if (roll < weight) return entry;
-      roll -= weight;
-    }
-
-    return mix[mix.length - 1] ?? {};
-  }
-
   private createBotSessionId(): string {
     return `bot-${this.roomId || "room"}-${this.nextBotId++}`;
   }
 
   private updateRoomMetadata(): Promise<void> {
-    const teamCounts = this.buildTeamCounts();
+    const teamCounts = this.simulation.buildTeamCounts();
     return this.setMetadata({
       devClusterSpawns: this.devClusterSpawns,
       matchMode: toPublicMatchMode(this.simulation.mode.id),
@@ -342,17 +317,6 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     });
   }
 
-  private buildTeamCounts(): number[] {
-    if (!this.simulation.mode.isTeamBased || this.simulation.mode.teamCount === 0) return [];
-    const counts = Array.from({ length: this.simulation.mode.teamCount }, () => 0);
-    for (const player of this.simulation.players.values()) {
-      if (player.teamId >= 0 && player.teamId < counts.length) {
-        counts[player.teamId] = (counts[player.teamId] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }
-
   private resolveSuggestedTeamId(teamCounts: readonly number[]): number | undefined {
     if (teamCounts.length === 0) return undefined;
     let suggested = 0;
@@ -360,56 +324,6 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       if ((teamCounts[teamId] ?? 0) < (teamCounts[suggested] ?? 0)) suggested = teamId;
     }
     return suggested;
-  }
-
-  private selectBotsToRemove(bots: readonly SimPlayerState[], count: number): SimPlayerState[] {
-    const selected: SimPlayerState[] = [];
-    const remaining = [...bots];
-
-    for (let i = 0; i < count; i++) {
-      let bestIndex = 0;
-      let bestScore = Infinity;
-      for (let index = 0; index < remaining.length; index++) {
-        const candidate = remaining[index];
-        if (!candidate) continue;
-        const score = this.scoreBotRemoval(candidate, remaining, selected);
-        if (score < bestScore) {
-          bestIndex = index;
-          bestScore = score;
-        }
-      }
-      const [removed] = remaining.splice(bestIndex, 1);
-      if (removed) selected.push(removed);
-    }
-
-    return selected;
-  }
-
-  private scoreBotRemoval(
-    candidate: SimPlayerState,
-    remainingBots: readonly SimPlayerState[],
-    alreadySelected: readonly SimPlayerState[],
-  ): number {
-    if (!this.simulation.mode.isTeamBased || this.simulation.mode.teamCount <= 1) {
-      return candidate.botOrigin === "generated" ? 0 : 1;
-    }
-
-    const counts = this.buildTeamCounts();
-    const decrement = (teamId: number): void => {
-      if (teamId >= 0 && teamId < counts.length) {
-        counts[teamId] = Math.max(0, (counts[teamId] ?? 0) - 1);
-      }
-    };
-    for (const bot of alreadySelected) decrement(bot.teamId);
-    decrement(candidate.teamId);
-
-    const max = Math.max(...counts);
-    const min = Math.min(...counts);
-    const originPenalty = candidate.botOrigin === "generated" ? 0 : 0.01;
-    const sameTeamBotsAfterRemoval = remainingBots.filter(
-      (bot) => bot !== candidate && bot.teamId === candidate.teamId,
-    ).length;
-    return (max - min) * 100 + originPenalty - sameTeamBotsAfterRemoval * 0.001;
   }
 
   private evaluateBotPopulation(): void {
@@ -421,24 +335,25 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       this.simulation.matchState.matchPhase === MatchPhase.Ended
         ? 0
         : Math.max(0, targetPopulation - humanCount);
+
+    let changed = false;
+
+    if (botPlayers.length > targetBotCount) {
+      const toRemove = this.simulation.selectBotsToRemove(botPlayers.length - targetBotCount);
+      for (const bot of toRemove) {
+        this.simulation.removePlayer(bot.sessionId);
+        this.state.players.delete(bot.sessionId);
+      }
+      changed = toRemove.length > 0;
+      if (changed) void this.updateRoomMetadata();
+      return;
+    }
+
     const existingNamedByIndex = new Map<number, (typeof botPlayers)[number]>();
     for (const bot of botPlayers) {
       if (bot.botOrigin === "named" && typeof bot.botConfigIndex === "number") {
         existingNamedByIndex.set(bot.botConfigIndex, bot);
       }
-    }
-
-    let changed = false;
-
-    if (botPlayers.length > targetBotCount) {
-      const botsToRemove = this.selectBotsToRemove(botPlayers, botPlayers.length - targetBotCount);
-      for (const bot of botsToRemove) {
-        this.simulation.removePlayer(bot.sessionId);
-        this.state.players.delete(bot.sessionId);
-      }
-      changed = botsToRemove.length > 0;
-      if (changed) void this.updateRoomMetadata();
-      return;
     }
 
     let botCount = botPlayers.length;
@@ -448,29 +363,14 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       index++
     ) {
       if (existingNamedByIndex.has(index)) continue;
-      const config = GAME_CONFIG.bot.namedBots[index] ?? {};
-      const botId = this.createBotSessionId();
-      const simPlayer = this.simulation.addBot(botId, config.name, {
-        profile: resolveBotBehaviorProfile(config),
-        emoteTemperament: config.emoteTemperament,
-        emoteFrequency: config.emoteFrequency,
-        origin: "named",
-        configIndex: index,
-      });
+      const simPlayer = this.simulation.addNamedBot(this.createBotSessionId(), index);
       addSimPlayerToRoomState(this.state, simPlayer);
       botCount++;
       changed = true;
     }
 
     while (botCount < targetBotCount) {
-      const template = this.pickGeneratedBotTemplate();
-      const botId = this.createBotSessionId();
-      const simPlayer = this.simulation.addBot(botId, template.name, {
-        profile: resolveBotBehaviorProfile(template),
-        emoteTemperament: template.emoteTemperament,
-        emoteFrequency: template.emoteFrequency,
-        origin: "generated",
-      });
+      const simPlayer = this.simulation.addGeneratedBot(this.createBotSessionId());
       addSimPlayerToRoomState(this.state, simPlayer);
       botCount++;
       changed = true;
@@ -485,11 +385,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     if (!this.state.players.has(client.sessionId)) return;
     if (!Array.isArray(msg.emoteIds)) return;
     if (msg.emoteIds.length > EMOTE_CONFIG.maxPostPayloadIds) return;
-
-    const now = Date.now();
-    const lastPostMs = this.lastEmotePostMs.get(client.sessionId) ?? 0;
-    if (now - lastPostMs < EMOTE_CONFIG.postCooldownMs) return;
-    this.lastEmotePostMs.set(client.sessionId, now);
+    if (!this.simulation.tryPostEmote(client.sessionId, Date.now())) return;
 
     const emoteIds: string[] = [];
     for (const emoteId of msg.emoteIds) {
@@ -501,55 +397,8 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     if (emoteIds.length === 0) return;
 
     this.broadcast(MessageType.EmoteEvents, {
-      events: [
-        {
-          playerId: client.sessionId,
-          emoteIds,
-          seq: ++this.emoteSeq,
-        },
-      ],
+      events: [{ playerId: client.sessionId, emoteIds, seq: ++this.emoteSeq }],
     });
-  }
-
-  private maybePostBotEmotes(dt: number): void {
-    if (this.simulation.matchState.matchPhase !== MatchPhase.Active) return;
-
-    const now = Date.now();
-    const cooldownMs = EMOTE_CONFIG.postCooldownMs;
-
-    for (const bot of this.simulation.players.values()) {
-      if (!bot.isBot || bot.respawnTimer > 0 || !bot.botEmoteTemperament) continue;
-      const lastPostMs = this.lastEmotePostMs.get(bot.sessionId) ?? 0;
-      if (now - lastPostMs < cooldownMs) continue;
-
-      const frequency = Math.max(0, Math.min(1, bot.botEmoteFrequency ?? 0));
-      if (frequency <= 0) continue;
-      const chance = frequency * (dt / cooldownMs);
-      if (Math.random() >= chance) continue;
-
-      const lexicon = BOT_EMOTE_LEXICONS[bot.botEmoteTemperament];
-      if (!lexicon || lexicon.length === 0) continue;
-
-      const emoteCount = Math.random() < 0.2 ? 2 : 1;
-      const emoteIds: string[] = [];
-      for (let i = 0; i < emoteCount; i++) {
-        const choice = lexicon[Math.floor(Math.random() * lexicon.length)];
-        if (!choice || emoteIds.includes(choice)) continue;
-        emoteIds.push(choice);
-      }
-      if (emoteIds.length === 0) continue;
-
-      this.lastEmotePostMs.set(bot.sessionId, now);
-      this.broadcast(MessageType.EmoteEvents, {
-        events: [
-          {
-            playerId: bot.sessionId,
-            emoteIds,
-            seq: ++this.emoteSeq,
-          },
-        ],
-      });
-    }
   }
 
   private tick(dt: number): void {
@@ -557,7 +406,13 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       this.evaluateBotPopulation();
     }
     const result = this.simulation.tick(dt);
-    this.maybePostBotEmotes(dt);
+
+    for (const event of this.simulation.drainBotEmoteEvents(dt, Date.now())) {
+      this.broadcast(MessageType.EmoteEvents, {
+        events: [{ ...event, seq: ++this.emoteSeq }],
+      });
+    }
+
     syncRoomStateFromSimulation(this.state, this.simulation.matchState);
     syncRoomWinnerFromSimulation(this.state, this.simulation);
 

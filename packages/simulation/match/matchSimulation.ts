@@ -13,8 +13,13 @@ import {
   resolveBotEmoteFrequency,
   resolveBotEmoteTemperament,
   type BotBehaviorProfile,
+  type BotConfigEntry,
 } from "@splat/content/config/gameConfig.ts";
-import type { BotEmoteTemperament } from "@splat/content/emotes/emoteDefs.ts";
+import {
+  BOT_EMOTE_LEXICONS,
+  EMOTE_CONFIG,
+  type BotEmoteTemperament,
+} from "@splat/content/emotes/emoteDefs.ts";
 import {
   DEV_MAP,
   type RuntimeMapData,
@@ -428,6 +433,7 @@ export class MatchSimulation {
   private playerCount = 0;
   private tickCount = 0;
   private killSeq = 0;
+  private readonly lastEmotePostMs = new Map<string, number>();
 
   constructor(
     mode: GameModeDefinition = FFA_MODE,
@@ -604,9 +610,31 @@ export class MatchSimulation {
     return player;
   }
 
+  addNamedBot(sessionId: string, configIndex: number): SimPlayerState {
+    const config = GAME_CONFIG.bot.namedBots[configIndex] ?? {};
+    return this.addBot(sessionId, config.name, {
+      profile: resolveBotBehaviorProfile(config),
+      emoteTemperament: config.emoteTemperament,
+      emoteFrequency: config.emoteFrequency,
+      origin: "named",
+      configIndex,
+    });
+  }
+
+  addGeneratedBot(sessionId: string): SimPlayerState {
+    const template = this.pickGeneratedBotTemplate();
+    return this.addBot(sessionId, template.name, {
+      profile: resolveBotBehaviorProfile(template),
+      emoteTemperament: template.emoteTemperament,
+      emoteFrequency: template.emoteFrequency,
+      origin: "generated",
+    });
+  }
+
   removePlayer(sessionId: string): void {
     this.simState.players.delete(sessionId);
     this.inputQueues.delete(sessionId);
+    this.lastEmotePostMs.delete(sessionId);
     removeBotState(sessionId);
   }
 
@@ -619,6 +647,113 @@ export class MatchSimulation {
     });
     messages.sort((a, b) => a.seq - b.seq);
     return messages;
+  }
+
+  buildTeamCounts(): number[] {
+    if (!this.mode.isTeamBased || this.mode.teamCount === 0) return [];
+    const counts = Array.from({ length: this.mode.teamCount }, () => 0);
+    for (const player of this.simState.players.values()) {
+      if (player.teamId >= 0 && player.teamId < counts.length) {
+        counts[player.teamId] = (counts[player.teamId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  selectBotsToRemove(count: number): SimPlayerState[] {
+    const bots = Array.from(this.simState.players.values()).filter((p) => p.isBot);
+    const selected: SimPlayerState[] = [];
+    const remaining = [...bots];
+    for (let i = 0; i < count; i++) {
+      let bestIndex = 0;
+      let bestScore = Infinity;
+      for (let index = 0; index < remaining.length; index++) {
+        const candidate = remaining[index];
+        if (!candidate) continue;
+        const score = this.scoreBotRemoval(candidate, remaining, selected);
+        if (score < bestScore) {
+          bestIndex = index;
+          bestScore = score;
+        }
+      }
+      const [removed] = remaining.splice(bestIndex, 1);
+      if (removed) selected.push(removed);
+    }
+    return selected;
+  }
+
+  private scoreBotRemoval(
+    candidate: SimPlayerState,
+    remainingBots: readonly SimPlayerState[],
+    alreadySelected: readonly SimPlayerState[],
+  ): number {
+    if (!this.mode.isTeamBased || this.mode.teamCount <= 1) {
+      return candidate.botOrigin === "generated" ? 0 : 1;
+    }
+    const counts = this.buildTeamCounts();
+    const decrement = (teamId: number): void => {
+      if (teamId >= 0 && teamId < counts.length) {
+        counts[teamId] = Math.max(0, (counts[teamId] ?? 0) - 1);
+      }
+    };
+    for (const bot of alreadySelected) decrement(bot.teamId);
+    decrement(candidate.teamId);
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
+    const originPenalty = candidate.botOrigin === "generated" ? 0 : 0.01;
+    const sameTeamBotsAfterRemoval = remainingBots.filter(
+      (bot) => bot !== candidate && bot.teamId === candidate.teamId,
+    ).length;
+    return (max - min) * 100 + originPenalty - sameTeamBotsAfterRemoval * 0.001;
+  }
+
+  private pickGeneratedBotTemplate(): BotConfigEntry {
+    const mix = GAME_CONFIG.bot.generatedBots.mix;
+    if (mix.length === 0) return {};
+    const totalWeight = mix.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
+    if (totalWeight <= 0) return mix[0] ?? {};
+    let roll = Math.random() * totalWeight;
+    for (const entry of mix) {
+      const weight = Math.max(0, entry.weight);
+      if (roll < weight) return entry;
+      roll -= weight;
+    }
+    return mix[mix.length - 1] ?? {};
+  }
+
+  tryPostEmote(sessionId: string, nowMs: number): boolean {
+    const lastPostMs = this.lastEmotePostMs.get(sessionId) ?? 0;
+    if (nowMs - lastPostMs < EMOTE_CONFIG.postCooldownMs) return false;
+    this.lastEmotePostMs.set(sessionId, nowMs);
+    return true;
+  }
+
+  drainBotEmoteEvents(dtMs: number, nowMs: number): { playerId: string; emoteIds: string[] }[] {
+    if (this.simState.matchPhase !== MatchPhase.Active) return [];
+    const events: { playerId: string; emoteIds: string[] }[] = [];
+    const cooldownMs = EMOTE_CONFIG.postCooldownMs;
+    for (const bot of this.simState.players.values()) {
+      if (!bot.isBot || bot.respawnTimer > 0 || !bot.botEmoteTemperament) continue;
+      const lastPostMs = this.lastEmotePostMs.get(bot.sessionId) ?? 0;
+      if (nowMs - lastPostMs < cooldownMs) continue;
+      const frequency = Math.max(0, Math.min(1, bot.botEmoteFrequency ?? 0));
+      if (frequency <= 0) continue;
+      const chance = frequency * (dtMs / cooldownMs);
+      if (Math.random() >= chance) continue;
+      const lexicon = BOT_EMOTE_LEXICONS[bot.botEmoteTemperament];
+      if (!lexicon || lexicon.length === 0) continue;
+      const emoteCount = Math.random() < 0.2 ? 2 : 1;
+      const emoteIds: string[] = [];
+      for (let i = 0; i < emoteCount; i++) {
+        const choice = lexicon[Math.floor(Math.random() * lexicon.length)];
+        if (!choice || emoteIds.includes(choice)) continue;
+        emoteIds.push(choice);
+      }
+      if (emoteIds.length === 0) continue;
+      this.lastEmotePostMs.set(bot.sessionId, nowMs);
+      events.push({ playerId: bot.sessionId, emoteIds });
+    }
+    return events;
   }
 
   drainPaintStampMessages(): PaintStampMessage[] {
