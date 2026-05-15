@@ -7,7 +7,7 @@ try {
 import { Server, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Request, Response } from "express";
-import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, resolveConfiguredBotCount } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
 import { MatchRoom, type MatchRoomMetadata } from "./rooms/matchRoom.ts";
 
@@ -35,10 +35,7 @@ interface PublicModeLobbySummary {
 }
 
 function resolvePreviewPopulation(mode: (typeof PUBLIC_MATCH_MODES)[number]): number {
-  const configuredBotCount =
-    GAME_CONFIG.bot.namedBots.length + Math.max(0, GAME_CONFIG.bot.generatedBots.count);
-  const configured =
-    configuredBotCount > 0 ? configuredBotCount : Math.max(0, GAME_CONFIG.bot.targetPopulation);
+  const configured = resolveConfiguredBotCount();
   if (!mode.isTeamBased || mode.teamCount <= 1) return configured;
   return Math.ceil(configured / mode.teamCount) * mode.teamCount;
 }

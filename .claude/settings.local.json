@@ -46,7 +46,8 @@
       "Bash(xargs ls *)",
       "Bash(sed -n '25,55p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/systems/railSystem.ts)",
       "Bash(sed -n '355,380p' /Users/johnurbank/Documents/projects/slimesurfers/apps/game/client/src/systems/projectileSystem.ts)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); planets=d.get\\('planets',[]\\); [print\\(f'planet {p[\\\\\"id\\\\\"]}: center={p.get\\(\\\\\"center\\\\\"\\)}'\\) for p in planets]\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); planets=d.get\\('planets',[]\\); [print\\(f'planet {p[\\\\\"id\\\\\"]}: center={p.get\\(\\\\\"center\\\\\"\\)}'\\) for p in planets]\")",
+      "Bash(awk '{sum+=$1} END {print \"Total systems code:\", sum}')"
     ]
   },
   "enableAllProjectMcpServers": true,

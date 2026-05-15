@@ -4,6 +4,7 @@ import { BOT_EMOTE_LEXICONS, EMOTE_CONFIG, isEmoteId } from "@splat/content/emot
 import {
   GAME_CONFIG,
   resolveBotBehaviorProfile,
+  resolveConfiguredBotCount,
   type BotConfigEntry,
 } from "@splat/content/config/gameConfig.ts";
 import { FFA_MODE, resolveGameMode } from "@splat/content/modes/gameModes.ts";
@@ -284,18 +285,12 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
   }
 
   private resolveTargetBotPopulation(): number {
-    const configuredBotCount =
-      GAME_CONFIG.bot.namedBots.length + Math.max(0, GAME_CONFIG.bot.generatedBots.count);
+    const configuredBotCount = resolveConfiguredBotCount();
     const parsed = Number.parseInt(
-      process.env.TARGET_BOT_POPULATION ??
-        String(configuredBotCount > 0 ? configuredBotCount : GAME_CONFIG.bot.targetPopulation),
+      process.env.TARGET_BOT_POPULATION ?? String(configuredBotCount),
       10,
     );
-    const configured = Number.isFinite(parsed)
-      ? parsed
-      : configuredBotCount > 0
-        ? configuredBotCount
-        : GAME_CONFIG.bot.targetPopulation;
+    const configured = Number.isFinite(parsed) ? parsed : configuredBotCount;
     const targetPopulation =
       this.simulation.mode.isTeamBased && this.simulation.mode.teamCount > 1
         ? Math.ceil(Math.max(0, configured) / this.simulation.mode.teamCount) *

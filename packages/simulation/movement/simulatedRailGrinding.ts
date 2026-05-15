@@ -2,78 +2,19 @@ import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessa
 import { PlayerMovementState, PlayerSurfState } from "../match/simState.ts";
 import { type ComputedRail, findClosestRailPoint, sampleRailAt } from "./railSpline.ts";
 import type { PlayerPhysics, StepConfig } from "./simulatedMovement.ts";
-
-// -- Vec3 helpers ------------------------------------------------------------
-
-function add(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
-}
-function sub(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
-  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-}
-function scale(a: { x: number; y: number; z: number }, s: number) {
-  return { x: a.x * s, y: a.y * s, z: a.z * s };
-}
-function dot(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-function cross(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
-  return {
-    x: a.y * b.z - a.z * b.y,
-    y: a.z * b.x - a.x * b.z,
-    z: a.x * b.y - a.y * b.x,
-  };
-}
-function vlen(a: { x: number; y: number; z: number }) {
-  return Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
-}
-function normalize(a: { x: number; y: number; z: number }) {
-  const l = vlen(a);
-  return l < 1e-8 ? { x: 0, y: 1, z: 0 } : scale(a, 1 / l);
-}
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-function assign(t: { x: number; y: number; z: number }, s: { x: number; y: number; z: number }) {
-  t.x = s.x;
-  t.y = s.y;
-  t.z = s.z;
-}
-function assignQuat(
-  t: { x: number; y: number; z: number; w: number },
-  s: { x: number; y: number; z: number; w: number },
-) {
-  t.x = s.x;
-  t.y = s.y;
-  t.z = s.z;
-  t.w = s.w;
-}
-
-function quatFromAxes(
-  right: { x: number; y: number; z: number },
-  up: { x: number; y: number; z: number },
-  forward: { x: number; y: number; z: number },
-): { x: number; y: number; z: number; w: number } {
-  const { x: m00, y: m10, z: m20 } = right;
-  const { x: m01, y: m11, z: m21 } = up;
-  const { x: m02, y: m12, z: m22 } = forward;
-  const trace = m00 + m11 + m22;
-  if (trace > 0) {
-    const s = 0.5 / Math.sqrt(trace + 1);
-    return { w: 0.25 / s, x: (m21 - m12) * s, y: (m02 - m20) * s, z: (m10 - m01) * s };
-  }
-  if (m00 > m11 && m00 > m22) {
-    const s = 2 * Math.sqrt(1 + m00 - m11 - m22);
-    return { w: (m21 - m12) / s, x: 0.25 * s, y: (m01 + m10) / s, z: (m02 + m20) / s };
-  }
-  if (m11 > m22) {
-    const s = 2 * Math.sqrt(1 + m11 - m00 - m22);
-    return { w: (m02 - m20) / s, x: (m01 + m10) / s, y: 0.25 * s, z: (m12 + m21) / s };
-  }
-  const s = 2 * Math.sqrt(1 + m22 - m00 - m11);
-  return { w: (m10 - m01) / s, x: (m02 + m20) / s, y: (m12 + m21) / s, z: 0.25 * s };
-}
+import {
+  add,
+  sub,
+  scale,
+  dot,
+  cross,
+  vlen,
+  normalize,
+  clamp,
+  assign,
+  assignQuat,
+  quatFromAxes,
+} from "../math/vec3.ts";
 
 // -- Internal helpers --------------------------------------------------------
 

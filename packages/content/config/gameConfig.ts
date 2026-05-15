@@ -406,3 +406,10 @@ export function getPlanetSurfaceChordRadius(surfaceRadius: number, planetRadius:
 export function getPaintStampChordRadius(planetRadius: number): number {
   return getPlanetSurfaceChordRadius(GAME_CONFIG.paint.impactStampSurfaceRadius, planetRadius);
 }
+
+/** Base bot count from config alone, before env overrides or team rounding. */
+export function resolveConfiguredBotCount(): number {
+  const { namedBots, generatedBots, targetPopulation } = GAME_CONFIG.bot;
+  const configuredBotCount = namedBots.length + Math.max(0, generatedBots.count);
+  return configuredBotCount > 0 ? configuredBotCount : Math.max(0, targetPopulation);
+}

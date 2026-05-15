@@ -1,6 +1,6 @@
-import type { Vec3Data } from "@splat/protocol/network/clientMessages.ts";
 import { type RailDef } from "@splat/content/config/railDefs.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { type Vec3Data, add, sub, scale, vlen, normalize } from "../math/vec3.ts";
 
 // StepConfig subset needed to evaluate terrain height.
 interface TerrainConfig {
@@ -35,25 +35,6 @@ export interface ComputedRail {
   totalLength: number;
   paintCorridorRadius: number;
   pts: Vec3Data[]; // padded control points for analytical re-evaluation
-}
-
-// -- Vec3 helpers (local, no imports needed) ---------------------------------
-
-function add(a: Vec3Data, b: Vec3Data): Vec3Data {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
-}
-function sub(a: Vec3Data, b: Vec3Data): Vec3Data {
-  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-}
-function scale(a: Vec3Data, s: number): Vec3Data {
-  return { x: a.x * s, y: a.y * s, z: a.z * s };
-}
-function vlen(a: Vec3Data): number {
-  return Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
-}
-function normalize(a: Vec3Data): Vec3Data {
-  const l = vlen(a);
-  return l < 1e-8 ? { x: 0, y: 1, z: 0 } : scale(a, 1 / l);
 }
 
 // -- Catmull-Rom evaluation --------------------------------------------------
