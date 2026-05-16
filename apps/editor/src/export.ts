@@ -34,7 +34,7 @@ export function editorStateToRuntimeMap(
       return {
         id: i,
         planetId: rail.planetId,
-        paintCorridorRadius: rail.width,
+        slimeCorridorRadius: rail.width,
         controlPoints: rail.points.map((pt) => ({
           nx: pt.normal[0],
           ny: pt.normal[1],

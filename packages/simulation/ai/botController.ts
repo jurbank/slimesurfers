@@ -10,7 +10,7 @@ import {
   resolveBotBehaviorProfile,
   type BotBehaviorProfile,
 } from "@splat/content/config/gameConfig.ts";
-import { isTerritoryCellPaintable } from "../paint/territoryGrid.ts";
+import { isTerritoryCellSlimeable } from "../slime/territoryGrid.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 
 export interface BotState {
@@ -189,11 +189,11 @@ function getCellWorldPosition(
   };
 }
 
-function choosePaintTarget(
+function chooseSlimeTarget(
   bot: SimPlayerState,
   simState: SimMatchState,
   profile: BotBehaviorProfile,
-  preferFriendlyPaint: boolean,
+  preferFriendlySlime: boolean,
 ): { x: number; y: number; z: number } | null {
   const planetState = simState.planets.get(bot.planetId);
   if (!planetState) return null;
@@ -210,7 +210,7 @@ function choosePaintTarget(
   for (let row = 0; row < planetState.territoryRows; row++) {
     for (let col = 0; col < planetState.territoryCols; col++) {
       if (
-        !isTerritoryCellPaintable(
+        !isTerritoryCellSlimeable(
           row,
           col,
           planetState.territoryRows,
@@ -240,9 +240,9 @@ function choosePaintTarget(
       const dz = pos.z - bot.pos.z;
       const distSq = dx * dx + dy * dy + dz * dz;
 
-      if (cell.ownerPaintGroupId === bot.paintGroupId) {
+      if (cell.ownerSlimeGroupId === bot.slimeGroupId) {
         if (!bestFriendly || distSq < bestFriendly.distSq) bestFriendly = { pos, distSq };
-      } else if (cell.ownerPaintGroupId === 255) {
+      } else if (cell.ownerSlimeGroupId === 255) {
         if (distSq < minTravelDistSq) continue;
         if (!bestNeutral || distSq < bestNeutral.distSq) bestNeutral = { pos, distSq };
       } else {
@@ -252,7 +252,7 @@ function choosePaintTarget(
     }
   }
 
-  if (preferFriendlyPaint || bias.surf > Math.max(bias.attack, bias.territory)) {
+  if (preferFriendlySlime || bias.surf > Math.max(bias.attack, bias.territory)) {
     return bestFriendly?.pos ?? bestNeutral?.pos ?? bestEnemy?.pos ?? null;
   }
 
@@ -275,7 +275,7 @@ function isInvisibleToBots(
   if (isRecentlyShooting(target, nowMs)) return false;
   if (target.movementState === PlayerMovementState.Airborne) return false;
 
-  return target.isOnFriendlyPaint;
+  return target.isOnFriendlySlime;
 }
 
 export function generateBotInput(
@@ -354,7 +354,7 @@ export function generateBotInput(
   if (state.state === "refilling") {
     state.targetSessionId = null;
     state.targetPos =
-      choosePaintTarget(bot, simState, profile, true) ?? getBotWanderTarget(bot, simState);
+      chooseSlimeTarget(bot, simState, profile, true) ?? getBotWanderTarget(bot, simState);
   } else if (state.state === "wandering") {
     state.targetSessionId = null;
     state.wanderingTimerMs -= reactionTimeMs;
@@ -362,7 +362,7 @@ export function generateBotInput(
       const prefersRoaming = bias.surf > bias.territory && Math.random() < bias.surf;
       state.targetPos = prefersRoaming
         ? getBotWanderTarget(bot, simState)
-        : (choosePaintTarget(bot, simState, profile, false) ?? getBotWanderTarget(bot, simState));
+        : (chooseSlimeTarget(bot, simState, profile, false) ?? getBotWanderTarget(bot, simState));
       state.wanderingTimerMs = prefersRoaming
         ? 900 + Math.random() * 1600
         : 1500 + Math.random() * 2500;
@@ -463,11 +463,11 @@ function buildInputFromState(
       state.targetPos = null; // Pick new target next time
     }
 
-    const shouldPaintTerrain =
+    const shouldSlimeTerrain =
       bias.territory >= 0.2 &&
       nowMs >= state.nextFireTimeMs &&
       bot.slimeLevel >= GAME_CONFIG.slime.shotCost;
-    if (shouldPaintTerrain) {
+    if (shouldSlimeTerrain) {
       keys |= InputKey.Fire;
       const fireIntervalMs =
         GAME_CONFIG.bot.maxFireRateMs -

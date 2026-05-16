@@ -2,7 +2,7 @@ import { ArraySchema, Encoder, Schema, MapSchema, defineTypes } from "@colyseus/
 
 Encoder.BUFFER_SIZE = 64 * 1024;
 import { PlayerState } from "./playerState.ts";
-import { PlanetPaintState, RailPaintState } from "./paintedState.ts";
+import { PlanetSlimeState, RailSlimeState } from "./slimedState.ts";
 
 import { MatchPhase } from "../network/matchPhase.ts";
 export { MatchPhase };
@@ -15,14 +15,14 @@ export class GameState extends Schema {
   /** All connected players keyed by sessionId. Physics stays in snapshot messages. */
   declare players: MapSchema<PlayerState>;
   /** Per-planet authoritative territory ownership keyed by planetId. */
-  declare planets: MapSchema<PlanetPaintState>;
-  /** Per-rail authoritative paint status keyed by railId. */
-  declare railStates: MapSchema<RailPaintState>;
+  declare planets: MapSchema<PlanetSlimeState>;
+  /** Per-rail authoritative slime status keyed by railId. */
+  declare railStates: MapSchema<RailSlimeState>;
 
   declare matchPhase: MatchPhase;
   /** Seconds remaining in the current phase (countdown or match timer) */
   declare matchTimer: number;
-  /** Aggregate territory scores keyed by paintGroupId.toString(); leaderboard ordering stays message-driven. */
+  /** Aggregate territory scores keyed by slimeGroupId.toString(); leaderboard ordering stays message-driven. */
   declare scores: MapSchema<number>;
   /** True when this room runs a team-based mode. */
   declare isTeamBased: boolean;
@@ -33,8 +33,8 @@ export class GameState extends Schema {
 }
 defineTypes(GameState, {
   players: { map: PlayerState },
-  planets: { map: PlanetPaintState },
-  railStates: { map: RailPaintState },
+  planets: { map: PlanetSlimeState },
+  railStates: { map: RailSlimeState },
   matchPhase: "uint8",
   matchTimer: "float32",
   scores: { map: "uint32" },

@@ -405,7 +405,7 @@ export class MatchEndOverlay {
     Object.assign(d.style, { textAlign: "center", fontSize: "0.75rem", color: "#9fb3c8" });
 
     const score = document.createElement("span");
-    score.textContent = `${Math.round(entry.paintScore)}`;
+    score.textContent = `${Math.round(entry.slimeScore)}`;
     Object.assign(score.style, {
       textAlign: "right",
       fontVariantNumeric: "tabular-nums",

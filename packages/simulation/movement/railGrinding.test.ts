@@ -4,7 +4,7 @@ import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessa
 import {
   PlayerMovementState,
   PlayerSurfState,
-  type SimPlanetPaintState,
+  type SimPlanetSlimeState,
 } from "@splat/simulation/match/simState.ts";
 import { buildComputedRail, sampleRailAt } from "./railSpline.ts";
 
@@ -24,7 +24,7 @@ const TEST_CONFIG = {
     anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     standingHeight: 1.0,
-    friendlyPaintSpeedMultiplier: 1.5,
+    friendlySlimeSpeedMultiplier: 1.5,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 6,
     surfSpeedMultiplier: 2.4,
@@ -38,8 +38,8 @@ const TEST_CONFIG = {
   rail: {
     snapDistance: 3.0,
     minEntrySpeed: 8.0,
-    paintCorridorRadius: 3.5,
-    paintStampSpacing: 4.0,
+    slimeCorridorRadius: 3.5,
+    slimeStampSpacing: 4.0,
     maxGrindSpeed: 35.0,
     carveAccelerationPerSecond: 12.0,
     visualRadius: 0.4,
@@ -66,7 +66,7 @@ const TEST_PLANETS: PlanetData[] = [
   },
 ];
 
-const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
+const EMPTY_SLIME = new Map<string, SimPlanetSlimeState>();
 
 // A simple straight rail along the Z axis, 10wu above surface
 const TEST_RAIL_DEF = {
@@ -77,7 +77,7 @@ const TEST_RAIL_DEF = {
     { nx: 0, ny: 1, nz: 0, heightOffset: 10 },
     { nx: 0, ny: 1, nz: 0.1, heightOffset: 10 },
   ],
-  paintCorridorRadius: 3.5,
+  slimeCorridorRadius: 3.5,
 };
 
 const TEST_RAIL = buildComputedRail(TEST_RAIL_DEF, TEST_PLANETS[0]!.center, TEST_CONFIG);
@@ -101,7 +101,7 @@ function createPlayer(): PlayerPhysics {
     vel: { x: 0, y: 0, z: 20 },
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: "",
-    paintGroupId: 1,
+    slimeGroupId: 1,
     movementState: PlayerMovementState.Airborne,
     surfState: PlayerSurfState.None,
     isCarving: false,
@@ -111,7 +111,7 @@ function createPlayer(): PlayerPhysics {
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    isOnFriendlyPaint: false,
+    isOnFriendlySlime: false,
   };
 }
 
@@ -137,7 +137,7 @@ describe("Rail Grinding", () => {
     // Move them slightly away so they are "airborne" but within snap distance
     player.pos.y += 0.5;
 
-    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT, [TEST_RAIL]);
+    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME, [TEST_RAIL]);
 
     expect(player.movementState).toBe(PlayerMovementState.Grinding);
     expect(player.grindRailId).toBe(0);
@@ -162,12 +162,12 @@ describe("Rail Grinding", () => {
     player.grindSpeed = 20;
 
     // Hold Anchor to charge, then release to launch.
-    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT, [
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME, [
       TEST_RAIL,
     ]);
     expect(player.movementState).toBe(PlayerMovementState.Grinding);
 
-    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT, [TEST_RAIL]);
+    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME, [TEST_RAIL]);
 
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
   });
@@ -183,13 +183,13 @@ describe("Rail Grinding", () => {
     player.grindSpeed = 20;
 
     // Move past the end
-    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT, [TEST_RAIL]);
+    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME, [TEST_RAIL]);
 
     // First step: should exit and become airborne
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
 
     // Second step: should stay airborne and move away
-    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT, [TEST_RAIL]);
+    stepPlayer(player, createInput(), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME, [TEST_RAIL]);
 
     // BUG: It might snap back because it's still close to the end point
     // If it's still grinding, the bug is reproduced

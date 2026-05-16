@@ -4,48 +4,48 @@ import type {
   KillEventMessage,
   LeaderboardMessage,
   MatchPhaseMessage,
-  PaintStampMessage,
+  SlimeStampMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { GameState, NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import {
-  PlanetPaintState,
+  PlanetSlimeState,
   TerritoryCell,
-  RailPaintState,
-} from "@splat/protocol/schemas/paintedState.ts";
+  RailSlimeState,
+} from "@splat/protocol/schemas/slimedState.ts";
 import { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 import { MatchSimulation, type TickResult } from "@splat/simulation/match/matchSimulation.ts";
 import type {
   SimMatchState,
-  SimPlanetPaintState,
+  SimPlanetSlimeState,
   SimPlayerState,
   SimTerritoryCell,
-  SimRailPaintState,
+  SimRailSlimeState,
 } from "@splat/simulation/match/simState.ts";
 
 export interface MatchRoomTickBroadcasts {
   killEvents: KillEventMessage[];
   leaderboard?: LeaderboardMessage;
   matchPhase?: MatchPhaseMessage;
-  paintStamps: PaintStampMessage[];
+  slimeStamps: SlimeStampMessage[];
   snapshot?: SnapshotMessage;
   trickEvents: TrickEventMessage[];
 }
 
 export interface MatchRoomJoinBootstrap {
-  paintStamps: readonly PaintStampMessage[];
+  slimeStamps: readonly SlimeStampMessage[];
   snapshot: SnapshotMessage;
 }
 
 function syncCell(schema: TerritoryCell, sim: SimTerritoryCell): void {
-  schema.ownerPaintGroupId = sim.ownerPaintGroupId;
+  schema.ownerSlimeGroupId = sim.ownerSlimeGroupId;
   schema.color = sim.color;
 }
 
-function schemaPlanetFromSim(simPlanet: SimPlanetPaintState): PlanetPaintState {
-  const schemaPlanet = new PlanetPaintState();
+function schemaPlanetFromSim(simPlanet: SimPlanetSlimeState): PlanetSlimeState {
+  const schemaPlanet = new PlanetSlimeState();
   schemaPlanet.planetId = simPlanet.planetId;
   schemaPlanet.territoryRows = simPlanet.territoryRows;
   schemaPlanet.territoryCols = simPlanet.territoryCols;
@@ -58,8 +58,8 @@ function schemaPlanetFromSim(simPlanet: SimPlanetPaintState): PlanetPaintState {
   return schemaPlanet;
 }
 
-function schemaRailFromSim(simRail: SimRailPaintState): RailPaintState {
-  const schemaRail = new RailPaintState();
+function schemaRailFromSim(simRail: SimRailSlimeState): RailSlimeState {
+  const schemaRail = new RailSlimeState();
   schemaRail.railId = simRail.railId;
   schemaRail.nodes = new ArraySchema<number>(...simRail.nodes);
   return schemaRail;
@@ -71,13 +71,13 @@ function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
   schema.isBot = sim.isBot;
   schema.name = sim.name;
   schema.teamId = sim.teamId;
-  schema.paintGroupId = sim.paintGroupId;
+  schema.slimeGroupId = sim.slimeGroupId;
   schema.paletteIndex = sim.paletteIndex;
   schema.patternId = sim.patternId;
   schema.slimeColor = sim.slimeColor;
   schema.health = sim.health;
   schema.slimeLevel = sim.slimeLevel;
-  schema.paintScore = sim.paintScore;
+  schema.slimeScore = sim.slimeScore;
   schema.killCount = sim.killCount;
   schema.deathCount = sim.deathCount;
   schema.respawnTimer = sim.respawnTimer;
@@ -87,8 +87,8 @@ function schemaFromSimPlayer(sim: SimPlayerState): PlayerState {
 export function createRoomState(simState: SimMatchState, mode: GameModeDefinition): GameState {
   const state = new GameState();
   state.players = new MapSchema<PlayerState>();
-  state.planets = new MapSchema<PlanetPaintState>();
-  state.railStates = new MapSchema<RailPaintState>();
+  state.planets = new MapSchema<PlanetSlimeState>();
+  state.railStates = new MapSchema<RailSlimeState>();
   state.scores = new MapSchema<number>();
   state.matchPhase = simState.matchPhase;
   state.matchTimer = simState.matchTimer;
@@ -117,7 +117,7 @@ export function syncRoomStateFromSimulation(state: GameState, simState: SimMatch
     if (!schema) return;
     schema.health = sim.health;
     schema.slimeLevel = sim.slimeLevel;
-    schema.paintScore = sim.paintScore;
+    schema.slimeScore = sim.slimeScore;
     schema.killCount = sim.killCount;
     schema.deathCount = sim.deathCount;
     schema.respawnTimer = sim.respawnTimer;
@@ -182,7 +182,7 @@ export function syncRoomWinnerFromSimulation(state: GameState, simulation: Match
 
 export function buildJoinBootstrap(simulation: MatchSimulation): MatchRoomJoinBootstrap {
   return {
-    paintStamps: simulation.getRecentPaintStamps(),
+    slimeStamps: simulation.getRecentSlimeStamps(),
     snapshot: simulation.buildSnapshotMessage(),
   };
 }
@@ -209,7 +209,7 @@ export function buildTickBroadcasts(
     leaderboard: result.shouldBroadcastLeaderboard
       ? simulation.buildLeaderboardMessage()
       : undefined,
-    paintStamps: simulation.drainPaintStampMessages(),
+    slimeStamps: simulation.drainSlimeStampMessages(),
     trickEvents: simulation.drainTrickEventMessages(),
   };
 }

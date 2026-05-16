@@ -3,7 +3,7 @@ import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import { WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import type {
   KillEventMessage,
-  PaintStampMessage,
+  SlimeStampMessage,
   PlayerSnapshot,
   ProjectileSnapshot,
   TrickEventMessage,
@@ -67,7 +67,7 @@ export class MatchAudioSystem {
     }
   }
 
-  handlePaintStamps(stamps: PaintStampMessage[]): void {
+  handleSlimeStamps(stamps: SlimeStampMessage[]): void {
     if (stamps.length > 0 && performance.now() <= this.heavyImpactEligibleUntilMs) {
       this.sound.playSfx("splat1", {
         volume: 0.7,

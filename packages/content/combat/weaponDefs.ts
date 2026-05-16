@@ -22,7 +22,7 @@ export interface WeaponDefinition {
   splashDamage: number;
   splashRadius: number;
   blastImpulse: number;
-  paintRadiusMultiplier: number;
+  slimeRadiusMultiplier: number;
   pickupColor: number;
   /** Client-facing public asset path used for pickup presentation. */
   pickupModelPath: string;
@@ -77,7 +77,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     splashDamage: 0,
     splashRadius: 0,
     blastImpulse: 0,
-    paintRadiusMultiplier: 0.7,
+    slimeRadiusMultiplier: 0.7,
     pickupColor: 0x3fe7ff,
     pickupModelPath: "/models/rifle-model.glb",
   },
@@ -94,7 +94,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     splashDamage: 10,
     splashRadius: 10,
     blastImpulse: 0,
-    paintRadiusMultiplier: 0.8,
+    slimeRadiusMultiplier: 0.8,
     pickupColor: 0xffd447,
     pickupModelPath: "/models/heavy-machinegun-model.glb",
     disposableShots: 48,
@@ -115,7 +115,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     splashDamage: 45,
     splashRadius: 3.4,
     blastImpulse: 40,
-    paintRadiusMultiplier: 2.4,
+    slimeRadiusMultiplier: 2.4,
     pickupColor: 0xff9b3d,
     pickupModelPath: "/models/bazooka-model.glb",
     disposableShots: 3,
@@ -134,7 +134,7 @@ export const WEAPON_DEFS: Record<WeaponId, WeaponDefinition> = {
     splashDamage: 5,
     splashRadius: 0,
     blastImpulse: 0,
-    paintRadiusMultiplier: 1.5,
+    slimeRadiusMultiplier: 1.5,
     pickupColor: 0xb63542,
     pickupModelPath: "/models/rifle-model.glb",
     disposableShots: 5,

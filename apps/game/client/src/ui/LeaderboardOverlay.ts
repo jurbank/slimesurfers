@@ -579,7 +579,7 @@ export class LeaderboardOverlay {
     d.style.color = "#9fb3c8";
 
     const score = document.createElement("span");
-    score.textContent = `${Math.round(entry.paintScore)}`;
+    score.textContent = `${Math.round(entry.slimeScore)}`;
     score.style.textAlign = "right";
     score.style.fontVariantNumeric = "tabular-nums";
     score.style.fontWeight = "bold";
@@ -664,7 +664,7 @@ export class LeaderboardOverlay {
     d.style.color = "#9fb3c8";
 
     const score = document.createElement("span");
-    score.textContent = `${Math.round(entry.paintScore)}`;
+    score.textContent = `${Math.round(entry.slimeScore)}`;
     score.style.textAlign = "right";
     score.style.fontVariantNumeric = "tabular-nums";
     score.style.fontWeight = "bold";
@@ -689,15 +689,15 @@ export class LeaderboardOverlay {
     const stableEntries = [...message.entries].sort((a, b) =>
       a.sessionId.localeCompare(b.sessionId),
     );
-    const totalScore = stableEntries.reduce((sum, entry) => sum + Math.max(0, entry.paintScore), 0);
+    const totalScore = stableEntries.reduce((sum, entry) => sum + Math.max(0, entry.slimeScore), 0);
 
     stableEntries.forEach((entry) => {
       const width =
         totalScore > 0
-          ? (Math.max(0, entry.paintScore) / totalScore) * 100
+          ? (Math.max(0, entry.slimeScore) / totalScore) * 100
           : 100 / stableEntries.length;
       const segment = this.createProgressSegment(entry.slimeColor, entry.patternId, width);
-      segment.title = `${entry.name} ${Math.round(entry.paintScore)}`;
+      segment.title = `${entry.name} ${Math.round(entry.slimeScore)}`;
       this.progressBar.appendChild(segment);
     });
   }

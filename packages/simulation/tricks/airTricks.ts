@@ -6,7 +6,7 @@ import {
 } from "@splat/content/tricks/airTrickDefs.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import type {
-  PaintStampMessage,
+  SlimeStampMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import {
@@ -15,7 +15,7 @@ import {
   type SimMatchState,
   type SimPlayerState,
 } from "../match/simState.ts";
-import { applyPaintImpact } from "../paint/stampPaint.ts";
+import { applySlimeImpact } from "../slime/stampSlime.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 
 const TRICK_DIRECTION_MASK = InputKey.Forward | InputKey.Backward | InputKey.Left | InputKey.Right;
@@ -61,7 +61,7 @@ function resetAirTrickState(player: SimPlayerState): void {
   player.airTrickFrontFlipMilestoneIndex = 0;
   player.airTrickBackFlipMilestoneIndex = 0;
   player.airTrickFlipBlocked = true;
-  player.airTrickPaintMultiplier = 1;
+  player.airTrickSlimeMultiplier = 1;
 }
 
 function nearestPlanet(player: SimPlayerState, simState: SimMatchState) {
@@ -81,7 +81,7 @@ function nearestPlanet(player: SimPlayerState, simState: SimMatchState) {
   return nearest;
 }
 
-function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): PaintStampMessage[] {
+function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): SlimeStampMessage[] {
   if (player.airTrickCombo <= 0) return [];
 
   const planet = nearestPlanet(player, simState);
@@ -99,19 +99,19 @@ function emitLandingSplat(simState: SimMatchState, player: SimPlayerState): Pain
     GAME_CONFIG.tricks.maxRadiusMultiplier,
     (GAME_CONFIG.tricks.radiusMultiplier +
       Math.max(0, player.airTrickCombo - 1) * GAME_CONFIG.tricks.comboRadiusBonus) *
-      player.airTrickPaintMultiplier,
+      player.airTrickSlimeMultiplier,
   );
-  const stamps: PaintStampMessage[] = [];
+  const stamps: SlimeStampMessage[] = [];
 
   const radius = getTerrainRadius(baseNormal.x, baseNormal.y, baseNormal.z, GAME_CONFIG);
-  const stamp = applyPaintImpact(simState, planetState, {
+  const stamp = applySlimeImpact(simState, planetState, {
     planetId: planet.id,
     pos: {
       x: planet.center.x + baseNormal.x * radius,
       y: planet.center.y + baseNormal.y * radius,
       z: planet.center.z + baseNormal.z * radius,
     },
-    paintGroupId: player.paintGroupId,
+    slimeGroupId: player.slimeGroupId,
     slimeColor: player.slimeColor,
     patternId: player.patternId,
     radiusMultiplier,
@@ -185,7 +185,7 @@ function buildTrickResult(
   player.lastAirTrickTimeMs = nowMs;
   player.airTrickInputSequence.length = 0;
   player.airTrickInputAgeMs = 0;
-  player.airTrickPaintMultiplier = Math.max(player.airTrickPaintMultiplier, trick.paintMultiplier);
+  player.airTrickSlimeMultiplier = Math.max(player.airTrickSlimeMultiplier, trick.slimeMultiplier);
 
   const event: TrickEventMessage = {
     playerId: player.sessionId,
@@ -195,13 +195,13 @@ function buildTrickResult(
   };
 
   return {
-    paintStamps: [],
+    slimeStamps: [],
     trickEvents: [event],
   };
 }
 
 export interface AirTrickResult {
-  paintStamps: PaintStampMessage[];
+  slimeStamps: SlimeStampMessage[];
   trickEvents: TrickEventMessage[];
 }
 
@@ -212,7 +212,7 @@ export function processAirTricks(
   dtMs: number,
   nowMs: number,
 ): AirTrickResult {
-  const empty: AirTrickResult = { paintStamps: [], trickEvents: [] };
+  const empty: AirTrickResult = { slimeStamps: [], trickEvents: [] };
   if (player.movementState === PlayerMovementState.Dead) {
     resetAirTrickState(player);
     return empty;
@@ -289,7 +289,7 @@ export function processAirTricks(
 export function settleAirTricksOnLanding(
   simState: SimMatchState,
   player: SimPlayerState,
-): PaintStampMessage[] {
+): SlimeStampMessage[] {
   const stamps = emitLandingSplat(simState, player);
   resetAirTrickState(player);
   return stamps;

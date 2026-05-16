@@ -38,7 +38,7 @@ describe("editorStateToRuntimeMap rail export", () => {
     expect(map.rails[0]).toEqual({
       id: 0,
       planetId: "planet-0",
-      paintCorridorRadius: 9.5,
+      slimeCorridorRadius: 9.5,
       controlPoints: [
         { nx: 1, ny: 0, nz: 0, heightOffset: 6 },
         { nx: 0, ny: 1, nz: 0, heightOffset: 0 },

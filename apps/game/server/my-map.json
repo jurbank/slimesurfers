@@ -126,7 +126,7 @@
     {
       "id": 0,
       "planetId": "planet-0",
-      "paintCorridorRadius": 8,
+      "slimeCorridorRadius": 8,
       "controlPoints": [
         {
           "nx": 0.5,
@@ -193,7 +193,7 @@
     {
       "id": 1,
       "planetId": "planet-0",
-      "paintCorridorRadius": 8,
+      "slimeCorridorRadius": 8,
       "controlPoints": [
         {
           "nx": -0.383,

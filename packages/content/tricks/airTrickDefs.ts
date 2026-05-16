@@ -9,7 +9,7 @@ export interface AirTrickDefinition {
   animation: AirTrickAnimation;
   soundKey: string;
   comboValue: number;
-  paintMultiplier: number;
+  slimeMultiplier: number;
   degrees?: number;
   sequence?: readonly number[];
 }
@@ -23,7 +23,7 @@ export const AIR_TRICKS = {
     animation: "boardRoll",
     soundKey: "skiLaunch",
     comboValue: 1,
-    paintMultiplier: 1.1,
+    slimeMultiplier: 1.1,
   },
   tailGrab: {
     id: "tailGrab",
@@ -33,7 +33,7 @@ export const AIR_TRICKS = {
     animation: "boardFlip",
     soundKey: "skiLaunch",
     comboValue: 1,
-    paintMultiplier: 1.15,
+    slimeMultiplier: 1.15,
   },
   corkscrew: {
     id: "corkscrew",
@@ -43,7 +43,7 @@ export const AIR_TRICKS = {
     animation: "boardRoll",
     soundKey: "skiLaunch",
     comboValue: 2,
-    paintMultiplier: 1.8,
+    slimeMultiplier: 1.8,
   },
   rodeo720: {
     id: "rodeo720",
@@ -53,7 +53,7 @@ export const AIR_TRICKS = {
     animation: "backFlip",
     soundKey: "skiLaunch",
     comboValue: 3,
-    paintMultiplier: 2.3,
+    slimeMultiplier: 2.3,
   },
   slimecopter: {
     id: "slimecopter",
@@ -63,7 +63,7 @@ export const AIR_TRICKS = {
     animation: "yawSpin",
     soundKey: "skiLaunch",
     comboValue: 4,
-    paintMultiplier: 2.8,
+    slimeMultiplier: 2.8,
   },
   planetBreaker: {
     id: "planetBreaker",
@@ -73,7 +73,7 @@ export const AIR_TRICKS = {
     animation: "boardFlip",
     soundKey: "skiLaunch",
     comboValue: 5,
-    paintMultiplier: 3.2,
+    slimeMultiplier: 3.2,
   },
   spin360: {
     id: "spin360",
@@ -83,7 +83,7 @@ export const AIR_TRICKS = {
     animation: "yawSpin",
     soundKey: "skiLaunch",
     comboValue: 1,
-    paintMultiplier: 1,
+    slimeMultiplier: 1,
   },
   spin720: {
     id: "spin720",
@@ -93,7 +93,7 @@ export const AIR_TRICKS = {
     animation: "yawSpin",
     soundKey: "skiLaunch",
     comboValue: 2,
-    paintMultiplier: 1.3,
+    slimeMultiplier: 1.3,
   },
   spin1080: {
     id: "spin1080",
@@ -103,7 +103,7 @@ export const AIR_TRICKS = {
     animation: "yawSpin",
     soundKey: "skiLaunch",
     comboValue: 3,
-    paintMultiplier: 1.7,
+    slimeMultiplier: 1.7,
   },
   frontflip: {
     id: "frontflip",
@@ -113,7 +113,7 @@ export const AIR_TRICKS = {
     animation: "frontFlip",
     soundKey: "skiLaunch",
     comboValue: 1,
-    paintMultiplier: 1.15,
+    slimeMultiplier: 1.15,
   },
   doubleFrontflip: {
     id: "doubleFrontflip",
@@ -123,7 +123,7 @@ export const AIR_TRICKS = {
     animation: "frontFlip",
     soundKey: "skiLaunch",
     comboValue: 2,
-    paintMultiplier: 1.35,
+    slimeMultiplier: 1.35,
   },
   tripleFrontflip: {
     id: "tripleFrontflip",
@@ -133,7 +133,7 @@ export const AIR_TRICKS = {
     animation: "frontFlip",
     soundKey: "skiLaunch",
     comboValue: 3,
-    paintMultiplier: 1.65,
+    slimeMultiplier: 1.65,
   },
   backflip: {
     id: "backflip",
@@ -143,7 +143,7 @@ export const AIR_TRICKS = {
     animation: "backFlip",
     soundKey: "skiLaunch",
     comboValue: 1,
-    paintMultiplier: 1.15,
+    slimeMultiplier: 1.15,
   },
   doubleBackflip: {
     id: "doubleBackflip",
@@ -153,7 +153,7 @@ export const AIR_TRICKS = {
     animation: "backFlip",
     soundKey: "skiLaunch",
     comboValue: 2,
-    paintMultiplier: 1.35,
+    slimeMultiplier: 1.35,
   },
   tripleBackflip: {
     id: "tripleBackflip",
@@ -163,7 +163,7 @@ export const AIR_TRICKS = {
     animation: "backFlip",
     soundKey: "skiLaunch",
     comboValue: 3,
-    paintMultiplier: 1.65,
+    slimeMultiplier: 1.65,
   },
 } as const satisfies Record<string, AirTrickDefinition>;
 

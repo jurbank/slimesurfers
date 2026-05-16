@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getSlimeTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
-import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
-import { createStampBuckets } from "./paintDetection.ts";
-import { applyPaintImpact } from "./stampPaint.ts";
+import { NO_SLIME_GROUP_ID } from "@splat/protocol/schemas/slimedState.ts";
+import { createStampBuckets } from "./slimeDetection.ts";
+import { applySlimeImpact } from "./stampSlime.ts";
 import { createTerritoryCells } from "./territoryGrid.ts";
 import type { SimMatchState } from "../match/simState.ts";
 import { getTerrainHeight, getTerrainRadius } from "../terrain/planetTerrain.ts";
@@ -22,7 +22,7 @@ function createSimState(): SimMatchState {
     pickups: new Map(),
     matchPhase: MatchPhase.Active,
     matchTimer: GAME_CONFIG.match.durationSeconds,
-    paintSeq: 0,
+    slimeSeq: 0,
     trickSeq: 0,
     scores: new Map(),
     elapsedMs: 0,
@@ -32,7 +32,7 @@ function createSimState(): SimMatchState {
 }
 
 function createPlanetState() {
-  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+  const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
   return {
     planetId: "planet-0",
     territoryRows: rows,
@@ -76,8 +76,8 @@ function findTerrainNormal(predicate: (height: number) => boolean): {
   throw new Error("expected a terrain sample matching the requested predicate");
 }
 
-describe("stampPaint", () => {
-  it("increments paintSeq monotonically and emits stamp payloads for valid impacts", () => {
+describe("stampSlime", () => {
+  it("increments slimeSeq monotonically and emits stamp payloads for valid impacts", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
@@ -87,18 +87,18 @@ describe("stampPaint", () => {
       z: planet.center.z,
     };
 
-    const first = applyPaintImpact(simState, planetState, {
+    const first = applySlimeImpact(simState, planetState, {
       planetId: "planet-0",
       pos: impactPos,
-      paintGroupId: 0,
+      slimeGroupId: 0,
       slimeColor: 0x00e5ff,
       patternId: 0,
       radiusMultiplier: 1,
     });
-    const second = applyPaintImpact(simState, planetState, {
+    const second = applySlimeImpact(simState, planetState, {
       planetId: "planet-0",
       pos: impactPos,
-      paintGroupId: 1,
+      slimeGroupId: 1,
       slimeColor: 0xff6200,
       patternId: 0,
       radiusMultiplier: 1,
@@ -106,26 +106,26 @@ describe("stampPaint", () => {
 
     expect(first?.seq).toBe(1);
     expect(second?.seq).toBe(2);
-    expect(simState.paintSeq).toBe(2);
+    expect(simState.slimeSeq).toBe(2);
     expect(first?.planetId).toBe("planet-0");
-    expect(second?.paintGroupId).toBe(1);
+    expect(second?.slimeGroupId).toBe(1);
   });
 
-  it("ignores impacts for unknown planets without mutating paint sequence", () => {
+  it("ignores impacts for unknown planets without mutating slime sequence", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
 
-    const stamp = applyPaintImpact(simState, planetState, {
+    const stamp = applySlimeImpact(simState, planetState, {
       planetId: "missing-planet",
       pos: { x: 0, y: 0, z: 0 },
-      paintGroupId: 0,
+      slimeGroupId: 0,
       slimeColor: 0x00e5ff,
       patternId: 0,
       radiusMultiplier: 1,
     });
 
     expect(stamp).toBeNull();
-    expect(simState.paintSeq).toBe(0);
+    expect(simState.slimeSeq).toBe(0);
   });
 
   it("allows impacts in shallow water", () => {
@@ -139,25 +139,25 @@ describe("stampPaint", () => {
     });
     const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 
-    const stamp = applyPaintImpact(simState, planetState, {
+    const stamp = applySlimeImpact(simState, planetState, {
       planetId: "planet-0",
       pos: {
         x: planet.center.x + normal.x * radius,
         y: planet.center.y + normal.y * radius,
         z: planet.center.z + normal.z * radius,
       },
-      paintGroupId: 0,
+      slimeGroupId: 0,
       slimeColor: 0x00e5ff,
       patternId: 0,
       radiusMultiplier: 1,
     });
 
     expect(stamp).not.toBeNull();
-    expect(simState.paintSeq).toBe(1);
+    expect(simState.slimeSeq).toBe(1);
     expect(planetState.stamps).toHaveLength(1);
   });
 
-  it("ignores impacts in deep water without mutating territory or paint sequence", () => {
+  it("ignores impacts in deep water without mutating territory or slime sequence", () => {
     const simState = createSimState();
     const planetState = createPlanetState();
     const planet = DEV_MAP.planets[0]!;
@@ -168,26 +168,26 @@ describe("stampPaint", () => {
     );
     const radius = getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg);
 
-    const stamp = applyPaintImpact(simState, planetState, {
+    const stamp = applySlimeImpact(simState, planetState, {
       planetId: "planet-0",
       pos: {
         x: planet.center.x + normal.x * radius,
         y: planet.center.y + normal.y * radius,
         z: planet.center.z + normal.z * radius,
       },
-      paintGroupId: 0,
+      slimeGroupId: 0,
       slimeColor: 0x00e5ff,
       patternId: 0,
       radiusMultiplier: 1,
     });
 
     expect(stamp).toBeNull();
-    expect(simState.paintSeq).toBe(0);
+    expect(simState.slimeSeq).toBe(0);
     expect(simState.scores.size).toBe(0);
     expect(planetState.stamps).toHaveLength(0);
     expect(
       planetState.cells.every(
-        (cell) => cell.ownerPaintGroupId === NO_PAINT_GROUP_ID && cell.color === 0,
+        (cell) => cell.ownerSlimeGroupId === NO_SLIME_GROUP_ID && cell.color === 0,
       ),
     ).toBe(true);
   });

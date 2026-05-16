@@ -1,8 +1,8 @@
-import { getPaintStampChordRadius } from "@splat/content/config/gameConfig.ts";
-import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
-import type { SimMatchState, SimPaintStamp, SimPlanetPaintState } from "../match/simState.ts";
-import { appendPaintStamp } from "./paintDetection.ts";
-import { applyPaintToTerritoryAtPoint } from "./territoryGrid.ts";
+import { getSlimeStampChordRadius } from "@splat/content/config/gameConfig.ts";
+import type { SlimeStampMessage } from "@splat/protocol/network/serverMessages.ts";
+import type { SimMatchState, SimSlimeStamp, SimPlanetSlimeState } from "../match/simState.ts";
+import { appendSlimeStamp } from "./slimeDetection.ts";
+import { applySlimeToTerritoryAtPoint } from "./territoryGrid.ts";
 import { getTerrainHeight } from "../terrain/planetTerrain.ts";
 
 function normalize(x: number, y: number, z: number): { nx: number; ny: number; nz: number } {
@@ -11,18 +11,18 @@ function normalize(x: number, y: number, z: number): { nx: number; ny: number; n
   return { nx: x / len, ny: y / len, nz: z / len };
 }
 
-export function applyPaintImpact(
+export function applySlimeImpact(
   simState: SimMatchState,
-  planetState: SimPlanetPaintState,
+  planetState: SimPlanetSlimeState,
   impact: {
     planetId: string;
     pos: { x: number; y: number; z: number };
-    paintGroupId: number;
+    slimeGroupId: number;
     slimeColor: number;
     patternId: number;
     radiusMultiplier: number;
   },
-): PaintStampMessage | null {
+): SlimeStampMessage | null {
   const planetPos = simState.planetDefs.find((p) => p.id === impact.planetId);
   if (!planetPos) return null;
 
@@ -38,24 +38,24 @@ export function applyPaintImpact(
     return null;
   }
 
-  applyPaintToTerritoryAtPoint(impact, simState, planetState, impact.radiusMultiplier);
+  applySlimeToTerritoryAtPoint(impact, simState, planetState, impact.radiusMultiplier);
 
   // Sphere normal (direction from planet center to impact point).
   // Must be the sphere normal, NOT the terrain slope normal, because the
   // stamp shader positions stamps on the render target via chord distance
   // against sphere normals reconstructed from UVs.
-  const stamp: SimPaintStamp = {
-    paintGroupId: impact.paintGroupId,
+  const stamp: SimSlimeStamp = {
+    slimeGroupId: impact.slimeGroupId,
     color: impact.slimeColor,
     patternId: impact.patternId,
     nx,
     ny,
     nz,
-    radius: getPaintStampChordRadius(planetPos.radius) * impact.radiusMultiplier,
-    seq: ++simState.paintSeq,
+    radius: getSlimeStampChordRadius(planetPos.radius) * impact.radiusMultiplier,
+    seq: ++simState.slimeSeq,
   };
 
-  appendPaintStamp(planetState, stamp);
+  appendSlimeStamp(planetState, stamp);
 
   return { planetId: impact.planetId, ...stamp };
 }

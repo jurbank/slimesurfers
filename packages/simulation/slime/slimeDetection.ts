@@ -1,9 +1,9 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 type PlanetRef = { id: string; center: { x: number; y: number; z: number } };
-import type { SimPaintStamp, SimPlanetPaintState, SimVec3 } from "../match/simState.ts";
+import type { SimSlimeStamp, SimPlanetSlimeState, SimVec3 } from "../match/simState.ts";
 
-export interface PaintDetectionResult {
-  paintGroupId: number;
+export interface SlimeDetectionResult {
+  slimeGroupId: number;
   color: number;
   alpha: number;
 }
@@ -34,11 +34,11 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-export function getPaintRenderRadius(stamp: Pick<SimPaintStamp, "radius">): number {
-  return stamp.radius * GAME_CONFIG.paint.projectileStampRadiusMultiplier;
+export function getSlimeRenderRadius(stamp: Pick<SimSlimeStamp, "radius">): number {
+  return stamp.radius * GAME_CONFIG.slimeStamp.projectileStampRadiusMultiplier;
 }
 
-export function createStampBuckets(rows: number, cols: number): SimPaintStamp[][] {
+export function createStampBuckets(rows: number, cols: number): SimSlimeStamp[][] {
   return Array.from({ length: Math.max(0, rows * cols) }, () => []);
 }
 
@@ -62,11 +62,11 @@ function normalToBucket(
   return { row, col, theta };
 }
 
-function getStampAngularRadius(stamp: Pick<SimPaintStamp, "radius">): number {
-  return 2 * Math.asin(Math.min(1, getPaintRenderRadius(stamp) * 0.5));
+function getStampAngularRadius(stamp: Pick<SimSlimeStamp, "radius">): number {
+  return 2 * Math.asin(Math.min(1, getSlimeRenderRadius(stamp) * 0.5));
 }
 
-function addStampToBuckets(planetState: SimPlanetPaintState, stamp: SimPaintStamp): void {
+function addStampToBuckets(planetState: SimPlanetSlimeState, stamp: SimSlimeStamp): void {
   const rows = planetState.territoryRows;
   const cols = planetState.territoryCols;
   if (rows <= 0 || cols <= 0) return;
@@ -100,7 +100,7 @@ function addStampToBuckets(planetState: SimPlanetPaintState, stamp: SimPaintStam
   }
 }
 
-function rebuildStampBuckets(planetState: SimPlanetPaintState): void {
+function rebuildStampBuckets(planetState: SimPlanetSlimeState): void {
   planetState.stampBuckets = createStampBuckets(
     planetState.territoryRows,
     planetState.territoryCols,
@@ -110,10 +110,10 @@ function rebuildStampBuckets(planetState: SimPlanetPaintState): void {
   }
 }
 
-export function appendPaintStamp(
-  planetState: SimPlanetPaintState,
-  stamp: SimPaintStamp,
-  maxStamps = GAME_CONFIG.paint.maxVisualStampsPerPlanet,
+export function appendSlimeStamp(
+  planetState: SimPlanetSlimeState,
+  stamp: SimSlimeStamp,
+  maxStamps = GAME_CONFIG.slimeStamp.maxVisualStampsPerPlanet,
 ): void {
   planetState.stamps.push(stamp);
   addStampToBuckets(planetState, stamp);
@@ -123,22 +123,22 @@ export function appendPaintStamp(
   }
 }
 
-export function getPaintCoverageAlpha(dist: number, stamp: Pick<SimPaintStamp, "radius">): number {
-  const renderRadius = getPaintRenderRadius(stamp);
+export function getSlimeCoverageAlpha(dist: number, stamp: Pick<SimSlimeStamp, "radius">): number {
+  const renderRadius = getSlimeRenderRadius(stamp);
   if (dist >= renderRadius) return 0;
 
-  const innerRadius = renderRadius * (1 - GAME_CONFIG.paint.brushSoftness);
+  const innerRadius = renderRadius * (1 - GAME_CONFIG.slimeStamp.brushSoftness);
   return 1 - smoothstep(innerRadius, renderRadius, dist);
 }
 
-export function getPaintCollisionDistance(stamp: Pick<SimPaintStamp, "radius">): number {
-  const threshold = GAME_CONFIG.paint.collisionAlphaThreshold;
+export function getSlimeCollisionDistance(stamp: Pick<SimSlimeStamp, "radius">): number {
+  const threshold = GAME_CONFIG.slimeStamp.collisionAlphaThreshold;
   let lo = 0;
-  let hi = getPaintRenderRadius(stamp);
+  let hi = getSlimeRenderRadius(stamp);
 
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) * 0.5;
-    if (getPaintCoverageAlpha(mid, stamp) > threshold) {
+    if (getSlimeCoverageAlpha(mid, stamp) > threshold) {
       lo = mid;
     } else {
       hi = mid;
@@ -148,12 +148,12 @@ export function getPaintCollisionDistance(stamp: Pick<SimPaintStamp, "radius">):
   return lo;
 }
 
-export function getPaintAtPoint(
+export function getSlimeAtPoint(
   pos: SimVec3,
   planetId: string,
-  planets: Map<string, SimPlanetPaintState>,
+  planets: Map<string, SimPlanetSlimeState>,
   planetDefs: PlanetRef[],
-): PaintDetectionResult | null {
+): SlimeDetectionResult | null {
   const planetState = planets.get(planetId);
   const planetPos = planetDefs.find((p) => p.id === planetId);
   if (!planetState || !planetPos) return null;
@@ -185,13 +185,13 @@ export function getPaintAtPoint(
     const d2 = 2 * (1 - dot);
     const dist = Math.sqrt(Math.max(0, d2));
 
-    const renderRadius = getPaintRenderRadius(s);
+    const renderRadius = getSlimeRenderRadius(s);
     if (dist < renderRadius) {
-      const alpha = getPaintCoverageAlpha(dist, s);
+      const alpha = getSlimeCoverageAlpha(dist, s);
 
-      if (alpha > GAME_CONFIG.paint.collisionAlphaThreshold) {
+      if (alpha > GAME_CONFIG.slimeStamp.collisionAlphaThreshold) {
         return {
-          paintGroupId: s.paintGroupId,
+          slimeGroupId: s.slimeGroupId,
           color: s.color,
           alpha,
         };

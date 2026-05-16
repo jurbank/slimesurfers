@@ -40,7 +40,7 @@ export class RailSystem {
       id: number;
       planetId: string;
       controlPoints: Array<{ nx: number; ny: number; nz: number; heightOffset: number }>;
-      paintCorridorRadius: number;
+      slimeCorridorRadius: number;
     },
     planetCenter: { x: number; y: number; z: number },
     terrainCfg: TerrainConfig,
@@ -72,7 +72,7 @@ export class RailSystem {
       uniforms: {
         uBaseColor: { value: new THREE.Color(0xd0d8e8) },
         uEmissive: { value: new THREE.Color(0x3060a0).multiplyScalar(0.12) },
-        uPaintNodes: { value: Array.from({ length: 64 }, () => new THREE.Color(0xffffff)) },
+        uSlimeNodes: { value: Array.from({ length: 64 }, () => new THREE.Color(0xffffff)) },
       },
     });
 
@@ -127,7 +127,7 @@ export class RailSystem {
     gameState.railStates.forEach((state, id) => {
       const mat = this.railMaterials.get(Number(id));
       if (mat) {
-        const nodesUniform = mat.uniforms.uPaintNodes.value as THREE.Color[];
+        const nodesUniform = mat.uniforms.uSlimeNodes.value as THREE.Color[];
         state.nodes.forEach((color, i) => {
           if (i < nodesUniform.length) {
             nodesUniform[i].setHex(color);

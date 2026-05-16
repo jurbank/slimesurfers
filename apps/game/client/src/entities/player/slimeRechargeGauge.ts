@@ -9,7 +9,7 @@ interface SlimeRechargeGaugeState {
   slimeLevel: number;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
-  isOnFriendlyPaint: boolean;
+  isOnFriendlySlime: boolean;
 }
 
 const CANVAS_WIDTH = 136;
@@ -115,7 +115,7 @@ export class SlimeRechargeGauge {
     const hasDisposableAmmo = disposableShotsTotal > 0;
     const dryFireFlashActive = this.dryFireFlashTimer > 0;
     const activityVisibleActive = this.activityVisibleTimer > 0;
-    const isGoldRecharging = state.isOnFriendlyPaint && targetFill < 0.999;
+    const isGoldRecharging = state.isOnFriendlySlime && targetFill < 0.999;
 
     const targetVisible =
       alive &&

@@ -19,7 +19,7 @@ export const NETWORK_CONFIG = {
   limits: {
     maxProjectilesPerRoom: 200,
     maxEventsInFeed: 50,
-    maxPaintUpdatesPerTick: 128,
+    maxSlimeUpdatesPerTick: 128,
   },
   rateLimits: {
     renameCooldownMs: 10000,

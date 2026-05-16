@@ -24,12 +24,12 @@ export const planetVertexShader = `
 
 export const planetFragmentShader = `
   ${celCommonChunks}
-  uniform sampler2D paintMask;
+  uniform sampler2D slimeMask;
   uniform float time;
   uniform float edgeNoiseScale;
   uniform float edgeNoiseStrength;
   uniform float normalPerturbationStrength;
-  uniform float paintBlendStrength;
+  uniform float slimeBlendStrength;
   uniform float slimeFlowSpeed;
   uniform float slimeFlowStrength;
   uniform float slimeShineStrength;
@@ -120,7 +120,7 @@ export const planetFragmentShader = `
     return 1.0 - shadow * 0.45;
   }
 
-  vec3 paintNormal(vec3 baseNormal, vec3 localNormal, float flowA, float flowB) {
+  vec3 slimeNormal(vec3 baseNormal, vec3 localNormal, float flowA, float flowB) {
     vec3 referenceUp = abs(baseNormal.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
     vec3 tangent = normalize(cross(referenceUp, baseNormal));
     vec3 bitangent = normalize(cross(baseNormal, tangent));
@@ -130,9 +130,9 @@ export const planetFragmentShader = `
   }
 
   void main() {
-    vec4 paintData = texture2D(paintMask, vUv);
-    float mask = paintData.a;
-    vec3 paintColor = paintData.rgb;
+    vec4 slimeData = texture2D(slimeMask, vUv);
+    float mask = slimeData.a;
+    vec3 slimeColor = slimeData.rgb;
 
     float dist = length(vWorldPosition - planetCenter);
     float displacement = dist - planetRadius;
@@ -164,43 +164,43 @@ export const planetFragmentShader = `
     float edgeBand = smoothstep(0.12, 0.55, mask) * (1.0 - smoothstep(0.55, 0.92, mask));
     float pooledCenter = smoothstep(0.58, 0.98, mask);
 
-    vec3 smoothPaintNormal = normalize(vSmoothNormal);
-    vec3 slimyNormal = paintNormal(smoothPaintNormal, smoothLocalNormal, flowA, flowB);
+    vec3 smoothSlimeNormal = normalize(vSmoothNormal);
+    vec3 slimyNormal = slimeNormal(smoothSlimeNormal, smoothLocalNormal, flowA, flowB);
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
 
     float terrainDiff = max(dot(vSmoothNormal, sunDirection), 0.0) * sunIntensity;
-    float paintDiff = max(dot(slimyNormal, sunDirection), 0.0) * sunIntensity;
+    float slimeDiff = max(dot(slimyNormal, sunDirection), 0.0) * sunIntensity;
 
     terrainDiff = getCelLighting(terrainDiff);
-    paintDiff = getCelLighting(paintDiff);
+    slimeDiff = getCelLighting(slimeDiff);
 
     float specular = pow(max(dot(reflect(-sunDirection, slimyNormal), viewDir), 0.0), slimeSpecularPower);
-    float clearCoat = pow(max(dot(reflect(-sunDirection, smoothPaintNormal), viewDir), 0.0), slimeSpecularPower * 1.8);
+    float clearCoat = pow(max(dot(reflect(-sunDirection, smoothSlimeNormal), viewDir), 0.0), slimeSpecularPower * 1.8);
     float fresnel = pow(1.0 - max(dot(viewDir, slimyNormal), 0.0), 3.0);
-    float edgeFresnel = pow(1.0 - max(dot(viewDir, smoothPaintNormal), 0.0), 5.0);
+    float edgeFresnel = pow(1.0 - max(dot(viewDir, smoothSlimeNormal), 0.0), 5.0);
 
     vec3 ambient = vec3(ambientIntensity);
 
-    vec3 pooledColor = paintColor * (1.0 - slimePoolDarkening);
-    vec3 goopBase = mix(pooledColor, paintColor * 0.96, 0.35 + goopMix * 0.12);
-    vec3 wetEdgeTint = min(paintColor * (1.0 + slimeEdgeWetness), vec3(1.0));
+    vec3 pooledColor = slimeColor * (1.0 - slimePoolDarkening);
+    vec3 goopBase = mix(pooledColor, slimeColor * 0.96, 0.35 + goopMix * 0.12);
+    vec3 wetEdgeTint = min(slimeColor * (1.0 + slimeEdgeWetness), vec3(1.0));
     goopBase = mix(goopBase, wetEdgeTint, edgeBand * slimeEdgeWetness);
     vec3 goopHighlight =
       vec3(specular * slimeShineStrength)
       + vec3(clearCoat * slimeShineStrength * 0.65)
-      + paintColor * fresnel * slimeFresnelStrength
+      + slimeColor * fresnel * slimeFresnelStrength
       + wetEdgeTint * edgeFresnel * edgeBand * slimeEdgeWetness * 0.9;
 
     vec3 shadedTerrain = biomeColor * (terrainDiff + ambient);
     shadedTerrain *= getHatching(gl_FragCoord.xy / 1000.0, terrainDiff);
 
-    vec3 shadedPaint = (goopBase * (paintDiff + ambient)) + goopHighlight * glossyMask;
-    shadedPaint *= getHatching(gl_FragCoord.xy / 1000.0, paintDiff);
+    vec3 shadedSlime = (goopBase * (slimeDiff + ambient)) + goopHighlight * glossyMask;
+    shadedSlime *= getHatching(gl_FragCoord.xy / 1000.0, slimeDiff);
 
-    shadedPaint = mix(shadedPaint, shadedPaint + wetEdgeTint * 0.08, edgeBand);
-    shadedPaint *= 1.0 - pooledCenter * slimePoolDarkening * 0.18;
+    shadedSlime = mix(shadedSlime, shadedSlime + wetEdgeTint * 0.08, edgeBand);
+    shadedSlime *= 1.0 - pooledCenter * slimePoolDarkening * 0.18;
 
-    vec3 finalColor = mix(shadedTerrain, shadedPaint, mask * paintBlendStrength);
+    vec3 finalColor = mix(shadedTerrain, shadedSlime, mask * slimeBlendStrength);
     finalColor *= puffyCloudShadow(smoothLocalNormal);
 
     float rimDot = 1.0 - max(dot(viewDir, normalize(vSmoothNormal)), 0.0);

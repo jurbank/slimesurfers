@@ -11,13 +11,13 @@ import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import {
   GAME_CONFIG,
-  getPaintStampChordRadius,
-  getPaintTerritoryDimensions,
+  getSlimeStampChordRadius,
+  getSlimeTerritoryDimensions,
   getPlayerTargetRadius,
 } from "@splat/content/config/gameConfig.ts";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
-import { appendPaintStamp, getPaintAtPoint } from "../paint/paintDetection.ts";
+import { appendSlimeStamp, getSlimeAtPoint } from "../slime/slimeDetection.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { buildComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
@@ -55,7 +55,7 @@ function distanceBetweenPlayers(
 }
 
 function surfaceNormalForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+  const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -97,11 +97,11 @@ function expectedMuzzlePos(player: { pos: { x: number; y: number; z: number }; p
   };
 }
 
-function paintPlayerSurface(
+function slimePlayerSurface(
   simulation: MatchSimulation,
   sessionId: string,
-  paintGroupId: number,
-  radius = Math.max(getPaintStampChordRadius(DEV_PLANET_RADIUS), 0.25),
+  slimeGroupId: number,
+  radius = Math.max(getSlimeStampChordRadius(DEV_PLANET_RADIUS), 0.25),
 ): void {
   const player = simulation.players.get(sessionId);
   if (!player) return;
@@ -116,8 +116,8 @@ function paintPlayerSurface(
   const len = Math.hypot(dx, dy, dz);
   if (len < 1e-6) return;
 
-  appendPaintStamp(planet, {
-    paintGroupId,
+  appendSlimeStamp(planet, {
+    slimeGroupId,
     color: 0xffffff,
     nx: dx / len,
     ny: dy / len,
@@ -228,26 +228,26 @@ describe("MatchSimulation", () => {
   });
 
   it("can seed large friendly and enemy slime regions for movement testing when enabled", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: true });
-    const planetPaint = simulation.matchState.planets;
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: true });
+    const planetSlime = simulation.matchState.planets;
 
     expect(
-      getPaintAtPoint(
+      getSlimeAtPoint(
         { x: 0, y: 100, z: 0 },
         "planet-0",
-        planetPaint,
+        planetSlime,
         simulation.matchState.planetDefs,
-      )?.paintGroupId,
+      )?.slimeGroupId,
     ).toBe(0);
     expect(
-      getPaintAtPoint(
+      getSlimeAtPoint(
         { x: 0, y: -100, z: 0 },
         "planet-0",
-        planetPaint,
+        planetSlime,
         simulation.matchState.planetDefs,
-      )?.paintGroupId,
+      )?.slimeGroupId,
     ).toBe(1);
-    expect(simulation.getRecentPaintStamps().map((stamp) => stamp.paintGroupId)).toEqual(
+    expect(simulation.getRecentSlimeStamps().map((stamp) => stamp.slimeGroupId)).toEqual(
       expect.arrayContaining([0, 1]),
     );
   });
@@ -259,7 +259,7 @@ describe("MatchSimulation", () => {
 
     expect(simulation.players.size).toBe(1);
     expect(player.name).toBe("Alpha");
-    expect(player.paintGroupId).toBe(0);
+    expect(player.slimeGroupId).toBe(0);
 
     simulation.removePlayer("session-1");
 
@@ -304,7 +304,7 @@ describe("MatchSimulation", () => {
     const leaderboard = simulation.buildLeaderboardMessage();
 
     expect(snapshot.players).toHaveLength(1);
-    expect(snapshot.players[0]?.paintGroupId).toBe(player.paintGroupId);
+    expect(snapshot.players[0]?.slimeGroupId).toBe(player.slimeGroupId);
     expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(snapshot.players[0]?.equippedWeaponId).toBe(player.equippedWeaponId);
     expect(snapshot.players[0]?.slimeLevel).toBe(player.slimeLevel);
@@ -323,15 +323,15 @@ describe("MatchSimulation", () => {
 
     expect(first.teamId).toBe(255);
     expect(second.teamId).toBe(255);
-    expect(first.paintGroupId).toBe(0);
-    expect(second.paintGroupId).toBe(1);
+    expect(first.slimeGroupId).toBe(0);
+    expect(second.slimeGroupId).toBe(1);
     expect(first.slimeColor).toBe(FFA_MODE.palette[0]);
     expect(second.slimeColor).toBe(FFA_MODE.palette[1]);
     expect(simulation.buildLeaderboardMessage().teamScores).toHaveLength(0);
   });
 
   it("spreads new ffa spawns away from existing alive players", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
 
     const first = simulation.addPlayer("session-1", "Alpha");
     const second = simulation.addPlayer("session-2", "Bravo");
@@ -343,7 +343,7 @@ describe("MatchSimulation", () => {
   });
 
   it("keeps team players on team colors and team-local spawn zones", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestSlime: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 1);
     const bravo = simulation.addPlayer("session-2", "Bravo", 0);
@@ -354,8 +354,8 @@ describe("MatchSimulation", () => {
     expect(charlie.teamId).toBe(0);
     expect(bravo.teamId).toBe(1);
     expect(delta.teamId).toBe(1);
-    expect(alpha.paintGroupId).toBe(0);
-    expect(bravo.paintGroupId).toBe(1);
+    expect(alpha.slimeGroupId).toBe(0);
+    expect(bravo.slimeGroupId).toBe(1);
     expect(alpha.slimeColor).toBe(TEAMS_MODE.teamColors[0]);
     expect(bravo.slimeColor).toBe(TEAMS_MODE.teamColors[1]);
     expect(alpha.patternId).toBe(0);
@@ -370,7 +370,7 @@ describe("MatchSimulation", () => {
   });
 
   it("ignores requested palette indices in teams mode", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestSlime: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 2);
     const bravo = simulation.addPlayer("session-2", "Bravo", 0);
@@ -382,28 +382,28 @@ describe("MatchSimulation", () => {
   });
 
   it("honors valid requested teams and balances invalid requested teams", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestSlime: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", undefined, 1);
     const bravo = simulation.addPlayer("session-2", "Bravo", undefined, 99);
 
     expect(alpha.teamId).toBe(1);
-    expect(alpha.paintGroupId).toBe(1);
+    expect(alpha.slimeGroupId).toBe(1);
     expect(bravo.teamId).toBe(0);
-    expect(bravo.paintGroupId).toBe(0);
+    expect(bravo.slimeGroupId).toBe(0);
   });
 
   it("ignores requested teams in ffa mode", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha", 0, 1);
 
     expect(alpha.teamId).toBe(255);
-    expect(alpha.paintGroupId).toBe(0);
+    expect(alpha.slimeGroupId).toBe(0);
   });
 
-  it("reports team scores once per paint group instead of once per teammate", () => {
-    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestPaint: false });
+  it("reports team scores once per slime group instead of once per teammate", () => {
+    const simulation = new MatchSimulation(TEAMS_MODE, DEV_MAP, { seedTestSlime: false });
 
     const alpha = simulation.addPlayer("session-1", "Alpha");
     const bravo = simulation.addPlayer("session-2", "Bravo");
@@ -412,10 +412,10 @@ describe("MatchSimulation", () => {
 
     simulation.matchState.scores.set("0", 42);
     simulation.matchState.scores.set("1", 17);
-    alpha.paintScore = 42;
-    charlie.paintScore = 42;
-    bravo.paintScore = 17;
-    delta.paintScore = 17;
+    alpha.slimeScore = 42;
+    charlie.slimeScore = 42;
+    bravo.slimeScore = 17;
+    delta.slimeScore = 17;
 
     const leaderboard = simulation.buildLeaderboardMessage();
 
@@ -424,7 +424,7 @@ describe("MatchSimulation", () => {
   });
 
   it("clusters dev spawns for faster combat testing without stacking players", () => {
-    const simulation = new MatchSimulation(DEV_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(DEV_MODE, DEV_MAP, { seedTestSlime: false });
 
     const first = simulation.addPlayer("session-1", "Alpha");
     const second = simulation.addPlayer("session-2", "Bravo");
@@ -438,7 +438,7 @@ describe("MatchSimulation", () => {
   });
 
   it("uses map-distributed weapon pickups by default", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const pickups = Array.from(simulation.matchState.pickups.values());
 
     const highestPairDistance = pickups.reduce((maxDistance, pickup, index) => {
@@ -456,7 +456,7 @@ describe("MatchSimulation", () => {
 
   it("can cluster weapon pickups for fast server-side dev iteration", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, {
-      seedTestPaint: false,
+      seedTestSlime: false,
       weaponPickupLayout: "cluster",
     });
     const pickups = Array.from(simulation.matchState.pickups.values());
@@ -728,7 +728,7 @@ describe("MatchSimulation", () => {
       id: "stream-arc-test",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: { x: planet.center.x, y: startY, z: planet.center.z },
@@ -771,7 +771,7 @@ describe("MatchSimulation", () => {
   });
 
   it("counts down disposable shots and reverts to default weapon when exhausted", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const bazooka = getWeaponDefinition(WeaponId.Bazooka);
     shooter.equippedWeaponId = WeaponId.Bazooka;
@@ -795,7 +795,7 @@ describe("MatchSimulation", () => {
   it("keeps ski mode active and fires on the same tick", () => {
     const simulation = new MatchSimulation();
     const surfmer = simulation.addPlayer("session-1", "Alpha");
-    paintPlayerSurface(simulation, surfmer.sessionId, surfmer.paintGroupId);
+    slimePlayerSurface(simulation, surfmer.sessionId, surfmer.slimeGroupId);
 
     simulation.tick(simulation.tickIntervalMs);
 
@@ -814,8 +814,8 @@ describe("MatchSimulation", () => {
     expect(simulation.buildSnapshotMessage().players[0]?.isShooting).toBe(true);
   });
 
-  it("creates capped trick paint while airborne in ski mode", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+  it("creates capped trick slime while airborne in ski mode", () => {
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
     player.slimeLevel = GAME_CONFIG.tricks.minSlimeToTrick;
@@ -823,7 +823,7 @@ describe("MatchSimulation", () => {
     simulation.recordInput("session-1", trickInput(1, InputKey.Left));
     simulation.tick(simulation.tickIntervalMs);
     expect(player.airTrickCombo).toBe(0);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
     simulation.recordInput("session-1", trickInput(2, InputKey.Right));
     simulation.tick(simulation.tickIntervalMs);
@@ -831,7 +831,7 @@ describe("MatchSimulation", () => {
     const events = simulation.drainTrickEventMessages();
     expect(player.airTrickCombo).toBe(1);
     expect(player.slimeLevel).toBeLessThan(GAME_CONFIG.tricks.minSlimeToTrick);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
     expect(events).toEqual([
       {
         playerId: player.sessionId,
@@ -843,17 +843,17 @@ describe("MatchSimulation", () => {
 
     landAirbornePlayer(simulation, player);
 
-    const stamps = simulation.drainPaintStampMessages();
+    const stamps = simulation.drainSlimeStampMessages();
     expect(stamps).toHaveLength(1);
-    expect(stamps[0]?.paintGroupId).toBe(player.paintGroupId);
-    expect(simulation.matchState.paintSeq).toBe(stamps.length);
-    expect(simulation.matchState.scores.get(player.paintGroupId.toString()) ?? 0).toBeGreaterThan(
+    expect(stamps[0]?.slimeGroupId).toBe(player.slimeGroupId);
+    expect(simulation.matchState.slimeSeq).toBe(stamps.length);
+    expect(simulation.matchState.scores.get(player.slimeGroupId.toString()) ?? 0).toBeGreaterThan(
       0,
     );
   });
 
   it("turns advanced air trick sequences into larger landing splats", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
@@ -874,17 +874,17 @@ describe("MatchSimulation", () => {
       },
     ]);
     expect(player.airTrickCombo).toBe(4);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
     landAirbornePlayer(simulation, player);
 
-    const stamps = simulation.drainPaintStampMessages();
+    const stamps = simulation.drainSlimeStampMessages();
     expect(stamps).toHaveLength(1);
-    expect(stamps[0]?.radius).toBe(getPaintStampChordRadius(DEV_PLANET_RADIUS) * 4.2);
+    expect(stamps[0]?.radius).toBe(getSlimeStampChordRadius(DEV_PLANET_RADIUS) * 4.2);
   });
 
   it("lets grinding players trigger trick combos and carry them until they land", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeGrindingSkier(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
@@ -904,7 +904,7 @@ describe("MatchSimulation", () => {
         seq: 1,
       },
     ]);
-    simulation.drainPaintStampMessages();
+    simulation.drainSlimeStampMessages();
 
     player.grindT = 0.01;
     player.lastGrindT = player.grindT;
@@ -913,15 +913,15 @@ describe("MatchSimulation", () => {
 
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
     expect(player.airTrickCombo).toBe(1);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
     landAirbornePlayer(simulation, player);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(1);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(1);
     expect(player.airTrickCombo).toBe(0);
   });
 
   it("includes rail grinding state in snapshots for client reconciliation", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeGrindingSkier(player);
 
@@ -936,8 +936,8 @@ describe("MatchSimulation", () => {
     expect(playerSnapshot?.grindCooldownMs).toBe(player.grindCooldownMs);
   });
 
-  it("gates trick paint by ski mode, airtime, cooldown, and landing reset", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+  it("gates trick slime by ski mode, airtime, cooldown, and landing reset", () => {
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
 
@@ -947,7 +947,7 @@ describe("MatchSimulation", () => {
     simulation.recordInput("session-1", trickInput(2, InputKey.Right));
     simulation.tick(simulation.tickIntervalMs);
     expect(player.airTrickCombo).toBe(0);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
     player.surfState = PlayerSurfState.SkiVisible;
     player.airTrickAirTimeMs = 0;
@@ -963,7 +963,7 @@ describe("MatchSimulation", () => {
     simulation.recordInput("session-1", trickInput(6, InputKey.Right));
     simulation.tick(simulation.tickIntervalMs);
     expect(player.airTrickCombo).toBe(1);
-    const firstBurst = simulation.drainPaintStampMessages().length;
+    const firstBurst = simulation.drainSlimeStampMessages().length;
     const firstEvents = simulation.drainTrickEventMessages();
     expect(firstBurst).toBe(0);
     expect(firstEvents[0]?.trickId).toBe("kickflip");
@@ -973,17 +973,17 @@ describe("MatchSimulation", () => {
     simulation.recordInput("session-1", trickInput(8, InputKey.Right));
     simulation.tick(simulation.tickIntervalMs);
     expect(player.airTrickCombo).toBe(1);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
     expect(simulation.drainTrickEventMessages()).toHaveLength(0);
 
     landAirbornePlayer(simulation, player);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(1);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(1);
     expect(player.airTrickCombo).toBe(0);
     expect(player.airTrickAirTimeMs).toBe(0);
   });
 
   it("emits named spin trick events from held air rotation", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(player);
 
@@ -1000,14 +1000,14 @@ describe("MatchSimulation", () => {
     const events = simulation.drainTrickEventMessages();
     expect(events.some((event) => event.trickId === "spin360")).toBe(true);
     expect(player.airTrickCombo).toBeGreaterThanOrEqual(1);
-    expect(simulation.drainPaintStampMessages()).toHaveLength(0);
+    expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
     landAirbornePlayer(simulation, player);
-    expect(simulation.drainPaintStampMessages().length).toBeGreaterThan(0);
+    expect(simulation.drainSlimeStampMessages().length).toBeGreaterThan(0);
   });
 
   it("emits named flip trick events from held forward and backward air rotation", () => {
-    const frontSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const frontSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const frontPlayer = frontSimulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(frontPlayer);
 
@@ -1024,7 +1024,7 @@ describe("MatchSimulation", () => {
     const frontEvents = frontSimulation.drainTrickEventMessages();
     expect(frontEvents.some((event) => event.trickId === "frontflip")).toBe(true);
 
-    const backSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const backSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const backPlayer = backSimulation.addPlayer("session-1", "Alpha");
     makeAirborneSkier(backPlayer);
 
@@ -1046,7 +1046,7 @@ describe("MatchSimulation", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
-    paintPlayerSurface(simulation, target.sessionId, target.paintGroupId);
+    slimePlayerSurface(simulation, target.sessionId, target.slimeGroupId);
 
     simulation.tick(simulation.tickIntervalMs);
 
@@ -1056,7 +1056,7 @@ describe("MatchSimulation", () => {
       id: "hit-submerged",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1088,7 +1088,7 @@ describe("MatchSimulation", () => {
       id: "hit-surfer",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1120,7 +1120,7 @@ describe("MatchSimulation", () => {
       bot.planetId = target.planetId;
       bot.teamId = 255;
 
-      paintPlayerSurface(simulation, target.sessionId, target.paintGroupId);
+      slimePlayerSurface(simulation, target.sessionId, target.slimeGroupId);
       target.surfState = PlayerSurfState.SurfmingHidden;
 
       const hiddenInput = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
@@ -1225,33 +1225,33 @@ describe("MatchSimulation", () => {
     }
   });
 
-  it("recharges slime slowly by default, faster on friendly paint, and fastest while skiing", () => {
-    const neutralSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
-    const paintedSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
-    const skiingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+  it("recharges slime slowly by default, faster on friendly slime, and fastest while skiing", () => {
+    const neutralSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const slimedSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const skiingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
-    const painted = paintedSimulation.addPlayer("session-1", "Painted");
+    const slimed = slimedSimulation.addPlayer("session-1", "Slimed");
     const skier = skiingSimulation.addPlayer("session-1", "Skier");
 
     neutral.slimeLevel = 0;
-    painted.slimeLevel = 0;
+    slimed.slimeLevel = 0;
     skier.slimeLevel = 0;
-    painted.surfState = PlayerSurfState.None;
+    slimed.surfState = PlayerSurfState.None;
 
-    paintPlayerSurface(paintedSimulation, painted.sessionId, painted.paintGroupId, 0.25);
-    paintPlayerSurface(skiingSimulation, skier.sessionId, skier.paintGroupId, 0.25);
+    slimePlayerSurface(slimedSimulation, slimed.sessionId, slimed.slimeGroupId, 0.25);
+    slimePlayerSurface(skiingSimulation, skier.sessionId, skier.slimeGroupId, 0.25);
     skier.surfState = PlayerSurfState.SkiVisible;
 
     neutralSimulation.tick(1000);
-    paintedSimulation.tick(1000);
+    slimedSimulation.tick(1000);
     skiingSimulation.tick(1000);
 
     expect(neutral.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.passiveRechargePerSecond, 5);
-    expect(painted.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.friendlyPaintRechargePerSecond, 5);
+    expect(slimed.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.friendlySlimeRechargePerSecond, 5);
     expect(skier.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.submergedRechargePerSecond, 5);
-    expect(neutral.slimeLevel).toBeLessThan(painted.slimeLevel);
-    expect(painted.slimeLevel).toBeLessThan(skier.slimeLevel);
+    expect(neutral.slimeLevel).toBeLessThan(slimed.slimeLevel);
+    expect(slimed.slimeLevel).toBeLessThan(skier.slimeLevel);
   });
 
   it("equips a bazooka when the player touches an active pickup", () => {
@@ -1306,7 +1306,7 @@ describe("MatchSimulation", () => {
   });
 
   it("spins up before a heavy machine gun starts spraying", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
@@ -1350,13 +1350,13 @@ describe("MatchSimulation", () => {
     expect(shooter.disposableShotsRemaining).toBeLessThan(heavyMachineGun.disposableShots!);
     expect(
       simulation
-        .drainPaintStampMessages()
-        .some((stamp) => stamp.paintGroupId === shooter.paintGroupId),
+        .drainSlimeStampMessages()
+        .some((stamp) => stamp.slimeGroupId === shooter.slimeGroupId),
     ).toBe(true);
   });
 
   it("lets the heavy machine gun hit a grounded player after spin-up", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const target = simulation.addPlayer("session-2", "Bravo");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
@@ -1400,7 +1400,7 @@ describe("MatchSimulation", () => {
   });
 
   it("reverts a heavy machine gun pickup to Pew Pew after the disposable spray runs out", () => {
-    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestPaint: false });
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const shooter = simulation.addPlayer("session-1", "Alpha");
     const heavyMachineGun = getWeaponDefinition(WeaponId.HeavyMachineGun);
     shooter.equippedWeaponId = WeaponId.HeavyMachineGun;
@@ -1439,7 +1439,7 @@ describe("MatchSimulation", () => {
       id: "bazooka-hit",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.Bazooka,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1457,9 +1457,9 @@ describe("MatchSimulation", () => {
     expect(Math.hypot(nearby.vel.x, nearby.vel.y, nearby.vel.z)).toBeGreaterThan(0);
     expect(
       simulation
-        .getRecentPaintStamps()
-        .filter((stamp) => stamp.paintGroupId === shooter.paintGroupId).length,
-    ).toBeGreaterThanOrEqual(GAME_CONFIG.paint.deathBurstStampCount);
+        .getRecentSlimeStamps()
+        .filter((stamp) => stamp.slimeGroupId === shooter.slimeGroupId).length,
+    ).toBeGreaterThanOrEqual(GAME_CONFIG.slimeStamp.deathBurstStampCount);
   });
 
   it("launches the shooter when a bazooka blast hits the ground underneath them", () => {
@@ -1483,7 +1483,7 @@ describe("MatchSimulation", () => {
       id: "rocket-jump-test",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.Bazooka,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: {
@@ -1504,7 +1504,7 @@ describe("MatchSimulation", () => {
     expect(shooter.vel.y).toBeGreaterThan(0);
   });
 
-  it("applies paint when an airborne projectile hits a planet surface", () => {
+  it("applies slime when an airborne projectile hits a planet surface", () => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
 
@@ -1518,7 +1518,7 @@ describe("MatchSimulation", () => {
       id: "surface-test",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: {
@@ -1538,10 +1538,10 @@ describe("MatchSimulation", () => {
     simulation.tick(simulation.tickIntervalMs);
 
     expect(simulation.matchState.projectiles.size).toBe(0);
-    expect(simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === planetId)).toBe(
+    expect(simulation.getRecentSlimeStamps().some((stamp) => stamp.planetId === planetId)).toBe(
       true,
     );
-    expect(simulation.matchState.scores.get(shooter.paintGroupId.toString()) ?? 0).toBeGreaterThan(
+    expect(simulation.matchState.scores.get(shooter.slimeGroupId.toString()) ?? 0).toBeGreaterThan(
       0,
     );
   });
@@ -1572,7 +1572,7 @@ describe("MatchSimulation", () => {
       id: "surface-chord-test",
       ownerId: shooter.sessionId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: start,
@@ -1588,7 +1588,7 @@ describe("MatchSimulation", () => {
     simulation.tick(simulation.tickIntervalMs);
 
     expect(simulation.matchState.projectiles.size).toBe(0);
-    expect(simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === planet.id)).toBe(
+    expect(simulation.getRecentSlimeStamps().some((stamp) => stamp.planetId === planet.id)).toBe(
       true,
     );
   });
@@ -1622,15 +1622,15 @@ describe("MatchSimulation", () => {
 
   //   for (let tick = 0; tick < NETWORK_CONFIG.simulation.tickRateHz * 3; tick++) {
   //     simulation.tick(simulation.tickIntervalMs);
-  //     if (simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === targetPlanetId)) {
+  //     if (simulation.getRecentSlimeStamps().some((stamp) => stamp.planetId === targetPlanetId)) {
   //       break;
   //     }
   //   }
 
   //   expect(
-  //     simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === targetPlanetId),
+  //     simulation.getRecentSlimeStamps().some((stamp) => stamp.planetId === targetPlanetId),
   //   ).toBe(true);
-  //   expect(simulation.matchState.scores.get(shooter.paintGroupId.toString()) ?? 0).toBeGreaterThan(
+  //   expect(simulation.matchState.scores.get(shooter.slimeGroupId.toString()) ?? 0).toBeGreaterThan(
   //     0,
   //   );
   // });
@@ -1647,7 +1647,7 @@ describe("MatchSimulation", () => {
         id: `test-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1664,9 +1664,9 @@ describe("MatchSimulation", () => {
     expect(shooter.killCount).toBe(1);
     expect(target.deathCount).toBe(1);
     expect(
-      simulation.getRecentPaintStamps().some((stamp) => stamp.planetId === target.planetId),
+      simulation.getRecentSlimeStamps().some((stamp) => stamp.planetId === target.planetId),
     ).toBe(true);
-    expect(simulation.matchState.scores.get(shooter.paintGroupId.toString()) ?? 0).toBeGreaterThan(
+    expect(simulation.matchState.scores.get(shooter.slimeGroupId.toString()) ?? 0).toBeGreaterThan(
       0,
     );
 
@@ -1689,7 +1689,7 @@ describe("MatchSimulation", () => {
         id: `leaderboard-kd-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1720,7 +1720,7 @@ describe("MatchSimulation", () => {
         id: `kill-feed-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: shooter.patternId,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -1766,7 +1766,7 @@ describe("MatchSimulation", () => {
     // Team 0 now has 0 players, team 1 has 1 — next joiner should go to team 0
     const delta = simulation.addPlayer("session-4", "Delta");
     expect(delta.teamId).toBe(0);
-    expect(delta.paintGroupId).toBe(0);
+    expect(delta.slimeGroupId).toBe(0);
   });
 
   it("does not damage a teammate in teams mode", () => {
@@ -1791,7 +1791,7 @@ describe("MatchSimulation", () => {
       ownerId: shooter.sessionId,
       ownerTeamId: shooter.teamId,
       weaponId: WeaponId.MachineGun,
-      paintGroupId: shooter.paintGroupId,
+      slimeGroupId: shooter.slimeGroupId,
       slimeColor: shooter.slimeColor,
       patternId: 0,
       pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
@@ -1833,7 +1833,7 @@ describe("MatchSimulation", () => {
         ownerId: shooter.sessionId,
         ownerTeamId: shooter.teamId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: 0,
         pos: { x: teammate.pos.x, y: teammate.pos.y, z: teammate.pos.z },
@@ -1853,7 +1853,7 @@ describe("MatchSimulation", () => {
         ownerId: shooter.sessionId,
         ownerTeamId: shooter.teamId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: 0,
         pos: { x: enemy.pos.x, y: enemy.pos.y, z: enemy.pos.z },
@@ -1878,7 +1878,7 @@ describe("MatchSimulation", () => {
         id: `respawn-check-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: 0,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },

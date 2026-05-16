@@ -21,8 +21,8 @@ export const MessageType = {
   Snapshot: "snapshot",
   /** Periodic leaderboard update (sent at NETWORK_CONFIG.simulation.leaderboardRateHz) */
   Leaderboard: "leaderboard",
-  /** Batched transient visual paint impacts; not authoritative scoring state */
-  PaintStamps: "paintStamps",
+  /** Batched transient visual slime stamp impacts; not authoritative scoring state */
+  SlimeStamps: "slimeStamps",
   /** Batched transient air-trick events for client animation and feedback */
   TrickEvents: "trickEvents",
   /** Batched transient emote bubbles for client UI */
@@ -45,8 +45,8 @@ export type {
   MatchPhaseMessage,
   EmoteEventBatchMessage,
   EmoteEventMessage,
-  PaintStampBatchMessage,
-  PaintStampMessage,
+  SlimeStampBatchMessage,
+  SlimeStampMessage,
   PlayerSnapshot,
   ProjectileSnapshot,
   SnapshotMessage,

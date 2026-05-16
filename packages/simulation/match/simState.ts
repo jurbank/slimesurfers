@@ -20,8 +20,8 @@ export interface SimQuat {
   w: number;
 }
 
-export interface SimPaintStamp {
-  paintGroupId: number;
+export interface SimSlimeStamp {
+  slimeGroupId: number;
   color: number;
   patternId: number;
   nx: number;
@@ -32,20 +32,20 @@ export interface SimPaintStamp {
 }
 
 export interface SimTerritoryCell {
-  ownerPaintGroupId: number;
+  ownerSlimeGroupId: number;
   color: number;
 }
 
-export interface SimPlanetPaintState {
+export interface SimPlanetSlimeState {
   planetId: string;
   territoryRows: number;
   territoryCols: number;
   cells: SimTerritoryCell[];
-  stamps: SimPaintStamp[];
-  stampBuckets: SimPaintStamp[][];
+  stamps: SimSlimeStamp[];
+  stampBuckets: SimSlimeStamp[][];
 }
 
-export interface SimRailPaintState {
+export interface SimRailSlimeState {
   railId: number;
   nodes: number[]; // Array of 0xRRGGBB colors
 }
@@ -55,7 +55,7 @@ export interface SimProjectileState {
   ownerId: string;
   ownerTeamId?: number;
   weaponId: WeaponId;
-  paintGroupId: number;
+  slimeGroupId: number;
   slimeColor: number;
   patternId: number;
   pos: SimVec3;
@@ -124,7 +124,7 @@ export interface SimPlayerState {
   botOrigin?: BotOrigin;
   botConfigIndex?: number;
   teamId: number;
-  paintGroupId: number;
+  slimeGroupId: number;
   paletteIndex: number;
   patternId: number;
   slimeColor: number;
@@ -145,7 +145,7 @@ export interface SimPlayerState {
   lastGrindT: number; // arc-length parameter from the previous tick
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
-  isOnFriendlyPaint: boolean;
+  isOnFriendlySlime: boolean;
   inputSeq: number;
   airTrickCombo: number;
   airTrickAirTimeMs: number;
@@ -159,13 +159,13 @@ export interface SimPlayerState {
   airTrickFrontFlipMilestoneIndex: number;
   airTrickBackFlipMilestoneIndex: number;
   airTrickFlipBlocked: boolean;
-  airTrickPaintMultiplier: number;
+  airTrickSlimeMultiplier: number;
   // Gameplay
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
   health: number;
   slimeLevel: number;
-  paintScore: number;
+  slimeScore: number;
   killCount: number;
   deathCount: number;
   respawnTimer: number;
@@ -179,14 +179,14 @@ export interface SimMatchState {
   players: Map<string, SimPlayerState>;
   planetDefs: RuntimeMapPlanet[];
   mapTerrain: TerrainConfig["terrain"];
-  planets: Map<string, SimPlanetPaintState>;
-  railStates: Map<number, SimRailPaintState>;
+  planets: Map<string, SimPlanetSlimeState>;
+  railStates: Map<number, SimRailSlimeState>;
   projectiles: Map<string, SimProjectileState>;
   pickups: Map<string, SimWeaponPickupState>;
   healthPickups: Map<string, SimHealthPickupState>;
   matchPhase: MatchPhase;
   matchTimer: number;
-  paintSeq: number;
+  slimeSeq: number;
   trickSeq: number;
   scores: Map<string, number>;
   elapsedMs: number;

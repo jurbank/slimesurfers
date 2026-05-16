@@ -20,7 +20,7 @@ export interface PlayerSnapshot {
   vel: Vec3Data;
   rot: QuatData;
   planetId: string;
-  paintGroupId: number;
+  slimeGroupId: number;
   movementState: number;
   surfState: number;
   isCarving: boolean;
@@ -36,8 +36,8 @@ export interface PlayerSnapshot {
   health: number;
   slimeLevel: number;
   respawnTimer: number;
-  /** True if the player is currently standing on or submerged in their own team's paint */
-  isOnFriendlyPaint: boolean;
+  /** True if the player is currently standing on or submerged in their own team's slime */
+  isOnFriendlySlime: boolean;
   /** Visual identity */
   slimeColor: number;
   patternId: number;
@@ -63,7 +63,7 @@ export interface ProjectileSnapshot {
   id: string;
   ownerId: string;
   weaponId: WeaponId;
-  paintGroupId: number;
+  slimeGroupId: number;
   slimeColor: number;
   patternId: number;
   pos: Vec3Data;
@@ -86,15 +86,15 @@ export interface HealthPickupSnapshot {
   pos: Vec3Data;
 }
 
-// -- Paint -------------------------------------------------------------------
+// -- Slime stamps ------------------------------------------------------------
 
 /**
- * Transient visual paint event for client-side rendering.
+ * Transient visual slime stamp event for client-side rendering.
  * Territory ownership remains authoritative in schema state.
  */
-export interface PaintStampMessage {
+export interface SlimeStampMessage {
   planetId: string;
-  paintGroupId: number;
+  slimeGroupId: number;
   color: number;
   patternId: number;
   nx: number;
@@ -104,8 +104,8 @@ export interface PaintStampMessage {
   seq: number;
 }
 
-export interface PaintStampBatchMessage {
-  stamps: PaintStampMessage[];
+export interface SlimeStampBatchMessage {
+  stamps: SlimeStampMessage[];
 }
 
 // -- Tricks ------------------------------------------------------------------
@@ -159,11 +159,11 @@ export interface LeaderboardEntry {
   sessionId: string;
   name: string;
   teamId: number;
-  paintGroupId: number;
+  slimeGroupId: number;
   slimeColor: number;
   patternId: number;
-  /** Cumulative paint score for this match */
-  paintScore: number;
+  /** Cumulative slime score for this match */
+  slimeScore: number;
   /** Total confirmed eliminations this match */
   killCount: number;
   /** Total times this player has been eliminated this match */
@@ -172,7 +172,7 @@ export interface LeaderboardEntry {
 
 /**
  * Sent at NETWORK_CONFIG.simulation.leaderboardRateHz (2 Hz by default).
- * Entries are pre-sorted descending by paintScore.
+ * Entries are pre-sorted descending by slimeScore.
  */
 export interface LeaderboardMessage {
   entries: LeaderboardEntry[];
@@ -251,6 +251,6 @@ export interface MapDataMessage {
     id: number;
     planetId: string;
     controlPoints: Array<{ nx: number; ny: number; nz: number; heightOffset: number }>;
-    paintCorridorRadius: number;
+    slimeCorridorRadius: number;
   }>;
 }

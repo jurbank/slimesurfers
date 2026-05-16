@@ -47,7 +47,7 @@ export class BrushTool {
 
   // Interaction state
   private brushState: BrushState | null = null;
-  private isPainting = false;
+  private isSliming = false;
   private flattenTarget: number | null = null;
 
   constructor(config: EditorConfig) {
@@ -77,7 +77,7 @@ export class BrushTool {
     if (!state) {
       if (this.brushCursor) this.brushCursor.visible = false;
       if (this.canvas) this.canvas.style.cursor = "";
-      this.isPainting = false;
+      this.isSliming = false;
       return;
     }
     if (this.brushCursor) {
@@ -459,7 +459,7 @@ export class BrushTool {
     this.brushCursor.visible = true;
     this.canvas.style.cursor = "none";
 
-    if (this.isPainting) {
+    if (this.isSliming) {
       this.applyBrushStroke(hit.point);
     }
   };
@@ -470,14 +470,14 @@ export class BrushTool {
     if (!hit) return;
 
     e.stopImmediatePropagation();
-    this.isPainting = true;
+    this.isSliming = true;
     this.flattenTarget = null;
     this.applyBrushStroke(hit.point);
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
-    if (e.button === 0 && this.isPainting) {
-      this.isPainting = false;
+    if (e.button === 0 && this.isSliming) {
+      this.isSliming = false;
       this.flattenTarget = null;
       this.onStrokeEnd?.(this.getSculptState());
     }

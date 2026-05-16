@@ -135,20 +135,20 @@ describe("MatchRoom", () => {
     }
   });
 
-  it("enables seeded paint only when SEED_TEST_PAINT is true", () => {
-    const previousSeedTestPaint = process.env.SEED_TEST_PAINT;
+  it("enables seeded slime only when SEED_TEST_SLIME is true", () => {
+    const previousSeedTestSlime = process.env.SEED_TEST_SLIME;
     try {
-      process.env.SEED_TEST_PAINT = "true";
+      process.env.SEED_TEST_SLIME = "true";
 
       const harness = createRoomHarness();
       const simulation = (harness.room as unknown as { simulation: MatchSimulation }).simulation;
 
-      expect(simulation.getRecentPaintStamps().length).toBeGreaterThan(0);
+      expect(simulation.getRecentSlimeStamps().length).toBeGreaterThan(0);
     } finally {
-      if (previousSeedTestPaint === undefined) {
-        delete process.env.SEED_TEST_PAINT;
+      if (previousSeedTestSlime === undefined) {
+        delete process.env.SEED_TEST_SLIME;
       } else {
-        process.env.SEED_TEST_PAINT = previousSeedTestPaint;
+        process.env.SEED_TEST_SLIME = previousSeedTestSlime;
       }
     }
   });
@@ -275,7 +275,7 @@ describe("MatchRoom", () => {
         id: `room-kill-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: shooter.patternId,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },

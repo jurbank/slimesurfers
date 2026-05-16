@@ -6,9 +6,9 @@ import {
 import { DEFAULT_WEAPON_ID, type WeaponPickupLayout } from "@splat/content/combat/weaponDefs.ts";
 import {
   GAME_CONFIG,
-  getPaintStampChordRadius,
+  getSlimeStampChordRadius,
   getPlanetSurfaceChordRadius,
-  getPaintTerritoryDimensions,
+  getSlimeTerritoryDimensions,
   resolveBotBehaviorProfile,
   resolveBotEmoteFrequency,
   resolveBotEmoteTemperament,
@@ -32,7 +32,7 @@ import type {
   KillEventMessage,
   LeaderboardEntry,
   LeaderboardMessage,
-  PaintStampMessage,
+  SlimeStampMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
@@ -55,11 +55,11 @@ import {
 } from "../combat/healthPickups.ts";
 import { stepPlayer, type PlanetData, type StepConfig } from "../movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail, sampleRailAt } from "../movement/railSpline.ts";
-import { appendPaintStamp, createStampBuckets } from "../paint/paintDetection.ts";
-import { applyPaintImpact } from "../paint/stampPaint.ts";
-import { createTerritoryCells } from "../paint/territoryGrid.ts";
+import { appendSlimeStamp, createStampBuckets } from "../slime/slimeDetection.ts";
+import { applySlimeImpact } from "../slime/stampSlime.ts";
+import { createTerritoryCells } from "../slime/territoryGrid.ts";
 import { generateBotInput, removeBotState } from "../ai/botController.ts";
-import { RAIL_PAINT_NODES } from "@splat/protocol/schemas/paintedState.ts";
+import { RAIL_SLIME_NODES } from "@splat/protocol/schemas/slimedState.ts";
 import {
   isTrickMovementState,
   processAirTricks,
@@ -72,7 +72,7 @@ import {
   PlayerSurfState,
   type BotOrigin,
   type SimMatchState,
-  type SimPlanetPaintState,
+  type SimPlanetSlimeState,
   type SimPlayerState,
 } from "./simState.ts";
 import { selectSpawnSurface } from "./spawnSelection.ts";
@@ -209,8 +209,8 @@ function sanitizeInputMessage(value: unknown): InputMessage | null {
   return input;
 }
 
-function createSimPlanetState(planet: RuntimeMapPlanet): SimPlanetPaintState {
-  const { rows, cols } = getPaintTerritoryDimensions(planet.radius);
+function createSimPlanetState(planet: RuntimeMapPlanet): SimPlanetSlimeState {
+  const { rows, cols } = getSlimeTerritoryDimensions(planet.radius);
   return {
     planetId: planet.id,
     territoryRows: rows,
@@ -221,7 +221,7 @@ function createSimPlanetState(planet: RuntimeMapPlanet): SimPlanetPaintState {
   };
 }
 
-function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void {
+function seedTestSlime(simState: SimMatchState, mode: GameModeDefinition): void {
   const planet = simState.planets.get("planet-0");
   if (!planet) return;
   const planetDef = simState.planetDefs.find((p) => p.id === planet.planetId);
@@ -232,55 +232,55 @@ function seedTestPaint(simState: SimMatchState, mode: GameModeDefinition): void 
 
   const stamps = [
     {
-      paintGroupId: 0,
+      slimeGroupId: 0,
       color: seedColors[0] ?? 0x00e5ff,
       patternId: 0,
       nx: 0,
       ny: 1,
       nz: 0,
       radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius, planetDef.radius),
-      seq: ++simState.paintSeq,
+      seq: ++simState.slimeSeq,
     },
     {
-      paintGroupId: 1,
+      slimeGroupId: 1,
       color: seedColors[1] ?? 0xff6200,
       patternId: 0,
       nx: 0,
       ny: -1,
       nz: 0,
       radius: getPlanetSurfaceChordRadius(largeSeedSurfaceRadius, planetDef.radius),
-      seq: ++simState.paintSeq,
+      seq: ++simState.slimeSeq,
     },
     {
-      paintGroupId: 1,
+      slimeGroupId: 1,
       color: seedColors[1] ?? 0xff6200,
       patternId: 0,
       nx: 0.55,
       ny: 0.55,
       nz: 0.62,
       radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius, planetDef.radius),
-      seq: ++simState.paintSeq,
+      seq: ++simState.slimeSeq,
     },
     {
-      paintGroupId: 0,
+      slimeGroupId: 0,
       color: seedColors[0] ?? 0x00e5ff,
       patternId: 0,
       nx: -0.5,
       ny: -0.45,
       nz: -0.74,
       radius: getPlanetSurfaceChordRadius(mediumSeedSurfaceRadius, planetDef.radius),
-      seq: ++simState.paintSeq,
+      seq: ++simState.slimeSeq,
     },
   ] as const;
 
   for (const stamp of stamps) {
-    appendPaintStamp(planet, stamp);
+    appendSlimeStamp(planet, stamp);
   }
 }
 
 function createSimMatchState(
   mode: GameModeDefinition,
-  seedPaint: boolean,
+  seedSlime: boolean,
   lobbyEnabled: boolean,
   weaponPickupLayout: WeaponPickupLayout,
   planetDefs: RuntimeMapPlanet[],
@@ -298,7 +298,7 @@ function createSimMatchState(
         idx,
         {
           railId: idx,
-          nodes: Array(RAIL_PAINT_NODES).fill(0xffffff),
+          nodes: Array(RAIL_SLIME_NODES).fill(0xffffff),
         },
       ]),
     ),
@@ -307,20 +307,20 @@ function createSimMatchState(
     healthPickups: createHealthPickups(pickupCfg, planetDefs),
     matchPhase: lobbyEnabled ? MatchPhase.Lobby : MatchPhase.Active,
     matchTimer: lobbyEnabled ? 0 : GAME_CONFIG.match.durationSeconds,
-    paintSeq: 0,
+    slimeSeq: 0,
     trickSeq: 0,
     scores: new Map(),
     elapsedMs: 0,
     nextProjectileId: 0,
   };
-  if (seedPaint) {
-    seedTestPaint(simState, mode);
+  if (seedSlime) {
+    seedTestSlime(simState, mode);
   }
   return simState;
 }
 
 export interface MatchSimulationOptions {
-  seedTestPaint?: boolean;
+  seedTestSlime?: boolean;
   lobbyEnabled?: boolean;
   weaponPickupLayout?: WeaponPickupLayout;
 }
@@ -367,7 +367,7 @@ function createSimPlayer(
     botOrigin: isBot ? botOptions?.origin : undefined,
     botConfigIndex: isBot ? botOptions?.configIndex : undefined,
     teamId: slot.teamId,
-    paintGroupId: slot.paintGroupId,
+    slimeGroupId: slot.slimeGroupId,
     paletteIndex: slot.paletteIndex,
     patternId: mode.slots[slot.paletteIndex]?.patternId ?? 0,
     slimeColor: mode.slots[slot.paletteIndex]?.color ?? 0xffffff,
@@ -390,7 +390,7 @@ function createSimPlayer(
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    isOnFriendlyPaint: false,
+    isOnFriendlySlime: false,
     inputSeq: 0,
     airTrickCombo: 0,
     airTrickAirTimeMs: 0,
@@ -404,12 +404,12 @@ function createSimPlayer(
     airTrickFrontFlipMilestoneIndex: 0,
     airTrickBackFlipMilestoneIndex: 0,
     airTrickFlipBlocked: false,
-    airTrickPaintMultiplier: 1,
+    airTrickSlimeMultiplier: 1,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     disposableShotsRemaining: 0,
     health: GAME_CONFIG.player.maxHealth,
     slimeLevel: GAME_CONFIG.slime.maxLevel,
-    paintScore: 0,
+    slimeScore: 0,
     killCount: 0,
     deathCount: 0,
     respawnTimer: 0,
@@ -426,8 +426,8 @@ export class MatchSimulation {
   private readonly stepCfgs: Map<string, StepConfig>;
   private readonly simState: SimMatchState;
   private readonly inputQueues = new Map<string, InputMessage[]>();
-  private readonly recentPaintStamps = new Map<string, PaintStampMessage[]>();
-  private readonly pendingPaintStamps: PaintStampMessage[] = [];
+  private readonly recentSlimeStamps = new Map<string, SlimeStampMessage[]>();
+  private readonly pendingSlimeStamps: SlimeStampMessage[] = [];
   private readonly pendingTrickEvents: TrickEventMessage[] = [];
   private readonly pendingKillEvents: KillEventMessage[] = [];
   private playerCount = 0;
@@ -447,7 +447,7 @@ export class MatchSimulation {
     this.rails = buildRails(map);
     this.simState = createSimMatchState(
       mode,
-      options.seedTestPaint ?? false,
+      options.seedTestSlime ?? false,
       options.lobbyEnabled ?? false,
       options.weaponPickupLayout ?? "map",
       map.planets,
@@ -495,7 +495,7 @@ export class MatchSimulation {
       requestedTeamId >= 0 &&
       requestedTeamId < this.mode.teamCount
     ) {
-      return { teamId: requestedTeamId, paintGroupId: requestedTeamId };
+      return { teamId: requestedTeamId, slimeGroupId: requestedTeamId };
     }
     const counts: number[] = [];
     for (let t = 0; t < this.mode.teamCount; t++) counts.push(0);
@@ -508,7 +508,7 @@ export class MatchSimulation {
     for (let t = 1; t < this.mode.teamCount; t++) {
       if (counts[t]! < counts[smallestTeam]!) smallestTeam = t;
     }
-    return { teamId: smallestTeam, paintGroupId: smallestTeam };
+    return { teamId: smallestTeam, slimeGroupId: smallestTeam };
   }
 
   private resolvePaletteIndex(
@@ -638,8 +638,8 @@ export class MatchSimulation {
     removeBotState(sessionId);
   }
 
-  getRecentPaintStamps(): readonly PaintStampMessage[] {
-    const messages: PaintStampMessage[] = [];
+  getRecentSlimeStamps(): readonly SlimeStampMessage[] {
+    const messages: SlimeStampMessage[] = [];
     this.simState.planets.forEach((planet) => {
       for (const stamp of planet.stamps) {
         messages.push({ planetId: planet.planetId, ...stamp });
@@ -756,8 +756,8 @@ export class MatchSimulation {
     return events;
   }
 
-  drainPaintStampMessages(): PaintStampMessage[] {
-    return this.pendingPaintStamps.splice(0, this.pendingPaintStamps.length);
+  drainSlimeStampMessages(): SlimeStampMessage[] {
+    return this.pendingSlimeStamps.splice(0, this.pendingSlimeStamps.length);
   }
 
   drainTrickEventMessages(): TrickEventMessage[] {
@@ -782,24 +782,27 @@ export class MatchSimulation {
       railState.nodes.fill(0xffffff);
     }
     this.simState.scores.clear();
-    this.recentPaintStamps.clear();
+    this.recentSlimeStamps.clear();
     this.simState.projectiles.clear();
     this.simState.players.forEach((player) => {
-      player.paintScore = 0;
+      player.slimeScore = 0;
       player.killCount = 0;
       player.deathCount = 0;
     });
   }
 
-  private recordPaintStamp(message: PaintStampMessage): void {
-    this.pendingPaintStamps.push(message);
+  private recordSlimeStamp(message: SlimeStampMessage): void {
+    this.pendingSlimeStamps.push(message);
 
-    const planetMessages = this.recentPaintStamps.get(message.planetId) ?? [];
+    const planetMessages = this.recentSlimeStamps.get(message.planetId) ?? [];
     planetMessages.push(message);
-    if (planetMessages.length > GAME_CONFIG.paint.maxVisualStampsPerPlanet) {
-      planetMessages.splice(0, planetMessages.length - GAME_CONFIG.paint.maxVisualStampsPerPlanet);
+    if (planetMessages.length > GAME_CONFIG.slimeStamp.maxVisualStampsPerPlanet) {
+      planetMessages.splice(
+        0,
+        planetMessages.length - GAME_CONFIG.slimeStamp.maxVisualStampsPerPlanet,
+      );
     }
-    this.recentPaintStamps.set(message.planetId, planetMessages);
+    this.recentSlimeStamps.set(message.planetId, planetMessages);
   }
 
   private maybeStampRailCorridor(player: SimPlayerState, prevGrindId: number): void {
@@ -813,14 +816,14 @@ export class MatchSimulation {
     if (!planetDef) return;
 
     const radiusMultiplier =
-      getPlanetSurfaceChordRadius(rail.paintCorridorRadius, planetDef.radius) /
-      getPaintStampChordRadius(planetDef.radius);
+      getPlanetSurfaceChordRadius(rail.slimeCorridorRadius, planetDef.radius) /
+      getSlimeStampChordRadius(planetDef.radius);
 
     // Use incremental painting between last position and current position
     const startT = player.lastGrindT;
     const endT = player.grindT;
     const dist = Math.abs(endT - startT);
-    const step = GAME_CONFIG.rail.paintStampSpacing;
+    const step = GAME_CONFIG.rail.slimeStampSpacing;
 
     // Stamp the ground
     if (dist > 0.01) {
@@ -830,25 +833,25 @@ export class MatchSimulation {
       for (let i = 0; i <= numStamps; i++) {
         const t = startT + (i / numStamps) * dist * dir;
         const { pos } = sampleRailAt(rail, t);
-        const msg = applyPaintImpact(this.simState, planetState, {
+        const msg = applySlimeImpact(this.simState, planetState, {
           planetId: rail.planetId,
           pos,
-          paintGroupId: player.paintGroupId,
+          slimeGroupId: player.slimeGroupId,
           slimeColor: player.slimeColor,
           patternId: player.patternId,
           radiusMultiplier,
         });
-        if (msg) this.recordPaintStamp(msg);
+        if (msg) this.recordSlimeStamp(msg);
       }
     }
 
     // Update rail nodes
-    const nodesPerUnit = (RAIL_PAINT_NODES - 1) / rail.totalLength;
+    const nodesPerUnit = (RAIL_SLIME_NODES - 1) / rail.totalLength;
     const nodeStart = Math.min(startT, endT) * nodesPerUnit;
     const nodeEnd = Math.max(startT, endT) * nodesPerUnit;
 
     for (let i = Math.floor(nodeStart); i <= Math.ceil(nodeEnd); i++) {
-      if (i >= 0 && i < RAIL_PAINT_NODES) {
+      if (i >= 0 && i < RAIL_SLIME_NODES) {
         railState.nodes[i] = player.slimeColor;
       }
     }
@@ -947,7 +950,7 @@ export class MatchSimulation {
             this.pendingTrickEvents.push(...tricks.trickEvents);
           } else if (wasTrickActive) {
             for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
-              this.recordPaintStamp(stamp);
+              this.recordSlimeStamp(stamp);
             }
           }
           collectWeaponPickup(this.simState, player, GAME_CONFIG);
@@ -967,7 +970,7 @@ export class MatchSimulation {
               gameplayCfg,
               (event) => this.recordKillEvent(event),
             )) {
-              this.recordPaintStamp(stamp);
+              this.recordSlimeStamp(stamp);
             }
             for (const stamp of tryFireHitscan(
               this.simState,
@@ -978,7 +981,7 @@ export class MatchSimulation {
               gameplayCfg,
               (event) => this.recordKillEvent(event),
             )) {
-              this.recordPaintStamp(stamp);
+              this.recordSlimeStamp(stamp);
             }
           }
         }
@@ -1011,7 +1014,7 @@ export class MatchSimulation {
           this.pendingTrickEvents.push(...tricks.trickEvents);
         } else if (wasTrickActive) {
           for (const stamp of settleAirTricksOnLanding(this.simState, player)) {
-            this.recordPaintStamp(stamp);
+            this.recordSlimeStamp(stamp);
           }
         }
         collectWeaponPickup(this.simState, player, GAME_CONFIG);
@@ -1026,7 +1029,7 @@ export class MatchSimulation {
       }
     });
 
-    const paintStamps = tickProjectiles(
+    const slimeStamps = tickProjectiles(
       this.simState,
       dtMs,
       this.planets,
@@ -1036,7 +1039,7 @@ export class MatchSimulation {
           this.mode,
           this.simState.players.values(),
           {
-            playerIndex: player.paintGroupId + player.deathCount,
+            playerIndex: player.slimeGroupId + player.deathCount,
             teamId: player.teamId,
           },
           player.sessionId,
@@ -1044,8 +1047,8 @@ export class MatchSimulation {
         ),
       (event) => this.recordKillEvent(event),
     );
-    for (const stamp of paintStamps) {
-      this.recordPaintStamp(stamp);
+    for (const stamp of slimeStamps) {
+      this.recordSlimeStamp(stamp);
     }
 
     this.simState.elapsedMs += dtMs;
@@ -1066,7 +1069,7 @@ export class MatchSimulation {
         vel: { x: player.vel.x, y: player.vel.y, z: player.vel.z },
         rot: { x: player.rot.x, y: player.rot.y, z: player.rot.z, w: player.rot.w },
         planetId: player.planetId,
-        paintGroupId: player.paintGroupId,
+        slimeGroupId: player.slimeGroupId,
         movementState: player.movementState,
         surfState: player.surfState,
         isCarving: player.isCarving,
@@ -1082,7 +1085,7 @@ export class MatchSimulation {
         health: player.health,
         slimeLevel: player.slimeLevel,
         respawnTimer: player.respawnTimer,
-        isOnFriendlyPaint: player.isOnFriendlyPaint,
+        isOnFriendlySlime: player.isOnFriendlySlime,
         slimeColor: player.slimeColor,
         patternId: player.patternId,
         inputSeq: player.inputSeq,
@@ -1095,7 +1098,7 @@ export class MatchSimulation {
         id: projectile.id,
         ownerId: projectile.ownerId,
         weaponId: projectile.weaponId,
-        paintGroupId: projectile.paintGroupId,
+        slimeGroupId: projectile.slimeGroupId,
         slimeColor: projectile.slimeColor,
         patternId: projectile.patternId,
         pos: { x: projectile.pos.x, y: projectile.pos.y, z: projectile.pos.z },
@@ -1148,17 +1151,17 @@ export class MatchSimulation {
         sessionId: player.sessionId,
         name: player.name,
         teamId: player.teamId,
-        paintGroupId: player.paintGroupId,
+        slimeGroupId: player.slimeGroupId,
         slimeColor: player.slimeColor,
         patternId: player.patternId,
-        paintScore: player.paintScore,
+        slimeScore: player.slimeScore,
         killCount: player.killCount,
         deathCount: player.deathCount,
       });
     });
     entries.sort(
       (a, b) =>
-        b.paintScore - a.paintScore ||
+        b.slimeScore - a.slimeScore ||
         b.killCount - a.killCount ||
         a.deathCount - b.deathCount ||
         a.name.localeCompare(b.name),

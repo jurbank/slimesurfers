@@ -39,19 +39,19 @@ This skill is for changes involving:
    - `apps/editor/src/export.ts`
    - `apps/editor/src/types.ts`
    - `packages/content/map/runtimeMapData.ts`
-   Confirm each changed editor field either maps into runtime data intentionally or is editor-only by design.
+     Confirm each changed editor field either maps into runtime data intentionally or is editor-only by design.
 
 3. Update schema and validation before regenerating map artifacts.
    If runtime shape changed, update:
    - `RuntimeMapData` types
    - `validateRuntimeMapData`
    - migration/backfill logic used by room map resolution
-   Do not refresh `my-map.json` until schema/validation are settled.
+     Do not refresh `my-map.json` until schema/validation are settled.
 
 4. Regenerate or refresh runtime map output.
    If export output changed, produce updated runtime JSON from the editor export path and sync it into:
    - `apps/game/server/my-map.json`
-   Keep `mapId`, `name`, `planets`, `cel`, `rails`, and `spawns` consistent with the exported runtime map.
+     Keep `mapId`, `name`, `planets`, `cel`, `rails`, and `spawns` consistent with the exported runtime map.
 
 5. Verify server consumption path.
    Confirm `apps/game/server/src/rooms/matchRoom.ts` still validates and accepts the map through `MAP_FILE` loading and migration.

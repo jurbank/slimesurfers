@@ -5,9 +5,9 @@ import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessa
 import {
   PlayerMovementState,
   PlayerSurfState,
-  type SimPlanetPaintState,
+  type SimPlanetSlimeState,
 } from "@splat/simulation/match/simState.ts";
-import { createStampBuckets } from "@splat/simulation/paint/paintDetection.ts";
+import { createStampBuckets } from "@splat/simulation/slime/slimeDetection.ts";
 import {
   getTerrainHeight,
   getTerrainRadius,
@@ -21,7 +21,7 @@ const TEST_PLANETS: PlanetData[] = [
     radius: 50,
   },
 ];
-const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
+const EMPTY_SLIME = new Map<string, SimPlanetSlimeState>();
 
 const TEST_CONFIG = {
   planet: {
@@ -39,7 +39,7 @@ const TEST_CONFIG = {
     anchorGravityMultiplier: 2.6,
     collisionRadius: 0.5,
     standingHeight: 1.0,
-    friendlyPaintSpeedMultiplier: 1.5,
+    friendlySlimeSpeedMultiplier: 1.5,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 6,
     surfSpeedMultiplier: 2.4,
@@ -53,8 +53,8 @@ const TEST_CONFIG = {
   rail: {
     snapDistance: 4.0,
     minEntrySpeed: 8.0,
-    paintCorridorRadius: 3.5,
-    paintStampSpacing: 4.0,
+    slimeCorridorRadius: 3.5,
+    slimeStampSpacing: 4.0,
     maxGrindSpeed: 35.0,
     carveAccelerationPerSecond: 12.0,
     visualRadius: 0.4,
@@ -93,7 +93,7 @@ function createPlayer(): PlayerPhysics {
     vel: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: "planet-0",
-    paintGroupId: 1,
+    slimeGroupId: 1,
     movementState: PlayerMovementState.Idle,
     surfState: PlayerSurfState.None,
     isCarving: false,
@@ -103,12 +103,12 @@ function createPlayer(): PlayerPhysics {
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    isOnFriendlyPaint: false,
+    isOnFriendlySlime: false,
   };
 }
 
-function createPaintMap(paintGroupId: number): Map<string, SimPlanetPaintState> {
-  const paint = new Map<string, SimPlanetPaintState>([
+function createSlimeMap(slimeGroupId: number): Map<string, SimPlanetSlimeState> {
+  const slime = new Map<string, SimPlanetSlimeState>([
     [
       "planet-0",
       {
@@ -118,7 +118,7 @@ function createPaintMap(paintGroupId: number): Map<string, SimPlanetPaintState> 
         cells: [],
         stamps: [
           {
-            paintGroupId,
+            slimeGroupId,
             color: 0xffffff,
             nx: 0,
             ny: 1,
@@ -132,8 +132,8 @@ function createPaintMap(paintGroupId: number): Map<string, SimPlanetPaintState> 
       },
     ],
   ]);
-  paint.get("planet-0")!.stampBuckets[0] = [...paint.get("planet-0")!.stamps];
-  return paint;
+  slime.get("planet-0")!.stampBuckets[0] = [...slime.get("planet-0")!.stamps];
+  return slime;
 }
 
 function forwardFromRot(rot: PlayerPhysics["rot"]): { x: number; y: number; z: number } {
@@ -179,7 +179,7 @@ describe("stepPlayer", () => {
   it("moves a grounded player along the planet surface", () => {
     const player = createPlayer();
 
-    stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     const dx = player.pos.x - TEST_PLANETS[0]!.center.x;
     const dy = player.pos.y - TEST_PLANETS[0]!.center.y;
@@ -211,7 +211,7 @@ describe("stepPlayer", () => {
       0.1,
       TEST_PLANETS,
       TEST_CONFIG,
-      EMPTY_PAINT,
+      EMPTY_SLIME,
       [],
       raisedTerrain,
     );
@@ -232,7 +232,7 @@ describe("stepPlayer", () => {
   it("jumps with space outside ski mode", () => {
     const player = createPlayer();
 
-    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
@@ -242,7 +242,7 @@ describe("stepPlayer", () => {
 
   it("carries normal movement input into a jump", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(
       player,
@@ -261,7 +261,7 @@ describe("stepPlayer", () => {
   it("accelerates forward faster in ski mode when holding forward and anchor together", () => {
     const normalPlayer = createPlayer();
     const boostedPlayer = createPlayer();
-    const paint = createPaintMap(boostedPlayer.paintGroupId);
+    const paint = createSlimeMap(boostedPlayer.slimeGroupId);
 
     stepPlayer(normalPlayer, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     // Enter ski mode then ramp up with carving — needs several steps to surpass normal speed
@@ -300,7 +300,7 @@ describe("stepPlayer", () => {
       0.1,
       TEST_PLANETS,
       TEST_CONFIG,
-      EMPTY_PAINT,
+      EMPTY_SLIME,
     );
 
     expect(player.planetId).toBe("");
@@ -312,7 +312,7 @@ describe("stepPlayer", () => {
     const player = createPlayer();
     player.vel.y = 20;
 
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("planet-0");
     expect(player.movementState).toBe(PlayerMovementState.Idle);
@@ -321,7 +321,7 @@ describe("stepPlayer", () => {
 
   it("lets ski traversal leave the surface when the free path rises beyond snap distance", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     player.vel.y = 20;
 
@@ -334,7 +334,7 @@ describe("stepPlayer", () => {
 
   it("keeps ski mode when landing back on slime after becoming airborne", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
     player.surfState = PlayerSurfState.SurfmingMoving;
@@ -356,8 +356,8 @@ describe("stepPlayer", () => {
     player.pos.y += 1;
     player.vel.y = -20;
 
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("planet-0");
     expect(player.surfState).not.toBe(PlayerSurfState.None);
@@ -367,7 +367,7 @@ describe("stepPlayer", () => {
     const player = createPlayer();
     player.vel.y = 20;
 
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("planet-0");
     expect(player.movementState).not.toBe(PlayerMovementState.Airborne);
@@ -378,7 +378,7 @@ describe("stepPlayer", () => {
     const player = createPlayer();
     player.vel.z = 12;
 
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("planet-0");
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeLessThan(0.1);
@@ -389,7 +389,7 @@ describe("stepPlayer", () => {
     const startPos = { ...player.pos };
 
     for (let i = 0; i < 10; i += 1) {
-      stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+      stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
     }
 
     expect(player.planetId).toBe("planet-0");
@@ -401,7 +401,7 @@ describe("stepPlayer", () => {
     const player = createPlayer();
     player.vel.z = 4;
 
-    stepPlayer(player, createInput(InputKey.Backward), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Backward), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.planetId).toBe("planet-0");
     expect(player.vel.z).toBeLessThan(0);
@@ -429,7 +429,7 @@ describe("stepPlayer", () => {
       0.05,
       TEST_PLANETS,
       TEST_CONFIG,
-      EMPTY_PAINT,
+      EMPTY_SLIME,
     );
 
     const forward = forwardFromRot(player.rot);
@@ -449,14 +449,14 @@ describe("stepPlayer", () => {
     freePlayer.pos.y += 5;
     anchoredPlayer.pos.y += 5;
 
-    stepPlayer(freePlayer, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(freePlayer, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
     stepPlayer(
       anchoredPlayer,
       createInput(InputKey.Anchor),
       0.1,
       TEST_PLANETS,
       TEST_CONFIG,
-      EMPTY_PAINT,
+      EMPTY_SLIME,
     );
 
     expect(anchoredPlayer.vel.y).toBeLessThan(freePlayer.vel.y);
@@ -468,19 +468,19 @@ describe("stepPlayer", () => {
     player.movementState = PlayerMovementState.Airborne;
     player.pos.y += 5;
 
-    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.airBoostAcceleration * 0.1 - 0.1);
     expect(player.vel.z).toBeLessThan(TEST_CONFIG.movement.boostAcceleration * 0.1);
   });
 
-  it("applies the friendly paint speed multiplier from config", () => {
+  it("applies the friendly slime speed multiplier from config", () => {
     const player = createPlayer();
-    // Add a stamp at the player's position to ensure onFriendlyPaint is true
-    const paint = createPaintMap(player.paintGroupId);
+    // Add a stamp at the player's position to ensure isOnFriendlySlime is true
+    const paint = createSlimeMap(player.slimeGroupId);
     const planet = paint.get("planet-0")!;
     planet.stamps.push({
-      paintGroupId: player.paintGroupId,
+      slimeGroupId: player.slimeGroupId,
       color: 0xff0000,
       patternId: 0,
       nx: 0,
@@ -502,14 +502,14 @@ describe("stepPlayer", () => {
     expect(speed).toBeLessThanOrEqual(
       TEST_CONFIG.movement.moveSpeed *
         TEST_CONFIG.movement.surfSpeedMultiplier *
-        TEST_CONFIG.movement.friendlyPaintSpeedMultiplier *
+        TEST_CONFIG.movement.friendlySlimeSpeedMultiplier *
         1.05,
     );
   });
 
-  it("shows a subtle moving indicator while skiing on friendly paint with movement input", () => {
+  it("shows a subtle moving indicator while skiing on friendly slime with movement input", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(
       player,
@@ -526,7 +526,7 @@ describe("stepPlayer", () => {
 
   it("becomes hidden in ski mode when stationary", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
@@ -536,7 +536,7 @@ describe("stepPlayer", () => {
 
   it("stays in ski mode after the toggle input is released", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
@@ -546,7 +546,7 @@ describe("stepPlayer", () => {
 
   it("exits ski mode when toggled again", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
@@ -556,7 +556,7 @@ describe("stepPlayer", () => {
 
   it("keeps ski mode while firing", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Fire), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
@@ -564,9 +564,9 @@ describe("stepPlayer", () => {
     expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
   });
 
-  it("allows visible ski mode on enemy paint", () => {
+  it("allows visible ski mode on enemy slime", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId + 1);
+    const paint = createSlimeMap(player.slimeGroupId + 1);
 
     stepPlayer(
       player,
@@ -583,8 +583,8 @@ describe("stepPlayer", () => {
 
   it("keeps ski momentum when crossing from friendly slime onto enemy slime", () => {
     const player = createPlayer();
-    const friendlyPaint = createPaintMap(player.paintGroupId);
-    const enemyPaint = createPaintMap(player.paintGroupId + 1);
+    const friendlySlime = createSlimeMap(player.slimeGroupId);
+    const enemySlime = createSlimeMap(player.slimeGroupId + 1);
 
     stepPlayer(
       player,
@@ -592,10 +592,10 @@ describe("stepPlayer", () => {
       0.1,
       TEST_PLANETS,
       TEST_CONFIG,
-      friendlyPaint,
+      friendlySlime,
     );
     player.vel.z = 18;
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemyPaint);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemySlime);
 
     expect(player.surfState).toBe(PlayerSurfState.SkiVisible);
     expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.moveSpeed);
@@ -603,7 +603,7 @@ describe("stepPlayer", () => {
 
   it("anchoring while in ski mode keeps ski mode active", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(
       player,
@@ -631,7 +631,7 @@ describe("stepPlayer", () => {
 
   it("clears carve pose when space is released in ski mode", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(
       player,
@@ -653,14 +653,14 @@ describe("stepPlayer", () => {
     player.movementState = PlayerMovementState.Airborne;
     player.surfState = PlayerSurfState.SurfmingMoving;
 
-    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.isCarving).toBe(true);
   });
 
   it("exiting ski mode with the toggle brakes back into normal movement", () => {
     const player = createPlayer();
-    const paint = createPaintMap(player.paintGroupId);
+    const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     player.vel.z = 18;
@@ -690,7 +690,7 @@ describe("stepPlayer", () => {
       z: -underwaterNormal.z * 8,
     };
 
-    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_PAINT);
+    stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     const distFromCenter = Math.hypot(
       player.pos.x - TEST_PLANETS[0]!.center.x,

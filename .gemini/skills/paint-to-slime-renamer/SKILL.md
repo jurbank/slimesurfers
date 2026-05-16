@@ -1,7 +1,7 @@
 ---
 name: paint-to-slime-renamer
-description: 'Rename terminology from paint to slime across the codebase. Use for word-level refactors, API/message naming updates, docs synchronization, and safe validation when converting paint terms to slime terms.'
-argument-hint: 'Scope or constraints, for example: exact word only, include comments/docs, skip protocol compatibility aliases'
+description: "Rename terminology from paint to slime across the codebase. Use for word-level refactors, API/message naming updates, docs synchronization, and safe validation when converting paint terms to slime terms."
+argument-hint: "Scope or constraints, for example: exact word only, include comments/docs, skip protocol compatibility aliases"
 ---
 
 # Paint To Slime Renamer
@@ -11,6 +11,7 @@ argument-hint: 'Scope or constraints, for example: exact word only, include comm
 This skill performs a safe, repeatable terminology migration from `paint` to `slime`.
 
 Expected output:
+
 - All targeted `paint` occurrences are renamed to `slime`.
 - Relevant file and folder names containing `paint` are renamed to `slime` when doing so improves consistency and does not break project structure.
 - Non-target substrings (for example, `repaint`, `painting`) are preserved unless explicitly requested.
@@ -19,6 +20,7 @@ Expected output:
 ## When To Use
 
 Use this skill when:
+
 - A feature, system, or package is moving from paint terminology to slime terminology.
 - You need consistent naming in code, schemas, protocol messages, tests, and docs.
 - You want a guarded migration that avoids accidental substring replacements.
@@ -36,24 +38,29 @@ Use this skill when:
 ## Decision Points
 
 1. Exact token or broad replacement:
+
 - Default: replace exact standalone word `paint` with `slime`.
 - Optional: include `Paint` -> `Slime`, `PAINT` -> `SLIME`, and identifier fragments like `paintScore` -> `slimeScore`.
 
 2. Compatibility policy:
+
 - If external contracts depend on old names, add compatibility aliases or translation shims.
 - If no compatibility is required, fully migrate to slime naming.
 
 3. File categories:
+
 - Code-only migration.
 - Code plus tests/docs/config and changelog text.
 
 4. Path rename relevance:
+
 - Rename files/folders when they represent domain terminology (for example, `paint` systems, modules, docs).
 - Skip generated, third-party, or externally contract-bound paths unless explicitly approved.
 
 ## Quality Checks
 
 Completion criteria:
+
 - No unintended replacements in unrelated words.
 - No unresolved references to renamed symbols.
 - No broken imports or references after file/folder renames.

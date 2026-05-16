@@ -28,7 +28,7 @@ export interface PlayerVisualState {
   isCarving: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
-  isOnFriendlyPaint: boolean;
+  isOnFriendlySlime: boolean;
 }
 
 interface PlayerVisualRigOptions {
@@ -280,7 +280,7 @@ export class PlayerVisualRig {
 export function isPlayerEffectivelySubmerged(state: PlayerVisualState): boolean {
   const airborne = state.movementState === PlayerMovementState.Airborne;
   return (
-    (state.isOnFriendlyPaint && !airborne && !state.isShooting) ||
+    (state.isOnFriendlySlime && !airborne && !state.isShooting) ||
     state.surfState === PlayerSurfState.SurfmingHidden
   );
 }

@@ -6,7 +6,7 @@ import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
 import { MatchSimulation } from "@splat/simulation/match/matchSimulation.ts";
-import { getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { getSlimeTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import {
   addSimPlayerToRoomState,
@@ -34,13 +34,13 @@ describe("PlayerState schema boundary", () => {
       "isBot",
       "name",
       "teamId",
-      "paintGroupId",
+      "slimeGroupId",
       "paletteIndex",
       "patternId",
       "slimeColor",
       "health",
       "slimeLevel",
-      "paintScore",
+      "slimeScore",
       "killCount",
       "deathCount",
       "respawnTimer",
@@ -51,7 +51,7 @@ describe("PlayerState schema boundary", () => {
 });
 
 describe("matchRoomReplication", () => {
-  const { rows } = getPaintTerritoryDimensions(DEV_MAP.planets[0]!.radius);
+  const { rows } = getSlimeTerritoryDimensions(DEV_MAP.planets[0]!.radius);
 
   it("projects simulation players into room schema state", () => {
     const simulation = new MatchSimulation();
@@ -59,14 +59,14 @@ describe("matchRoomReplication", () => {
     const state = createRoomState(simulation.matchState, simulation.mode);
 
     addSimPlayerToRoomState(state, alpha);
-    alpha.paintScore = 12;
+    alpha.slimeScore = 12;
     alpha.health = 42;
     alpha.slimeLevel = 27.5;
     syncRoomStateFromSimulation(state, simulation.matchState);
 
     const schemaPlayer = state.players.get("session-1");
     expect(schemaPlayer?.name).toBe("Alpha");
-    expect(schemaPlayer?.paintScore).toBe(12);
+    expect(schemaPlayer?.slimeScore).toBe(12);
     expect(schemaPlayer?.health).toBe(42);
     expect(schemaPlayer?.slimeLevel).toBe(27.5);
   });
@@ -79,7 +79,7 @@ describe("matchRoomReplication", () => {
     const bootstrap = buildJoinBootstrap(simulation);
 
     expect(bootstrap.snapshot.players).toHaveLength(1);
-    expect(Array.isArray(bootstrap.paintStamps)).toBe(true);
+    expect(Array.isArray(bootstrap.slimeStamps)).toBe(true);
   });
 
   it("builds outbound broadcasts from simulation tick results", () => {
@@ -101,7 +101,7 @@ describe("matchRoomReplication", () => {
     expect(broadcasts.leaderboard?.entries[0]?.deathCount).toBe(0);
     expect(broadcasts.matchPhase?.phase).toBe(MatchPhase.Active);
     expect(broadcasts.killEvents).toHaveLength(0);
-    expect(broadcasts.paintStamps).toHaveLength(0);
+    expect(broadcasts.slimeStamps).toHaveLength(0);
   });
 
   it("drains kill events into outbound broadcasts", () => {
@@ -114,7 +114,7 @@ describe("matchRoomReplication", () => {
         id: `replication-kill-${shot}`,
         ownerId: shooter.sessionId,
         weaponId: WeaponId.MachineGun,
-        paintGroupId: shooter.paintGroupId,
+        slimeGroupId: shooter.slimeGroupId,
         slimeColor: shooter.slimeColor,
         patternId: shooter.patternId,
         pos: { x: target.pos.x, y: target.pos.y, z: target.pos.z },
@@ -148,18 +148,18 @@ describe("matchRoomReplication", () => {
     addSimPlayerToRoomState(state, alpha);
     const planet = simulation.matchState.planets.get("planet-0");
     if (!planet) {
-      throw new Error("expected planet-0 paint state");
+      throw new Error("expected planet-0 slime state");
     }
 
-    planet.cells[0]!.ownerPaintGroupId = alpha.paintGroupId;
+    planet.cells[0]!.ownerSlimeGroupId = alpha.slimeGroupId;
     planet.cells[0]!.color = alpha.slimeColor;
-    simulation.matchState.scores.set(alpha.paintGroupId.toString(), 1);
-    alpha.paintScore = 1;
+    simulation.matchState.scores.set(alpha.slimeGroupId.toString(), 1);
+    alpha.slimeScore = 1;
     syncRoomStateFromSimulation(state, simulation.matchState);
 
-    expect(state.scores.get(alpha.paintGroupId.toString())).toBe(1);
-    expect(state.players.get(alpha.sessionId)?.paintScore).toBe(1);
-    expect(state.planets.get("planet-0")?.cells[0]?.ownerPaintGroupId).toBe(alpha.paintGroupId);
+    expect(state.scores.get(alpha.slimeGroupId.toString())).toBe(1);
+    expect(state.players.get(alpha.sessionId)?.slimeScore).toBe(1);
+    expect(state.planets.get("planet-0")?.cells[0]?.ownerSlimeGroupId).toBe(alpha.slimeGroupId);
     expect(state.planets.get("planet-0")?.territoryRows).toBe(rows);
   });
 

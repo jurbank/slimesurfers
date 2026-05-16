@@ -11,7 +11,7 @@ import {
   type StepConfig,
 } from "@splat/simulation/movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail } from "@splat/simulation/movement/railSpline.ts";
-import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
+import type { SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
 
 const MAX_PENDING_INPUTS = 60;
 
@@ -23,7 +23,7 @@ export interface RuntimePlayerState extends PlayerPhysics {
   slimeLevel: number;
   inputSeq: number;
   respawnTimer: number;
-  isOnFriendlyPaint: boolean;
+  isOnFriendlySlime: boolean;
   sessionId: string;
   slimeColor: number;
   patternId: number;
@@ -49,7 +49,7 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     vel: cloneVec3(state.vel),
     rot: cloneQuat(state.rot),
     planetId: state.planetId,
-    paintGroupId: state.paintGroupId,
+    slimeGroupId: state.slimeGroupId,
     movementState: state.movementState,
     surfState: state.surfState,
     isCarving: state.isCarving,
@@ -66,7 +66,7 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     slimeLevel: state.slimeLevel,
     inputSeq: state.inputSeq,
     respawnTimer: state.respawnTimer,
-    isOnFriendlyPaint: state.isOnFriendlyPaint,
+    isOnFriendlySlime: state.isOnFriendlySlime,
     slimeColor: state.slimeColor,
     patternId: state.patternId,
   };
@@ -83,7 +83,7 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     vel: cloneVec3(snapshot.vel),
     rot: cloneQuat(snapshot.rot),
     planetId: snapshot.planetId,
-    paintGroupId: snapshot.paintGroupId,
+    slimeGroupId: snapshot.slimeGroupId,
     movementState: snapshot.movementState,
     surfState: snapshot.surfState,
     isCarving: snapshot.isCarving,
@@ -100,7 +100,7 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     slimeLevel: snapshot.slimeLevel,
     inputSeq: snapshot.inputSeq,
     respawnTimer: snapshot.respawnTimer,
-    isOnFriendlyPaint: snapshot.isOnFriendlyPaint,
+    isOnFriendlySlime: snapshot.isOnFriendlySlime,
     slimeColor: snapshot.slimeColor,
     patternId: snapshot.patternId,
   };
@@ -130,7 +130,7 @@ function interpolateState(
       w: lerp(older.rot.w, newer.rot.w, t),
     },
     planetId: newer.planetId,
-    paintGroupId: newer.paintGroupId,
+    slimeGroupId: newer.slimeGroupId,
     movementState: newer.movementState,
     surfState: newer.surfState,
     isCarving: newer.isCarving,
@@ -147,7 +147,7 @@ function interpolateState(
     slimeLevel: newer.slimeLevel,
     inputSeq: newer.inputSeq,
     respawnTimer: newer.respawnTimer,
-    isOnFriendlyPaint: newer.isOnFriendlyPaint,
+    isOnFriendlySlime: newer.isOnFriendlySlime,
     slimeColor: newer.slimeColor,
     patternId: newer.patternId,
   };
@@ -209,7 +209,7 @@ export class ClientRuntimeState {
     this.remoteSnapshots.clear();
   }
 
-  recordLocalInput(input: InputMessage, planetPaint: Map<string, SimPlanetPaintState>): void {
+  recordLocalInput(input: InputMessage, planetSlime: Map<string, SimPlanetSlimeState>): void {
     if (!this.localPlayer) return;
     this.pendingInputs.push(input);
     if (this.pendingInputs.length > MAX_PENDING_INPUTS) {
@@ -221,7 +221,7 @@ export class ClientRuntimeState {
       input.dt,
       this.planets,
       this.getStepConfig(this.localPlayer.planetId),
-      planetPaint,
+      planetSlime,
       this.computedRails,
     );
   }
@@ -230,11 +230,11 @@ export class ClientRuntimeState {
     snapshot: PlayerSnapshot,
     isLocal: boolean,
     receivedAtMs: number,
-    planetPaint: Map<string, SimPlanetPaintState>,
+    planetSlime: Map<string, SimPlanetSlimeState>,
   ): void {
     const runtime = snapshotToRuntimeState(snapshot);
     if (isLocal) {
-      this.reconcileLocalPlayer(runtime, planetPaint);
+      this.reconcileLocalPlayer(runtime, planetSlime);
       return;
     }
 
@@ -244,9 +244,9 @@ export class ClientRuntimeState {
     this.remoteSnapshots.set(snapshot.sessionId, buffer);
   }
 
-  setLocalPaintGroupId(groupId: number): void {
+  setLocalSlimeGroupId(groupId: number): void {
     if (this.localPlayer) {
-      this.localPlayer.paintGroupId = groupId;
+      this.localPlayer.slimeGroupId = groupId;
     }
   }
 
@@ -280,7 +280,7 @@ export class ClientRuntimeState {
 
   private reconcileLocalPlayer(
     authoritative: RuntimePlayerState,
-    planetPaint: Map<string, SimPlanetPaintState>,
+    planetSlime: Map<string, SimPlanetSlimeState>,
   ): void {
     const nextPendingIndex = this.pendingInputs.findIndex(
       (input) => input.seq > authoritative.inputSeq,
@@ -296,7 +296,7 @@ export class ClientRuntimeState {
         input.dt,
         this.planets,
         this.getStepConfig(this.localPlayer.planetId),
-        planetPaint,
+        planetSlime,
         this.computedRails,
       );
     }

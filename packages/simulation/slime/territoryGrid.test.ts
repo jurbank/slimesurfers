@@ -1,27 +1,27 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
-import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getSlimeTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
-import { createStampBuckets } from "./paintDetection.ts";
+import { createStampBuckets } from "./slimeDetection.ts";
 import {
-  applyPaintToTerritoryAtPoint,
-  countPaintableTerritoryCells,
+  applySlimeToTerritoryAtPoint,
+  countSlimeableTerritoryCells,
   createTerritoryCells,
-  isTerritoryCellPaintable,
+  isTerritoryCellSlimeable,
 } from "./territoryGrid.ts";
 import type { SimMatchState, SimPlayerState } from "../match/simState.ts";
 
 const DEV_PLANET_RADIUS = DEV_MAP.planets[0]!.radius;
 
-function createPlayer(sessionId: string, paintGroupId: number, slimeColor: number): SimPlayerState {
+function createPlayer(sessionId: string, slimeGroupId: number, slimeColor: number): SimPlayerState {
   return {
     sessionId,
     isBot: false,
     name: sessionId,
     teamId: 255,
-    paintGroupId,
-    paletteIndex: paintGroupId,
+    slimeGroupId,
+    paletteIndex: slimeGroupId,
     patternId: 0,
     slimeColor,
     pos: { x: 0, y: 0, z: 0 },
@@ -39,7 +39,7 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    isOnFriendlyPaint: false,
+    isOnFriendlySlime: false,
     inputSeq: 0,
     airTrickCombo: 0,
     airTrickAirTimeMs: 0,
@@ -53,12 +53,12 @@ function createPlayer(sessionId: string, paintGroupId: number, slimeColor: numbe
     airTrickFrontFlipMilestoneIndex: 0,
     airTrickBackFlipMilestoneIndex: 0,
     airTrickFlipBlocked: false,
-    airTrickPaintMultiplier: 1,
+    airTrickSlimeMultiplier: 1,
     equippedWeaponId: DEFAULT_WEAPON_ID,
     disposableShotsRemaining: 0,
     health: 100,
     slimeLevel: GAME_CONFIG.slime.maxLevel,
-    paintScore: 0,
+    slimeScore: 0,
     killCount: 0,
     deathCount: 0,
     respawnTimer: 0,
@@ -81,7 +81,7 @@ function createSimState(): SimMatchState {
     pickups: new Map(),
     matchPhase: MatchPhase.Active,
     matchTimer: GAME_CONFIG.match.durationSeconds,
-    paintSeq: 0,
+    slimeSeq: 0,
     trickSeq: 0,
     scores: new Map(),
     elapsedMs: 0,
@@ -91,7 +91,7 @@ function createSimState(): SimMatchState {
 }
 
 function surfacePointForCell(row: number, col: number): { x: number; y: number; z: number } {
-  const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+  const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
   const v = (row + 0.5) / rows;
   const u = (col + 0.5) / cols;
   const theta = v * Math.PI;
@@ -112,32 +112,32 @@ function surfacePointForCell(row: number, col: number): { x: number; y: number; 
 }
 
 describe("territoryGrid", () => {
-  it("counts only paintable cells toward total territory coverage", () => {
+  it("counts only slimeable cells toward total territory coverage", () => {
     const planet = DEV_MAP.planets[0]!;
     const terrainCfg = { planet: { radius: planet.radius }, terrain: DEV_MAP.planets[0]!.terrain };
-    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+    const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
     const totalCells = rows * cols;
-    const paintableCells = countPaintableTerritoryCells(rows, cols, terrainCfg);
+    const slimeableCells = countSlimeableTerritoryCells(rows, cols, terrainCfg);
 
-    expect(paintableCells).toBeGreaterThan(0);
-    expect(paintableCells).toBeLessThan(totalCells);
+    expect(slimeableCells).toBeGreaterThan(0);
+    expect(slimeableCells).toBeLessThan(totalCells);
 
     let blockedCellCount = 0;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        if (!isTerritoryCellPaintable(row, col, rows, cols, terrainCfg)) {
+        if (!isTerritoryCellSlimeable(row, col, rows, cols, terrainCfg)) {
           blockedCellCount++;
         }
       }
     }
 
-    expect(blockedCellCount).toBe(totalCells - paintableCells);
+    expect(blockedCellCount).toBe(totalCells - slimeableCells);
     expect(blockedCellCount).toBeGreaterThan(0);
   });
 
-  it("claims neutral cells once and does not double-count repainting the same owned area", () => {
+  it("claims neutral cells once and does not double-count re-sliming the same owned area", () => {
     const simState = createSimState();
-    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+    const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
     const planetState = {
       planetId: "planet-0",
       territoryRows: rows,
@@ -148,21 +148,21 @@ describe("territoryGrid", () => {
     };
     const impactPoint = surfacePointForCell(5, 7);
 
-    const firstChanged = applyPaintToTerritoryAtPoint(
+    const firstChanged = applySlimeToTerritoryAtPoint(
       {
         planetId: planetState.planetId,
         pos: impactPoint,
-        paintGroupId: 0,
+        slimeGroupId: 0,
         slimeColor: 0x00e5ff,
       },
       simState,
       planetState,
     );
-    const secondChanged = applyPaintToTerritoryAtPoint(
+    const secondChanged = applySlimeToTerritoryAtPoint(
       {
         planetId: planetState.planetId,
         pos: impactPoint,
-        paintGroupId: 0,
+        slimeGroupId: 0,
         slimeColor: 0x00e5ff,
       },
       simState,
@@ -172,12 +172,12 @@ describe("territoryGrid", () => {
     expect(firstChanged).toBeGreaterThan(0);
     expect(secondChanged).toBe(0);
     expect(simState.scores.get("0")).toBe(firstChanged);
-    expect(simState.players.get("session-1")?.paintScore).toBe(firstChanged);
+    expect(simState.players.get("session-1")?.slimeScore).toBe(firstChanged);
   });
 
-  it("transfers ownership and score when repainting enemy-controlled territory", () => {
+  it("transfers ownership and score when re-sliming enemy-controlled territory", () => {
     const simState = createSimState();
-    const { rows, cols } = getPaintTerritoryDimensions(DEV_PLANET_RADIUS);
+    const { rows, cols } = getSlimeTerritoryDimensions(DEV_PLANET_RADIUS);
     const planetState = {
       planetId: "planet-0",
       territoryRows: rows,
@@ -188,21 +188,21 @@ describe("territoryGrid", () => {
     };
     const impactPoint = surfacePointForCell(5, 7);
 
-    const firstChanged = applyPaintToTerritoryAtPoint(
+    const firstChanged = applySlimeToTerritoryAtPoint(
       {
         planetId: planetState.planetId,
         pos: impactPoint,
-        paintGroupId: 1,
+        slimeGroupId: 1,
         slimeColor: 0xff6200,
       },
       simState,
       planetState,
     );
-    const secondChanged = applyPaintToTerritoryAtPoint(
+    const secondChanged = applySlimeToTerritoryAtPoint(
       {
         planetId: planetState.planetId,
         pos: impactPoint,
-        paintGroupId: 0,
+        slimeGroupId: 0,
         slimeColor: 0x00e5ff,
       },
       simState,
@@ -213,7 +213,7 @@ describe("territoryGrid", () => {
     expect(secondChanged).toBe(firstChanged);
     expect(simState.scores.get("0")).toBe(secondChanged);
     expect(simState.scores.get("1")).toBe(0);
-    expect(simState.players.get("session-1")?.paintScore).toBe(secondChanged);
-    expect(simState.players.get("session-2")?.paintScore).toBe(0);
+    expect(simState.players.get("session-1")?.slimeScore).toBe(secondChanged);
+    expect(simState.players.get("session-2")?.slimeScore).toBe(0);
   });
 });

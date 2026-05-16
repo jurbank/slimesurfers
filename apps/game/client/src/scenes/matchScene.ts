@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { DEFAULT_WEAPON_ID, getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 import { getAirTrickDefinition } from "@splat/content/tricks/airTrickDefs.ts";
 import type { MatchModeId } from "@splat/protocol/network/clientMessages.ts";
-import { GAME_CONFIG, getPaintTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
+import { GAME_CONFIG, getSlimeTerritoryDimensions } from "@splat/content/config/gameConfig.ts";
 import { DEFAULT_RUNTIME_PLANET_TERRAIN, DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import type {
@@ -17,7 +17,7 @@ import { WeaponAimSystem } from "../systems/weaponAimSystem.ts";
 import { RenderSystem } from "../systems/renderSystem.ts";
 import { CameraSystem } from "../systems/cameraSystem.ts";
 import { InputSystem } from "../systems/inputSystem.ts";
-import { PaintSystem } from "../systems/paintSystem.ts";
+import { SlimeSystem } from "../systems/slimeSystem.ts";
 import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
 import { PickupSystem } from "../systems/pickup/pickupSystem.ts";
@@ -55,14 +55,14 @@ import {
 } from "@splat/simulation/terrain/planetTerrain.ts";
 
 import {
-  appendPaintStamp,
+  appendSlimeStamp,
   createStampBuckets,
-  getPaintCollisionDistance,
-} from "@splat/simulation/paint/paintDetection.ts";
+  getSlimeCollisionDistance,
+} from "@splat/simulation/slime/slimeDetection.ts";
 import {
   PlayerMovementState,
   PlayerSurfState,
-  type SimPlanetPaintState,
+  type SimPlanetSlimeState,
 } from "@splat/simulation/match/simState.ts";
 
 type MapPlanet = MapDataMessage["planets"][number];
@@ -80,7 +80,7 @@ export class MatchScene {
   private readonly render: RenderSystem;
   private readonly camera: CameraSystem;
   private readonly input: InputSystem;
-  private readonly paint: PaintSystem;
+  private readonly slime: SlimeSystem;
   private readonly clouds: CloudSystem;
   private readonly props: PropSystem;
   private readonly pickups: PickupSystem;
@@ -122,7 +122,7 @@ export class MatchScene {
   private readonly playerColors = new Map<string, number>();
   private readonly playerPatterns = new Map<string, number>();
   private readonly removedSessions = new Set<string>();
-  private readonly planetPaint = new Map<string, SimPlanetPaintState>();
+  private readonly planetSlime = new Map<string, SimPlanetSlimeState>();
   private lastLocalHealth: number | null = null;
   private lastWasCarving = false;
   private lastWasAirborne = false;
@@ -157,7 +157,7 @@ export class MatchScene {
   }
 
   private updateDebugLines(): void {
-    if (!GAME_CONFIG.debug.showPaintColliders) {
+    if (!GAME_CONFIG.debug.showSlimeColliders) {
       if (this.debugLines) {
         this.render.scene.remove(this.debugLines);
         this.debugLines = null;
@@ -182,11 +182,11 @@ export class MatchScene {
 
     const positions: number[] = [];
     for (const planet of this.mapPlanets) {
-      const history = this.paint.getStampHistory(planet.id);
+      const history = this.slime.getStampHistory(planet.id);
       const planetCenter = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
 
       for (const s of history) {
-        const thresholdDist = getPaintCollisionDistance(s);
+        const thresholdDist = getSlimeCollisionDistance(s);
         // dist^2 = 2 * (1 - cosTheta) => cosTheta = 1 - dist^2 / 2
         const cosTheta = Math.max(-1, 1 - (thresholdDist * thresholdDist) / 2);
         const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
@@ -270,7 +270,7 @@ export class MatchScene {
     this.render = new RenderSystem();
     this.camera = new CameraSystem();
     this.input = new InputSystem(this.render.renderer.domElement);
-    this.paint = new PaintSystem(this.render.renderer);
+    this.slime = new SlimeSystem(this.render.renderer);
     this.clouds = new CloudSystem(this.render.scene);
     this.props = new PropSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
@@ -308,8 +308,8 @@ export class MatchScene {
       once: true,
     });
     for (const p of this.mapPlanets) {
-      const { rows, cols } = getPaintTerritoryDimensions(p.radius);
-      this.planetPaint.set(p.id, {
+      const { rows, cols } = getSlimeTerritoryDimensions(p.radius);
+      this.planetSlime.set(p.id, {
         planetId: p.id,
         territoryRows: rows,
         territoryCols: cols,
@@ -485,9 +485,9 @@ export class MatchScene {
       const atmosphereRadius = p.radius + p.atmosphere.height;
       const { x, y, z } = p.center;
 
-      const paintMask = this.paint.getRenderTarget(p.id);
+      const slimeMask = this.slime.getRenderTarget(p.id);
       const planetMaterial = createPlanetMaterial({
-        paintMask: paintMask.texture,
+        slimeMask: slimeMask.texture,
         planetCenter: new THREE.Vector3(x, y, z),
         planetRadius: p.radius,
         waterRadius,
@@ -568,9 +568,9 @@ export class MatchScene {
     }
 
     for (const p of msg.planets) {
-      const { rows, cols } = getPaintTerritoryDimensions(p.radius);
-      if (!this.planetPaint.has(p.id)) {
-        this.planetPaint.set(p.id, {
+      const { rows, cols } = getSlimeTerritoryDimensions(p.radius);
+      if (!this.planetSlime.has(p.id)) {
+        this.planetSlime.set(p.id, {
           planetId: p.id,
           territoryRows: rows,
           territoryCols: cols,
@@ -723,8 +723,8 @@ export class MatchScene {
     return geometry;
   }
 
-  private clearPlanetPaint(): void {
-    for (const planet of this.planetPaint.values()) {
+  private clearPlanetSlime(): void {
+    for (const planet of this.planetSlime.values()) {
       planet.stamps.length = 0;
       planet.stampBuckets = createStampBuckets(planet.territoryRows, planet.territoryCols);
     }
@@ -779,8 +779,8 @@ export class MatchScene {
     return { slimeColor: teamColor ?? fallbackColor, patternId: 0 };
   }
 
-  private resolvePaintGroupVisual(
-    paintGroupId: number,
+  private resolveSlimeGroupVisual(
+    slimeGroupId: number,
     fallbackColor: number,
     fallbackPatternId: number,
   ): { slimeColor: number; patternId: number } {
@@ -788,7 +788,7 @@ export class MatchScene {
     if (!roomState?.isTeamBased) {
       return { slimeColor: fallbackColor, patternId: fallbackPatternId };
     }
-    return { slimeColor: roomState.teamColors[paintGroupId] ?? fallbackColor, patternId: 0 };
+    return { slimeColor: roomState.teamColors[slimeGroupId] ?? fallbackColor, patternId: 0 };
   }
 
   private ensureRemotePlayer(
@@ -860,8 +860,8 @@ export class MatchScene {
     const liveProjectileIds = new Set<string>();
     for (const projectile of snapshot.projectiles) {
       liveProjectileIds.add(projectile.id);
-      const visual = this.resolvePaintGroupVisual(
-        projectile.paintGroupId,
+      const visual = this.resolveSlimeGroupVisual(
+        projectile.slimeGroupId,
         projectile.slimeColor,
         projectile.patternId,
       );
@@ -976,7 +976,7 @@ export class MatchScene {
           name: string,
           slimeColor: number,
           patternId: number,
-          paintGroupId: number,
+          slimeGroupId: number,
         ) => {
           // Join successful, start preloading match assets
           this.playMatchMusic();
@@ -986,7 +986,7 @@ export class MatchScene {
           this.playerPatterns.set(sessionId, visual.patternId);
           if (sessionId === this.connection.sessionId) {
             this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
-            this.runtime.setLocalPaintGroupId(paintGroupId);
+            this.runtime.setLocalSlimeGroupId(slimeGroupId);
           } else {
             this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
             this.applyTeamRelation(sessionId);
@@ -997,7 +997,7 @@ export class MatchScene {
           name: string,
           slimeColor: number,
           patternId: number,
-          paintGroupId: number,
+          slimeGroupId: number,
         ) => {
           this.removedSessions.delete(sessionId);
           const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
@@ -1005,7 +1005,7 @@ export class MatchScene {
           this.playerPatterns.set(sessionId, visual.patternId);
           if (sessionId === this.connection.sessionId) {
             this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
-            this.runtime.setLocalPaintGroupId(paintGroupId);
+            this.runtime.setLocalSlimeGroupId(slimeGroupId);
           } else {
             this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
             this.applyTeamRelation(sessionId);
@@ -1032,11 +1032,11 @@ export class MatchScene {
           this.trickText.clear();
           this.emoteBubbles.clearPlayer(sessionId);
         },
-        onPaintStamps: (stamps) => {
-          this.matchAudio.handlePaintStamps(stamps);
+        onSlimeStamps: (stamps) => {
+          this.matchAudio.handleSlimeStamps(stamps);
           for (const stamp of stamps) {
-            const visual = this.resolvePaintGroupVisual(
-              stamp.paintGroupId,
+            const visual = this.resolveSlimeGroupVisual(
+              stamp.slimeGroupId,
               stamp.color,
               stamp.patternId,
             );
@@ -1044,13 +1044,13 @@ export class MatchScene {
               visual.slimeColor === stamp.color && visual.patternId === stamp.patternId
                 ? stamp
                 : { ...stamp, color: visual.slimeColor, patternId: visual.patternId };
-            // PaintSystem is the single dedup authority for both visual and gameplay stamp state.
-            // Gate appendPaintStamp on the same check to prevent bootstrap+incremental overlap
+            // SlimeSystem is the single dedup authority for both visual and gameplay stamp state.
+            // Gate appendSlimeStamp on the same check to prevent bootstrap+incremental overlap
             // from applying the same stamp twice to stampBuckets.
-            if (this.paint.addStamp(visualStamp)) {
-              const planetState = this.planetPaint.get(stamp.planetId);
+            if (this.slime.addStamp(visualStamp)) {
+              const planetState = this.planetSlime.get(stamp.planetId);
               if (planetState) {
-                appendPaintStamp(planetState, visualStamp);
+                appendSlimeStamp(planetState, visualStamp);
               }
             }
           }
@@ -1083,7 +1083,7 @@ export class MatchScene {
               const name = this.connection.roomState?.players.get(player.sessionId)?.name || "";
               this.ensureRemotePlayer(player.sessionId, slimeColor, patternId, name);
             }
-            this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetPaint);
+            this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetSlime);
           }
           this.removeRemotePlayers(liveRemoteIds);
           this.syncProjectiles(snapshot, receivedAtMs);
@@ -1099,8 +1099,8 @@ export class MatchScene {
           if (phase === MatchPhase.Countdown) {
             this.syncCenterCountdown(0);
           } else if (phase === MatchPhase.Active) {
-            this.paint.clear();
-            this.clearPlanetPaint();
+            this.slime.clear();
+            this.clearPlanetSlime();
             this.projectiles.clear();
             this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
             this.playMatchMusic();
@@ -1120,8 +1120,8 @@ export class MatchScene {
         onDisconnect: () => {
           this.clearPlayerEntities();
           this.runtime.clear();
-          this.paint.clear();
-          this.clearPlanetPaint();
+          this.slime.clear();
+          this.clearPlanetSlime();
           this.clouds.dispose();
           this.props.dispose();
           this.pickups.clear();
@@ -1173,7 +1173,7 @@ export class MatchScene {
         if (mat) mat.uniforms.time.value = now / 1000;
       }
       this.clouds.update(dt);
-      this.paint.update(now);
+      this.slime.update(now);
 
       // Always update debug lines if enabled
       this.updateDebugLines();
@@ -1221,7 +1221,7 @@ export class MatchScene {
         chargeProgress: fireOutput.chargeProgress,
       };
       this.connection.sendInput(input);
-      this.runtime.recordLocalInput(input, this.planetPaint);
+      this.runtime.recordLocalInput(input, this.planetSlime);
 
       const predictedLocalState = this.runtime.getLocalPlayerState();
       if (predictedLocalState) {

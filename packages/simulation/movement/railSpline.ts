@@ -33,7 +33,7 @@ export interface ComputedRail {
   planetCenter: Vec3Data;
   samples: RailSample[];
   totalLength: number;
-  paintCorridorRadius: number;
+  slimeCorridorRadius: number;
   pts: Vec3Data[]; // padded control points for analytical re-evaluation
 }
 
@@ -132,7 +132,7 @@ export function buildComputedRail(
       planetCenter,
       samples: [],
       totalLength: 0,
-      paintCorridorRadius: def.paintCorridorRadius,
+      slimeCorridorRadius: def.slimeCorridorRadius,
       pts: [],
     };
 
@@ -177,7 +177,7 @@ export function buildComputedRail(
     planetCenter,
     samples,
     totalLength: arcLength,
-    paintCorridorRadius: def.paintCorridorRadius,
+    slimeCorridorRadius: def.slimeCorridorRadius,
     pts,
   };
 }

@@ -26,7 +26,7 @@ export interface PlayerSlotDefinition {
 
 export interface AssignedPlayerSlot {
   teamId: number;
-  paintGroupId: number;
+  slimeGroupId: number;
 }
 
 export interface SpawnAnchorDefinition {
@@ -117,7 +117,7 @@ export const FFA_MODE: GameModeDefinition = {
   assignPlayerSlot(playerIndex) {
     return {
       teamId: FFA_NO_TEAM_ID,
-      paintGroupId: playerIndex,
+      slimeGroupId: playerIndex,
     };
   },
   selectSpawnPlanet() {
@@ -143,7 +143,7 @@ export const TEAMS_MODE: GameModeDefinition = {
     const teamId = playerIndex % this.teamCount;
     return {
       teamId,
-      paintGroupId: teamId,
+      slimeGroupId: teamId,
     };
   },
   selectSpawnPlanet(playerIndex) {
@@ -170,7 +170,7 @@ export const DEV_MODE: GameModeDefinition = {
   assignPlayerSlot(playerIndex) {
     return {
       teamId: FFA_NO_TEAM_ID,
-      paintGroupId: playerIndex,
+      slimeGroupId: playerIndex,
     };
   },
   selectSpawnPlanet() {

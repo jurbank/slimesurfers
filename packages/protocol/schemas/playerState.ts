@@ -40,7 +40,7 @@ defineTypes(Quat, { x: "float32", y: "float32", z: "float32", w: "float32" });
 //
 // SNAPSHOT (broadcast at snapshotRateHz for client-side prediction/reconciliation):
 //   Physics: pos, vel, rot, movementState, grind state, etc.
-//   Per-tick derived values: isOnFriendlyPaint, isShooting.
+//   Per-tick derived values: isOnFriendlySlime, isShooting.
 //   Anything needed for client prediction must go in SnapshotMessage → PlayerSnapshot,
 //   not here. See packages/protocol/network/serverMessages.ts.
 //
@@ -55,8 +55,8 @@ export class PlayerState extends Schema {
   declare name: string;
   /** Team assignment for team-based modes. NO_TEAM_ID means unteamed (FFA). */
   declare teamId: number;
-  /** Paint/scoring ownership group. Shared by teammates, unique per player in FFA. */
-  declare paintGroupId: number;
+  /** Slime/scoring ownership group. Shared by teammates, unique per player in FFA. */
+  declare slimeGroupId: number;
   /** Visual palette slot used to derive slimeColor for the current mode. */
   declare paletteIndex: number;
   /** Pattern overlay applied to the slime mesh (see PATTERN_COUNT in gameModes.ts). */
@@ -67,8 +67,8 @@ export class PlayerState extends Schema {
   // Gameplay
   declare health: number;
   declare slimeLevel: number;
-  /** Cumulative surface units painted by this player this match */
-  declare paintScore: number;
+  /** Cumulative surface units covered in slime by this player this match */
+  declare slimeScore: number;
   declare killCount: number;
   declare deathCount: number;
   /** Seconds remaining until respawn (0 when alive) */
@@ -79,13 +79,13 @@ defineTypes(PlayerState, {
   isBot: "boolean",
   name: "string",
   teamId: "uint8",
-  paintGroupId: "uint16",
+  slimeGroupId: "uint16",
   paletteIndex: "uint8",
   patternId: "uint8",
   slimeColor: "uint32",
   health: "uint8",
   slimeLevel: "float32",
-  paintScore: "uint32",
+  slimeScore: "uint32",
   killCount: "uint16",
   deathCount: "uint16",
   respawnTimer: "float32",

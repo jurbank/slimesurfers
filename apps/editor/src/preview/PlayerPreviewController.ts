@@ -10,12 +10,12 @@ import {
   type StepConfig,
 } from "@splat/simulation/movement/simulatedMovement.ts";
 import type { TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
-import type { SimPlanetPaintState } from "@splat/simulation/match/simState.ts";
+import type { SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
 import type { EditorConfig, PreviewSpawnState } from "../types.ts";
 
 let PLANETS: PlanetData[] = [];
 
-const EMPTY_PAINT = new Map<string, SimPlanetPaintState>();
+const EMPTY_SLIME = new Map<string, SimPlanetSlimeState>();
 const MAX_DT = 1 / 30;
 const MOUSE_SENSITIVITY = 0.0025;
 const MIN_PITCH = -0.75;
@@ -166,7 +166,7 @@ export class PlayerPreviewController {
       Math.min(dt, MAX_DT),
       PLANETS,
       this.stepConfig,
-      EMPTY_PAINT,
+      EMPTY_SLIME,
       [],
       this.terrainProvider,
     );
@@ -226,7 +226,7 @@ export class PlayerPreviewController {
       vel: { x: 0, y: 0, z: 0 },
       rot: { x: 0, y: 0, z: 0, w: 1 },
       planetId: planet.id,
-      paintGroupId: 0,
+      slimeGroupId: 0,
       movementState: PlayerMovementState.Idle,
       surfState: PlayerSurfState.None,
       isCarving: false,
@@ -236,7 +236,7 @@ export class PlayerPreviewController {
       lastGrindT: 0,
       grindSpeed: 0,
       grindCooldownMs: 0,
-      isOnFriendlyPaint: false,
+      isOnFriendlySlime: false,
     };
   }
 

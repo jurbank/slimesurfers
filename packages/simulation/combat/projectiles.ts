@@ -15,11 +15,11 @@ import {
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import type {
   KillEventMessage,
-  PaintStampMessage,
+  SlimeStampMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import type { PlanetData } from "../movement/simulatedMovement.ts";
-import { getPaintAtPoint } from "../paint/paintDetection.ts";
-import { applyPaintImpact } from "../paint/stampPaint.ts";
+import { getSlimeAtPoint } from "../slime/slimeDetection.ts";
+import { applySlimeImpact } from "../slime/stampSlime.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import {
   NO_TEAM_ID,
@@ -45,11 +45,11 @@ export interface CombatConfig {
   slime: {
     maxLevel: number;
     passiveRechargePerSecond: number;
-    friendlyPaintRechargePerSecond: number;
+    friendlySlimeRechargePerSecond: number;
     submergedRechargePerSecond: number;
     rechargeDelayMs: number;
   };
-  paint: {
+  slimeStamp: {
     impactStampSurfaceRadius: number;
     deathBurstStampCount: number;
     deathBurstSpreadRadius: number;
@@ -363,9 +363,9 @@ function getProjectileMuzzlePosition(
   return add(player.pos, scale(up, cfg.player.projectileMuzzleHeight));
 }
 
-function applyImpactPaint(
+function applyImpactSlime(
   simState: SimMatchState,
-  paintStamps: PaintStampMessage[],
+  slimeStamps: SlimeStampMessage[],
   planetId: string | undefined,
   impactPos: Vec3Data,
   player: SimPlayerState,
@@ -374,15 +374,15 @@ function applyImpactPaint(
   if (!planetId) return;
   const planetState = simState.planets.get(planetId);
   if (!planetState) return;
-  const stamp = applyPaintImpact(simState, planetState, {
+  const stamp = applySlimeImpact(simState, planetState, {
     planetId,
     pos: impactPos,
-    paintGroupId: player.paintGroupId,
+    slimeGroupId: player.slimeGroupId,
     slimeColor: player.slimeColor,
     patternId: player.patternId,
     radiusMultiplier,
   });
-  if (stamp) paintStamps.push(stamp);
+  if (stamp) slimeStamps.push(stamp);
 }
 
 function getSlimeRechargeRate(
@@ -394,15 +394,15 @@ function getSlimeRechargeRate(
     return cfg.slime.passiveRechargePerSecond;
   }
 
-  const paint = getPaintAtPoint(player.pos, player.planetId, simState.planets, simState.planetDefs);
-  const onFriendlyPaint = paint?.paintGroupId === player.paintGroupId;
-  if (!onFriendlyPaint) {
+  const slime = getSlimeAtPoint(player.pos, player.planetId, simState.planets, simState.planetDefs);
+  const onFriendlySlime = slime?.slimeGroupId === player.slimeGroupId;
+  if (!onFriendlySlime) {
     return cfg.slime.passiveRechargePerSecond;
   }
 
   return player.surfState !== PlayerSurfState.None
     ? cfg.slime.submergedRechargePerSecond
-    : cfg.slime.friendlyPaintRechargePerSecond;
+    : cfg.slime.friendlySlimeRechargePerSecond;
 }
 
 function getEquippedWeaponId(player: SimPlayerState): WeaponId {
@@ -445,15 +445,15 @@ function getPlayerPlanet(player: SimPlayerState, planets: PlanetData[]): PlanetD
   );
 }
 
-function addDeathBurstPaint(
+function addDeathBurstSlime(
   simState: SimMatchState,
-  paintStamps: PaintStampMessage[],
+  slimeStamps: SlimeStampMessage[],
   defeated: SimPlayerState,
   owner: SimPlayerState | undefined,
   planets: PlanetData[],
   cfg: CombatConfig,
 ): void {
-  if (!owner || cfg.paint.deathBurstStampCount <= 0) return;
+  if (!owner || cfg.slimeStamp.deathBurstStampCount <= 0) return;
 
   const planet = getPlayerPlanet(defeated, planets);
   if (!planet) return;
@@ -466,12 +466,12 @@ function addDeathBurstPaint(
   const tangentSeed = Math.abs(normal.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
   const tangentA = normalize(cross(tangentSeed, normal));
   const tangentB = normalize(cross(normal, tangentA));
-  const count = Math.floor(cfg.paint.deathBurstStampCount);
+  const count = Math.floor(cfg.slimeStamp.deathBurstStampCount);
 
   for (let i = 0; i < count; i++) {
     const isCenter = i === 0;
     const angle = (i / Math.max(1, count - 1)) * Math.PI * 2;
-    const spread = isCenter ? 0 : cfg.paint.deathBurstSpreadRadius;
+    const spread = isCenter ? 0 : cfg.slimeStamp.deathBurstSpreadRadius;
     const surfaceDir = normalize(
       add(
         normal,
@@ -482,15 +482,15 @@ function addDeathBurstPaint(
       ),
     );
     const surfaceRadius = getTerrainRadius(surfaceDir.x, surfaceDir.y, surfaceDir.z, cfg);
-    const stamp = applyPaintImpact(simState, planetState, {
+    const stamp = applySlimeImpact(simState, planetState, {
       planetId: planet.id,
       pos: add(planet.center, scale(surfaceDir, surfaceRadius)),
-      paintGroupId: owner.paintGroupId,
+      slimeGroupId: owner.slimeGroupId,
       slimeColor: owner.slimeColor,
       patternId: owner.patternId,
-      radiusMultiplier: cfg.paint.deathBurstRadiusMultiplier,
+      radiusMultiplier: cfg.slimeStamp.deathBurstRadiusMultiplier,
     });
-    if (stamp) paintStamps.push(stamp);
+    if (stamp) slimeStamps.push(stamp);
   }
 }
 
@@ -537,7 +537,7 @@ function clearSurfMode(player: SimPlayerState): void {
 
 function applySplashDamage(
   simState: SimMatchState,
-  paintStamps: PaintStampMessage[],
+  slimeStamps: SlimeStampMessage[],
   owner: SimPlayerState | undefined,
   ownerId: string,
   ownerTeamId: number,
@@ -571,7 +571,7 @@ function applySplashDamage(
       weaponId,
       recordKillEvent,
     );
-    if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
+    if (killed) addDeathBurstSlime(simState, slimeStamps, player, owner, planets, cfg);
   });
 }
 
@@ -683,23 +683,23 @@ export function tryFireProjectile(
   planets: PlanetData[],
   cfg: CombatConfig,
   recordKillEvent?: RecordKillEvent,
-): PaintStampMessage[] {
-  const paintStamps: PaintStampMessage[] = [];
+): SlimeStampMessage[] {
+  const slimeStamps: SlimeStampMessage[] = [];
   if ((input.keys & InputKey.Fire) === 0) {
     resetWeaponTrigger(player);
-    return paintStamps;
+    return slimeStamps;
   }
   if (player.movementState === PlayerMovementState.Dead) {
     resetWeaponTrigger(player);
-    return paintStamps;
+    return slimeStamps;
   }
   const weapon = getWeaponDefinition(getEquippedWeaponId(player));
   if (weapon.behavior === "sprayHitscan") {
     if (player.weaponTriggerHeldSinceMs < 0) {
       player.weaponTriggerHeldSinceMs = nowMs;
     }
-    if (nowMs - player.weaponTriggerHeldSinceMs < (weapon.spinUpMs ?? 0)) return paintStamps;
-    if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
+    if (nowMs - player.weaponTriggerHeldSinceMs < (weapon.spinUpMs ?? 0)) return slimeStamps;
+    if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return slimeStamps;
 
     const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
     const aimDir = isFiniteVec3(input.aimPoint)
@@ -707,7 +707,7 @@ export function tryFireProjectile(
       : normalize(input.aimDir);
     const { tangentA, tangentB } = makePerpendicularBasis(aimDir);
     const spreadScale = Math.tan(((weapon.sprayConeHalfAngleDeg ?? 0) * Math.PI) / 180);
-    const spreadSeed = input.seq * 73856093 + player.paintGroupId * 19349663 + nowMs * 83492791;
+    const spreadSeed = input.seq * 73856093 + player.slimeGroupId * 19349663 + nowMs * 83492791;
     const radius = Math.sqrt(seededUnit(spreadSeed + 1)) * spreadScale;
     const angle = seededUnit(spreadSeed + 2) * Math.PI * 2;
     const spreadDir = normalize(
@@ -762,23 +762,23 @@ export function tryFireProjectile(
         weapon.id,
         recordKillEvent,
       );
-      if (killed) addDeathBurstPaint(simState, paintStamps, bestPlayer.player, owner, planets, cfg);
-      applyImpactPaint(
+      if (killed) addDeathBurstSlime(simState, slimeStamps, bestPlayer.player, owner, planets, cfg);
+      applyImpactSlime(
         simState,
-        paintStamps,
+        slimeStamps,
         bestPlayer.planetId,
         bestPlayer.impactPos,
         player,
-        weapon.paintRadiusMultiplier,
+        weapon.slimeRadiusMultiplier,
       );
     } else if (bestTerrain) {
-      applyImpactPaint(
+      applyImpactSlime(
         simState,
-        paintStamps,
+        slimeStamps,
         bestTerrain.planetId,
         bestTerrain.impactPos,
         player,
-        weapon.paintRadiusMultiplier,
+        weapon.slimeRadiusMultiplier,
       );
     }
 
@@ -790,14 +790,14 @@ export function tryFireProjectile(
         resetWeaponTrigger(player);
       }
     }
-    return paintStamps;
+    return slimeStamps;
   }
 
   resetWeaponTrigger(player);
-  if (weapon.behavior !== "projectile") return paintStamps;
-  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
-  if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return paintStamps;
-  if (player.slimeLevel < weapon.slimeCost) return paintStamps;
+  if (weapon.behavior !== "projectile") return slimeStamps;
+  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return slimeStamps;
+  if (simState.projectiles.size >= NETWORK_CONFIG.limits.maxProjectilesPerRoom) return slimeStamps;
+  if (player.slimeLevel < weapon.slimeCost) return slimeStamps;
 
   const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
   const aim = isFiniteVec3(input.aimPoint)
@@ -812,7 +812,7 @@ export function tryFireProjectile(
     ownerId: player.sessionId,
     ownerTeamId: player.teamId,
     weaponId: weapon.id,
-    paintGroupId: player.paintGroupId,
+    slimeGroupId: player.slimeGroupId,
     slimeColor: player.slimeColor,
     patternId: player.patternId,
     pos: muzzlePos,
@@ -833,7 +833,7 @@ export function tryFireProjectile(
       resetWeaponTrigger(player);
     }
   }
-  return paintStamps;
+  return slimeStamps;
 }
 
 export function tickProjectiles(
@@ -843,8 +843,8 @@ export function tickProjectiles(
   cfg: CombatConfig,
   selectRespawnPoint?: SelectRespawnPoint,
   recordKillEvent?: RecordKillEvent,
-): PaintStampMessage[] {
-  const paintStamps: PaintStampMessage[] = [];
+): SlimeStampMessage[] {
+  const slimeStamps: SlimeStampMessage[] = [];
   simState.players.forEach((player) => {
     if (player.movementState !== PlayerMovementState.Dead) return;
     player.respawnTimer = Math.max(0, player.respawnTimer - dtMs / 1000);
@@ -921,11 +921,11 @@ export function tickProjectiles(
         weapon.id,
         recordKillEvent,
       );
-      if (killed) addDeathBurstPaint(simState, paintStamps, player, owner, planets, cfg);
+      if (killed) addDeathBurstSlime(simState, slimeStamps, player, owner, planets, cfg);
       const splashExclusions = new Set<string>([player.sessionId]);
       applySplashDamage(
         simState,
-        paintStamps,
+        slimeStamps,
         owner,
         projectile.ownerId,
         projectile.ownerTeamId ?? NO_TEAM_ID,
@@ -952,15 +952,15 @@ export function tickProjectiles(
       if (nearestPlanet) {
         const planetState = simState.planets.get(nearestPlanet.id);
         if (planetState) {
-          const stamp = applyPaintImpact(simState, planetState, {
+          const stamp = applySlimeImpact(simState, planetState, {
             planetId: nearestPlanet.id,
             pos: impactPos,
-            paintGroupId: projectile.paintGroupId,
+            slimeGroupId: projectile.slimeGroupId,
             slimeColor: projectile.slimeColor,
             patternId: projectile.patternId,
-            radiusMultiplier: weapon.paintRadiusMultiplier,
+            radiusMultiplier: weapon.slimeRadiusMultiplier,
           });
-          if (stamp) paintStamps.push(stamp);
+          if (stamp) slimeStamps.push(stamp);
         }
       }
       removedIds.push(projectileId);
@@ -979,19 +979,19 @@ export function tickProjectiles(
         if (impactPos) {
           const planetState = simState.planets.get(planet.id);
           if (planetState) {
-            const stamp = applyPaintImpact(simState, planetState, {
+            const stamp = applySlimeImpact(simState, planetState, {
               planetId: planet.id,
               pos: impactPos,
-              paintGroupId: projectile.paintGroupId,
+              slimeGroupId: projectile.slimeGroupId,
               slimeColor: projectile.slimeColor,
               patternId: projectile.patternId,
-              radiusMultiplier: weapon.paintRadiusMultiplier,
+              radiusMultiplier: weapon.slimeRadiusMultiplier,
             });
-            if (stamp) paintStamps.push(stamp);
+            if (stamp) slimeStamps.push(stamp);
           }
           applySplashDamage(
             simState,
-            paintStamps,
+            slimeStamps,
             owner,
             projectile.ownerId,
             projectile.ownerTeamId ?? NO_TEAM_ID,
@@ -1024,7 +1024,7 @@ export function tickProjectiles(
     simState.projectiles.delete(projectileId);
   }
 
-  return paintStamps;
+  return slimeStamps;
 }
 
 export function tryFireHitscan(
@@ -1035,14 +1035,14 @@ export function tryFireHitscan(
   planets: PlanetData[],
   cfg: CombatConfig,
   recordKillEvent?: RecordKillEvent,
-): PaintStampMessage[] {
-  const paintStamps: PaintStampMessage[] = [];
-  if ((input.keys & InputKey.Fire) === 0) return paintStamps;
-  if (player.movementState === PlayerMovementState.Dead) return paintStamps;
+): SlimeStampMessage[] {
+  const slimeStamps: SlimeStampMessage[] = [];
+  if ((input.keys & InputKey.Fire) === 0) return slimeStamps;
+  if (player.movementState === PlayerMovementState.Dead) return slimeStamps;
   const weapon = getWeaponDefinition(getEquippedWeaponId(player));
-  if (weapon.behavior !== "chargedHitscan") return paintStamps;
-  if (weapon.hitscanConeHalfAngleDeg === undefined) return paintStamps;
-  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return paintStamps;
+  if (weapon.behavior !== "chargedHitscan") return slimeStamps;
+  if (weapon.hitscanConeHalfAngleDeg === undefined) return slimeStamps;
+  if (nowMs - player.lastFireTimeMs < weapon.fireCooldownMs) return slimeStamps;
 
   const muzzlePos = getProjectileMuzzlePosition(player, planets, cfg);
   const aimDir = isFiniteVec3(input.aimPoint)
@@ -1067,21 +1067,21 @@ export function tryFireHitscan(
       return;
 
     const killed = applyDamage(target, owner, weapon.directDamage, cfg, weapon.id, recordKillEvent);
-    if (killed) addDeathBurstPaint(simState, paintStamps, target, owner, planets, cfg);
+    if (killed) addDeathBurstSlime(simState, slimeStamps, target, owner, planets, cfg);
 
     const planet = getNearestPlanet(target.pos, planets);
     if (planet) {
       const planetState = simState.planets.get(planet.id);
       if (planetState) {
-        const stamp = applyPaintImpact(simState, planetState, {
+        const stamp = applySlimeImpact(simState, planetState, {
           planetId: planet.id,
           pos: target.pos,
-          paintGroupId: player.paintGroupId,
+          slimeGroupId: player.slimeGroupId,
           slimeColor: player.slimeColor,
           patternId: player.patternId,
-          radiusMultiplier: weapon.paintRadiusMultiplier,
+          radiusMultiplier: weapon.slimeRadiusMultiplier,
         });
-        if (stamp) paintStamps.push(stamp);
+        if (stamp) slimeStamps.push(stamp);
       }
     }
   });
@@ -1124,15 +1124,15 @@ export function tryFireHitscan(
           trailPlanet.center,
           scale(normal, getTerrainRadius(normal.x, normal.y, normal.z, cfg)),
         );
-        const stamp = applyPaintImpact(simState, planetState, {
+        const stamp = applySlimeImpact(simState, planetState, {
           planetId: trailPlanet.id,
           pos: surfacePos,
-          paintGroupId: player.paintGroupId,
+          slimeGroupId: player.slimeGroupId,
           slimeColor: player.slimeColor,
           patternId: player.patternId,
           radiusMultiplier: HITSCAN_TRAIL_RADIUS_MULT,
         });
-        if (stamp) paintStamps.push(stamp);
+        if (stamp) slimeStamps.push(stamp);
       }
     }
   }
@@ -1146,5 +1146,5 @@ export function tryFireHitscan(
     }
   }
 
-  return paintStamps;
+  return slimeStamps;
 }

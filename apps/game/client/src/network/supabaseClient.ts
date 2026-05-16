@@ -8,7 +8,7 @@ const supabase = createClient(
 export interface GlobalLeaderboardEntry {
   id: string;
   name: string;
-  paintScore: number;
+  slimeScore: number;
   kills: number;
   deaths: number;
   wins: number;
@@ -89,7 +89,7 @@ function mapGlobalLeaderboardRow(row: GlobalLeaderboardRow): GlobalLeaderboardEn
   return {
     id: row.id,
     name: row.name || row.last_known_name || "Mystery Surfer",
-    paintScore: row.paint_score ?? row.total_paint_score ?? 0,
+    slimeScore: row.paint_score ?? row.total_paint_score ?? 0,
     kills: row.kills ?? row.total_kills ?? 0,
     deaths: row.deaths ?? row.total_deaths ?? 0,
     wins: row.wins ?? row.total_wins ?? 0,

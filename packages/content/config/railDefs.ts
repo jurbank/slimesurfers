@@ -9,7 +9,7 @@ export interface RailDef {
   id: number;
   planetId: string;
   controlPoints: RailControlPoint[];
-  paintCorridorRadius: number; // surface radius in wu
+  slimeCorridorRadius: number; // surface radius in wu
 }
 
 // Half-planet test rail at ~30° from north pole, 0°→180° longitude.
@@ -18,7 +18,7 @@ export const RAIL_DEFS: RailDef[] = [
   {
     id: 0,
     planetId: "planet-0",
-    paintCorridorRadius: 8.0,
+    slimeCorridorRadius: 8.0,
     controlPoints: [
       { nx: 0.5, ny: 0.866, nz: 0, heightOffset: 4.5 },
       { nx: 0.4698, ny: 0.866, nz: 0.171, heightOffset: 6.0 },
@@ -35,7 +35,7 @@ export const RAIL_DEFS: RailDef[] = [
   {
     id: 1,
     planetId: "planet-0",
-    paintCorridorRadius: 8.0,
+    slimeCorridorRadius: 8.0,
     controlPoints: [
       // Spanning ~280 degrees longitude to ensure a clear gap between ends
       { nx: -0.383, ny: -0.866, nz: -0.321, heightOffset: 4.5 }, // -140 deg

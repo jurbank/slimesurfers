@@ -192,7 +192,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     this.map = resolveMap(options);
     this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), this.map, {
       lobbyEnabled: true,
-      seedTestPaint: isEnvFlagEnabled(process.env.SEED_TEST_PAINT),
+      seedTestSlime: isEnvFlagEnabled(process.env.SEED_TEST_SLIME),
       weaponPickupLayout: resolveWeaponPickupLayout(),
     });
     this.setState(createRoomState(this.simulation.matchState, this.simulation.mode));
@@ -235,8 +235,8 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     });
 
     const bootstrap = buildJoinBootstrap(this.simulation);
-    if (bootstrap.paintStamps.length > 0) {
-      client.send(MessageType.PaintStamps, { stamps: [...bootstrap.paintStamps] });
+    if (bootstrap.slimeStamps.length > 0) {
+      client.send(MessageType.SlimeStamps, { stamps: [...bootstrap.slimeStamps] });
     }
     client.send(MessageType.Snapshot, bootstrap.snapshot);
     this.broadcast(MessageType.Snapshot, bootstrap.snapshot, { except: client });
@@ -250,10 +250,10 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
           sessionId: sim.sessionId,
           name: sim.name,
           teamId: sim.teamId,
-          paintGroupId: sim.paintGroupId,
+          slimeGroupId: sim.slimeGroupId,
           slimeColor: sim.slimeColor,
           patternId: sim.patternId,
-          paintScore: sim.paintScore,
+          slimeScore: sim.slimeScore,
           killCount: sim.killCount,
           deathCount: sim.deathCount,
           playerUuid: this.playerUuids.get(client.sessionId),
@@ -433,8 +433,8 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     if (broadcasts.killEvents.length > 0) {
       this.broadcast(MessageType.KillEvents, { events: broadcasts.killEvents });
     }
-    if (broadcasts.paintStamps.length > 0) {
-      this.broadcast(MessageType.PaintStamps, { stamps: broadcasts.paintStamps });
+    if (broadcasts.slimeStamps.length > 0) {
+      this.broadcast(MessageType.SlimeStamps, { stamps: broadcasts.slimeStamps });
     }
     if (broadcasts.trickEvents.length > 0) {
       this.broadcast(MessageType.TrickEvents, { events: broadcasts.trickEvents });
@@ -459,7 +459,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     // Same sort order as buildLeaderboardMessage
     allEntries.sort(
       (a, b) =>
-        b.paintScore - a.paintScore ||
+        b.slimeScore - a.slimeScore ||
         b.killCount - a.killCount ||
         a.deathCount - b.deathCount ||
         a.name.localeCompare(b.name),

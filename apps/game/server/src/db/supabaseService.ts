@@ -32,7 +32,7 @@ export class SupabaseService {
         id: e.playerUuid,
         name: e.name,
         placement: e.placement,
-        paintScore: e.paintScore,
+        slimeScore: e.slimeScore,
         killCount: e.killCount,
         deathCount: e.deathCount,
         slimeColor: e.slimeColor,

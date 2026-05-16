@@ -9,7 +9,7 @@
     "./network/serverMessages.ts": "./network/serverMessages.ts",
     "./network/weaponIds.ts": "./network/weaponIds.ts",
     "./schemas/gameState.ts": "./schemas/gameState.ts",
-    "./schemas/paintedState.ts": "./schemas/paintedState.ts",
+    "./schemas/slimedState.ts": "./schemas/slimedState.ts",
     "./schemas/playerState.ts": "./schemas/playerState.ts",
     "./schemas/projectileState.ts": "./schemas/projectileState.ts"
   },

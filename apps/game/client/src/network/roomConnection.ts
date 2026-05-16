@@ -16,8 +16,8 @@ import type {
   LeaderboardMessage,
   MapDataMessage,
   MatchPhaseMessage,
-  PaintStampBatchMessage,
-  PaintStampMessage,
+  SlimeStampBatchMessage,
+  SlimeStampMessage,
   SnapshotMessage,
   TrickEventBatchMessage,
   TrickEventMessage,
@@ -30,19 +30,19 @@ export interface RoomCallbacks {
     name: string,
     slimeColor: number,
     patternId: number,
-    paintGroupId: number,
+    slimeGroupId: number,
   ): void;
   onPlayerAdded(
     sessionId: string,
     name: string,
     slimeColor: number,
     patternId: number,
-    paintGroupId: number,
+    slimeGroupId: number,
   ): void;
   onPlayerRemoved(sessionId: string): void;
-  // Snapshots and paint stamps drive frame-critical client state; schema stays
+  // Snapshots and slime stamps drive frame-critical client state; schema stays
   // focused on persistent room membership and shared territory state.
-  onPaintStamps(stamps: PaintStampMessage[]): void;
+  onSlimeStamps(stamps: SlimeStampMessage[]): void;
   onTrickEvents(events: TrickEventMessage[]): void;
   onEmoteEvents(events: EmoteEventMessage[]): void;
   onKillEvents(events: KillEventMessage[]): void;
@@ -120,8 +120,8 @@ export class RoomConnection {
       callbacks.onLeaderboard(message);
     });
 
-    this.room.onMessage(MessageType.PaintStamps, (message: PaintStampBatchMessage) => {
-      callbacks.onPaintStamps(message.stamps);
+    this.room.onMessage(MessageType.SlimeStamps, (message: SlimeStampBatchMessage) => {
+      callbacks.onSlimeStamps(message.stamps);
     });
 
     this.room.onMessage(MessageType.TrickEvents, (message: TrickEventBatchMessage) => {
@@ -160,7 +160,7 @@ export class RoomConnection {
         player.name,
         player.slimeColor,
         player.patternId,
-        player.paintGroupId,
+        player.slimeGroupId,
       );
     });
 
@@ -175,7 +175,7 @@ export class RoomConnection {
         player.name,
         player.slimeColor,
         player.patternId,
-        player.paintGroupId,
+        player.slimeGroupId,
       );
     });
 

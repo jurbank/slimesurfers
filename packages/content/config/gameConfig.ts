@@ -87,7 +87,7 @@ export const GAME_CONFIG = {
     maxLevel: 100,
     shotCost: 12,
     passiveRechargePerSecond: 8,
-    friendlyPaintRechargePerSecond: 30,
+    friendlySlimeRechargePerSecond: 30,
     submergedRechargePerSecond: 55,
     rechargeDelayMs: 180,
   },
@@ -104,8 +104,8 @@ export const GAME_CONFIG = {
     dropInHeight: 3,
   },
 
-  // -- Paint -----------------------------------------------------------------
-  paint: {
+  // -- Slime stamps and territory -------------------------------------------
+  slimeStamp: {
     territoryCellSurfaceSize: (Math.PI * DEFAULT_PLANET_RADIUS) / DEFAULT_TERRITORY_ROWS,
     impactStampSurfaceRadius: DEFAULT_PLANET_RADIUS * DEFAULT_IMPACT_STAMP_RADIUS * Math.PI,
     deathBurstStampCount: 9,
@@ -131,7 +131,7 @@ export const GAME_CONFIG = {
     secondaryDropletMaxAnimatedPerStamp: 4,
     maxActiveAnimatedSplats: 24,
     normalPerturbationStrength: 0.5,
-    paintBlendStrength: 1.0,
+    slimeBlendStrength: 1.0,
     slimeFlowSpeed: 0.16,
     slimeFlowStrength: 0.08,
     slimeShineStrength: 1.15,
@@ -201,7 +201,7 @@ export const GAME_CONFIG = {
     /** Distance from planet surface to player center of mass. Must be > collisionRadius
      *  so the mesh bottom (standingHeight - collisionRadius) floats above the surface. */
     standingHeight: 1.0 * PLAYER_SIZE_SCALE,
-    friendlyPaintSpeedMultiplier: 1.8,
+    friendlySlimeSpeedMultiplier: 1.8,
     enemySpeedMultiplier: 0.7,
     groundedDeceleration: 0.5,
     surfSpeedMultiplier: 2.2,
@@ -284,8 +284,8 @@ export const GAME_CONFIG = {
   rail: {
     snapDistance: 4.0,
     minEntrySpeed: 8.0,
-    paintCorridorRadius: 8.0,
-    paintStampSpacing: 4.0,
+    slimeCorridorRadius: 8.0,
+    slimeStampSpacing: 4.0,
     maxGrindSpeed: 65.0,
     carveAccelerationPerSecond: 12.0,
     visualRadius: 0.4,
@@ -363,7 +363,7 @@ export const GAME_CONFIG = {
   // -- Debug -----------------------------------------------------------------
   debug: {
     showColliders: false,
-    showPaintColliders: false,
+    showSlimeColliders: false,
   },
 } as const;
 
@@ -380,31 +380,31 @@ export function getPlayerTargetRadius(cfg: PlayerTargetRadiusConfig = GAME_CONFI
   return cfg.movement.collisionRadius * cfg.player.targetRadiusMultiplier;
 }
 
-export function getPaintTerritoryDimensions(planetRadius: number): {
+export function getSlimeTerritoryDimensions(planetRadius: number): {
   rows: number;
   cols: number;
 } {
   const rows = Math.max(
     1,
-    Math.round((Math.PI * planetRadius) / GAME_CONFIG.paint.territoryCellSurfaceSize),
+    Math.round((Math.PI * planetRadius) / GAME_CONFIG.slimeStamp.territoryCellSurfaceSize),
   );
   const cols = Math.max(
     1,
-    Math.round((2 * Math.PI * planetRadius) / GAME_CONFIG.paint.territoryCellSurfaceSize),
+    Math.round((2 * Math.PI * planetRadius) / GAME_CONFIG.slimeStamp.territoryCellSurfaceSize),
   );
   return { rows, cols };
 }
 
-export function getPaintStampAngularRadius(planetRadius: number): number {
-  return clamp(GAME_CONFIG.paint.impactStampSurfaceRadius / planetRadius, 0, Math.PI);
+export function getSlimeStampAngularRadius(planetRadius: number): number {
+  return clamp(GAME_CONFIG.slimeStamp.impactStampSurfaceRadius / planetRadius, 0, Math.PI);
 }
 
 export function getPlanetSurfaceChordRadius(surfaceRadius: number, planetRadius: number): number {
   return 2 * Math.sin(clamp(surfaceRadius / planetRadius, 0, Math.PI) * 0.5);
 }
 
-export function getPaintStampChordRadius(planetRadius: number): number {
-  return getPlanetSurfaceChordRadius(GAME_CONFIG.paint.impactStampSurfaceRadius, planetRadius);
+export function getSlimeStampChordRadius(planetRadius: number): number {
+  return getPlanetSurfaceChordRadius(GAME_CONFIG.slimeStamp.impactStampSurfaceRadius, planetRadius);
 }
 
 /** Base bot count from config alone, before env overrides or team rounding. */

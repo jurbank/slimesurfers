@@ -525,7 +525,7 @@ export class JoinOverlay {
     nameWrap.append(swatch, name);
 
     const score = document.createElement("span");
-    score.textContent = `${Math.round(entry.paintScore)}`;
+    score.textContent = `${Math.round(entry.slimeScore)}`;
     Object.assign(score.style, {
       color: "#f6f7fb",
       fontWeight: "700",

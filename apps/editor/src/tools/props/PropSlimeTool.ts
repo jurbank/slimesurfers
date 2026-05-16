@@ -3,7 +3,7 @@ import type { PerformanceMetricGroup, PropBrushState } from "../../types.ts";
 import { MAX_SKATE_PARK_INSTANCES, SkateParkProp } from "./SkateParkProp.ts";
 import { MAX_NATURE_INSTANCES, NatureProps } from "./NatureProps.ts";
 
-export interface PropPaintConnectOptions {
+export interface PropSlimeConnectOptions {
   canvas: HTMLCanvasElement;
   camera: THREE.Camera;
   scene: THREE.Scene;
@@ -11,7 +11,7 @@ export interface PropPaintConnectOptions {
   shouldOrbit: () => boolean;
 }
 
-export class PropPaintTool {
+export class PropSlimeTool {
   private canvas: HTMLCanvasElement | null = null;
   private camera: THREE.Camera | null = null;
   private scene: THREE.Scene | null = null;
@@ -37,10 +37,10 @@ export class PropPaintTool {
 
   private brushState: PropBrushState | null = null;
   private brushCursor: THREE.LineLoop | null = null;
-  private isPainting = false;
+  private isSliming = false;
   private nextPlacementTime = 0;
 
-  connect(options: PropPaintConnectOptions): void {
+  connect(options: PropSlimeConnectOptions): void {
     this.canvas = options.canvas;
     this.camera = options.camera;
     this.scene = options.scene;
@@ -66,7 +66,7 @@ export class PropPaintTool {
       if (this.brushCursor) this.brushCursor.visible = false;
       this.skateParkProp.setPreview("ramp", null);
       if (this.canvas) this.canvas.style.cursor = "";
-      this.isPainting = false;
+      this.isSliming = false;
       return;
     }
     if (state.propId !== "ramp") this.skateParkProp.setPreview("ramp", null);
@@ -98,7 +98,7 @@ export class PropPaintTool {
     }
   }
 
-  private paintProps(hit: THREE.Intersection): void {
+  private slimeProps(hit: THREE.Intersection): void {
     if (!this.brushState) return;
     if (this.brushState.propId === "ramp") {
       if (
@@ -269,8 +269,8 @@ export class PropPaintTool {
     this.brushCursor.visible = true;
     this.canvas.style.cursor = "none";
 
-    if (this.isPainting && performance.now() >= this.nextPlacementTime) {
-      this.paintProps(hit);
+    if (this.isSliming && performance.now() >= this.nextPlacementTime) {
+      this.slimeProps(hit);
       this.nextPlacementTime = performance.now() + 80;
     }
   };
@@ -281,20 +281,20 @@ export class PropPaintTool {
     if (!hit) return;
 
     e.stopImmediatePropagation();
-    this.paintProps(hit);
+    this.slimeProps(hit);
     if (this.brushState.propId === "ramp") return;
 
-    this.isPainting = true;
+    this.isSliming = true;
     this.nextPlacementTime = performance.now() + 80;
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
-    if (e.button === 0) this.isPainting = false;
+    if (e.button === 0) this.isSliming = false;
   };
 
   private readonly onPointerLeave = (): void => {
     if (this.brushCursor) this.brushCursor.visible = false;
     this.skateParkProp.setPreview("ramp", null);
-    this.isPainting = false;
+    this.isSliming = false;
   };
 }

@@ -1,6 +1,6 @@
-import { getPaintStampAngularRadius } from "@splat/content/config/gameConfig.ts";
-import { NO_PAINT_GROUP_ID } from "@splat/protocol/schemas/paintedState.ts";
-import type { SimMatchState, SimPlanetPaintState, SimTerritoryCell } from "../match/simState.ts";
+import { getSlimeStampAngularRadius } from "@splat/content/config/gameConfig.ts";
+import { NO_SLIME_GROUP_ID } from "@splat/protocol/schemas/slimedState.ts";
+import type { SimMatchState, SimPlanetSlimeState, SimTerritoryCell } from "../match/simState.ts";
 import { getTerrainHeight, type TerrainConfig } from "../terrain/planetTerrain.ts";
 
 function clamp(value: number, min: number, max: number): number {
@@ -44,16 +44,16 @@ function normalize(x: number, y: number, z: number) {
   return { x: x / len, y: y / len, z: z / len };
 }
 
-function adjustPaintGroupScore(simState: SimMatchState, paintGroupId: number, delta: number): void {
-  if (paintGroupId === NO_PAINT_GROUP_ID || delta === 0) return;
+function adjustSlimeGroupScore(simState: SimMatchState, slimeGroupId: number, delta: number): void {
+  if (slimeGroupId === NO_SLIME_GROUP_ID || delta === 0) return;
 
-  const key = paintGroupId.toString();
+  const key = slimeGroupId.toString();
   const nextScore = Math.max(0, (simState.scores.get(key) ?? 0) + delta);
   simState.scores.set(key, nextScore);
 
   simState.players.forEach((player) => {
-    if (player.paintGroupId === paintGroupId) {
-      player.paintScore = Math.max(0, player.paintScore + delta);
+    if (player.slimeGroupId === slimeGroupId) {
+      player.slimeScore = Math.max(0, player.slimeScore + delta);
     }
   });
 }
@@ -62,14 +62,14 @@ export function createTerritoryCells(rows: number, cols: number): SimTerritoryCe
   const cells: SimTerritoryCell[] = [];
   for (let index = 0; index < rows * cols; index++) {
     cells.push({
-      ownerPaintGroupId: NO_PAINT_GROUP_ID,
+      ownerSlimeGroupId: NO_SLIME_GROUP_ID,
       color: 0,
     });
   }
   return cells;
 }
 
-export function isTerritoryCellPaintable(
+export function isTerritoryCellSlimeable(
   row: number,
   col: number,
   rows: number,
@@ -79,7 +79,7 @@ export function isTerritoryCellPaintable(
   return getWaterDepthAtCell(row, col, rows, cols, terrainCfg) <= terrainCfg.terrain.sandBand;
 }
 
-export function countPaintableTerritoryCells(
+export function countSlimeableTerritoryCells(
   rows: number,
   cols: number,
   terrainCfg: TerrainConfig,
@@ -87,7 +87,7 @@ export function countPaintableTerritoryCells(
   let count = 0;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      if (isTerritoryCellPaintable(row, col, rows, cols, terrainCfg)) {
+      if (isTerritoryCellSlimeable(row, col, rows, cols, terrainCfg)) {
         count++;
       }
     }
@@ -95,29 +95,29 @@ export function countPaintableTerritoryCells(
   return count;
 }
 
-export interface PaintPlayerInput {
+export interface SlimePlayerInput {
   planetId: string;
   pos: { x: number; y: number; z: number };
-  paintGroupId: number;
+  slimeGroupId: number;
   slimeColor: number;
 }
 
-export function applyPaintToTerritoryAtPoint(
-  paint: PaintPlayerInput,
+export function applySlimeToTerritoryAtPoint(
+  slime: SlimePlayerInput,
   simState: SimMatchState,
-  planetState: SimPlanetPaintState,
+  planetState: SimPlanetSlimeState,
   radiusMultiplier = 1,
 ): number {
-  const planetDef = simState.planetDefs.find((p) => p.id === paint.planetId);
+  const planetDef = simState.planetDefs.find((p) => p.id === slime.planetId);
   if (!planetDef) return 0;
 
   const normal = normalize(
-    paint.pos.x - planetDef.center.x,
-    paint.pos.y - planetDef.center.y,
-    paint.pos.z - planetDef.center.z,
+    slime.pos.x - planetDef.center.x,
+    slime.pos.y - planetDef.center.y,
+    slime.pos.z - planetDef.center.z,
   );
   const angularRadius = clamp(
-    getPaintStampAngularRadius(planetDef.radius) * radiusMultiplier,
+    getSlimeStampAngularRadius(planetDef.radius) * radiusMultiplier,
     0,
     Math.PI,
   );
@@ -136,12 +136,12 @@ export function applyPaintToTerritoryAtPoint(
 
       const index = row * planetState.territoryCols + col;
       const cell = planetState.cells[index];
-      if (!cell || cell.ownerPaintGroupId === paint.paintGroupId) continue;
+      if (!cell || cell.ownerSlimeGroupId === slime.slimeGroupId) continue;
 
-      adjustPaintGroupScore(simState, cell.ownerPaintGroupId, -1);
-      cell.ownerPaintGroupId = paint.paintGroupId;
-      cell.color = paint.slimeColor;
-      adjustPaintGroupScore(simState, paint.paintGroupId, 1);
+      adjustSlimeGroupScore(simState, cell.ownerSlimeGroupId, -1);
+      cell.ownerSlimeGroupId = slime.slimeGroupId;
+      cell.color = slime.slimeColor;
+      adjustSlimeGroupScore(simState, slime.slimeGroupId, 1);
       changedCells++;
     }
   }

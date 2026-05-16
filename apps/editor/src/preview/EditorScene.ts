@@ -11,7 +11,7 @@ import { createPlanetMaterial } from "@splat/client-runtime/materials/planetMate
 import { createWaterMaterial } from "@splat/client-runtime/materials/waterMaterial.ts";
 import { createMetricGroup } from "../performance/geometryStats.ts";
 import { BrushTool } from "../tools/brush/BrushTool.ts";
-import { PropPaintTool } from "../tools/props/PropPaintTool.ts";
+import { PropSlimeTool } from "../tools/props/PropSlimeTool.ts";
 import { TerrainStampTool } from "../tools/terrain/TerrainStampTool.ts";
 import type { TerrainStampState } from "../tools/terrain/TerrainStampTypes.ts";
 import { RailTool } from "../tools/rails/RailTool.ts";
@@ -89,7 +89,7 @@ export class EditorScene {
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
   private readonly terrainStampTool: TerrainStampTool;
-  private readonly propPaintTool: PropPaintTool;
+  private readonly propSlimeTool: PropSlimeTool;
   private readonly railTool: RailTool;
   private readonly railPreviewVisuals: RailPreviewVisuals;
   private readonly baseTerrainProvider: TerrainSurfaceProvider;
@@ -165,7 +165,7 @@ export class EditorScene {
     // Phase 1: init sculpt data and tool instances before planet build
     this.brushTool = new BrushTool(config);
     this.terrainStampTool = new TerrainStampTool();
-    this.propPaintTool = new PropPaintTool();
+    this.propSlimeTool = new PropSlimeTool();
     this.railTool = new RailTool();
     this.baseTerrainProvider = {
       getHeight: (nx, ny, nz, cfg) => getTerrainHeight(nx, ny, nz, cfg),
@@ -238,7 +238,7 @@ export class EditorScene {
         this.rebuildPlanetMeshes();
       },
     });
-    this.propPaintTool.connect({
+    this.propSlimeTool.connect({
       canvas,
       camera: this.camera,
       scene: this.scene,
@@ -280,7 +280,7 @@ export class EditorScene {
   setPropBrushState(state: PropBrushState | null): void {
     if (this.isPreviewActive && state) return;
     this.hasPropBrush = state !== null;
-    this.propPaintTool.setBrushState(state);
+    this.propSlimeTool.setBrushState(state);
   }
 
   setRailToolState(state: RailToolState | null): void {
@@ -294,7 +294,7 @@ export class EditorScene {
     if (this.spawnPlacementActive) {
       this.brushTool.setBrushState(null);
       this.terrainStampTool.setStampState(null);
-      this.propPaintTool.setBrushState(null);
+      this.propSlimeTool.setBrushState(null);
       this.railTool.setRailToolState(null);
       this.canvas.style.cursor = "crosshair";
     } else if (!this.isPreviewActive) {
@@ -322,7 +322,7 @@ export class EditorScene {
     this.setSpawnPlacementActive(false);
     this.brushTool.setBrushState(null);
     this.terrainStampTool.setStampState(null);
-    this.propPaintTool.setBrushState(null);
+    this.propSlimeTool.setBrushState(null);
     if (active) this.railTool.setRailToolState(null);
     this.railPreviewVisuals.setActive(active);
     this.playerPreview.setActive(active);
@@ -335,7 +335,7 @@ export class EditorScene {
     if (render) {
       this.brushTool.setPlanetMeshes([render.terrainMesh, render.outlineMesh]);
       this.terrainStampTool.setPlanetMesh(render.terrainMesh);
-      this.propPaintTool.setPlanetMesh(render.terrainMesh);
+      this.propSlimeTool.setPlanetMesh(render.terrainMesh);
       this.railTool.setPlanetMesh(render.terrainMesh);
       this.brushTool.resetSculptBase(this.getPlanetById(id));
       this.railPreviewVisuals.setRails(this.getActivePlanetRails());
@@ -425,7 +425,7 @@ export class EditorScene {
         atmoMeshes,
         "Transparent fresnel shell around the planet",
       ),
-      ...this.propPaintTool.getPerformanceStats(),
+      ...this.propSlimeTool.getPerformanceStats(),
       ...this.railTool.getPerformanceStats(),
     ];
 
@@ -459,7 +459,7 @@ export class EditorScene {
     this.controls.dispose();
     this.brushTool.dispose();
     this.terrainStampTool.dispose();
-    this.propPaintTool.dispose();
+    this.propSlimeTool.dispose();
     this.railTool.dispose();
     this.railPreviewVisuals.dispose();
     this.playerPreview.dispose();
@@ -501,7 +501,7 @@ export class EditorScene {
       displacements,
     );
     const planetMaterial = createPlanetMaterial({
-      paintMask: null,
+      slimeMask: null,
       planetCenter: new THREE.Vector3(0, 0, 0),
       planetRadius: planet.radius,
       waterRadius,

@@ -22,9 +22,9 @@ import {
 import {
   PlayerMovementState,
   PlayerSurfState,
-  type SimPlanetPaintState,
+  type SimPlanetSlimeState,
 } from "../match/simState.ts";
-import { getPaintAtPoint } from "../paint/paintDetection.ts";
+import { getSlimeAtPoint } from "../slime/slimeDetection.ts";
 import {
   getTerrainHeight,
   getTerrainRadius,
@@ -47,7 +47,7 @@ export interface PlayerPhysics {
   vel: Vec3Data;
   rot: QuatData;
   planetId: string;
-  paintGroupId: number;
+  slimeGroupId: number;
   movementState: number;
   surfState: number;
   isCarving: boolean;
@@ -57,7 +57,7 @@ export interface PlayerPhysics {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
-  isOnFriendlyPaint: boolean;
+  isOnFriendlySlime: boolean;
 }
 
 /**
@@ -80,7 +80,7 @@ export interface StepConfig {
     anchorGravityMultiplier: number;
     collisionRadius: number;
     standingHeight: number;
-    friendlyPaintSpeedMultiplier: number;
+    friendlySlimeSpeedMultiplier: number;
     enemySpeedMultiplier: number;
     groundedDeceleration: number;
     surfSpeedMultiplier: number;
@@ -94,8 +94,8 @@ export interface StepConfig {
   rail: {
     snapDistance: number;
     minEntrySpeed: number;
-    paintCorridorRadius: number;
-    paintStampSpacing: number;
+    slimeCorridorRadius: number;
+    slimeStampSpacing: number;
     maxGrindSpeed: number;
     carveAccelerationPerSecond: number;
     visualRadius: number;
@@ -214,7 +214,7 @@ function stepOnSurface(
   dt: number,
   planets: PlanetData[],
   cfg: StepConfig,
-  planetPaint: Map<string, SimPlanetPaintState>,
+  planetSlime: Map<string, SimPlanetSlimeState>,
   terrainProvider?: TerrainSurfaceProvider,
 ): void {
   const planet = planets.find((p) => p.id === state.planetId);
@@ -225,11 +225,11 @@ function stepOnSurface(
   }
 
   const oldNormal = normalize(sub(state.pos, planet.center));
-  const paint = getPaintAtPoint(state.pos, state.planetId, planetPaint, planets);
-  const onFriendlyPaint = paint?.paintGroupId === state.paintGroupId;
-  state.isOnFriendlyPaint = onFriendlyPaint;
-  const onEnemyPaint = paint !== null && !onFriendlyPaint;
-  const onNeutralSurface = paint === null;
+  const slime = getSlimeAtPoint(state.pos, state.planetId, planetSlime, planets);
+  const onFriendlySlime = slime?.slimeGroupId === state.slimeGroupId;
+  state.isOnFriendlySlime = onFriendlySlime;
+  const onEnemySlime = slime !== null && !onFriendlySlime;
+  const onNeutralSurface = slime === null;
   const terrainHeight =
     terrainProvider?.getHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg, state.planetId) ??
     getTerrainHeight(oldNormal.x, oldNormal.y, oldNormal.z, cfg);
@@ -268,14 +268,14 @@ function stepOnSurface(
   let speedMultiplier = 1.0;
   if (onWater && skiActive) {
     speedMultiplier = cfg.movement.waterSkiSpeedMultiplier;
-  } else if (skiActive && onFriendlyPaint) {
-    speedMultiplier = cfg.movement.surfSpeedMultiplier * cfg.movement.friendlyPaintSpeedMultiplier;
+  } else if (skiActive && onFriendlySlime) {
+    speedMultiplier = cfg.movement.surfSpeedMultiplier * cfg.movement.friendlySlimeSpeedMultiplier;
   } else if (skiActive) {
     speedMultiplier = cfg.movement.surfSpeedMultiplier;
-  } else if (onEnemyPaint) {
+  } else if (onEnemySlime) {
     speedMultiplier = cfg.movement.enemySpeedMultiplier;
-  } else if (onFriendlyPaint) {
-    speedMultiplier = cfg.movement.friendlyPaintSpeedMultiplier;
+  } else if (onFriendlySlime) {
+    speedMultiplier = cfg.movement.friendlySlimeSpeedMultiplier;
   }
   if (!skiActive && anchorPressed) {
     const moveDir = hasMoveInput
@@ -431,7 +431,7 @@ function stepOnSurface(
     }
     if (onWater) {
       state.surfState = PlayerSurfState.SkiWater;
-    } else if (onFriendlyPaint) {
+    } else if (onFriendlySlime) {
       state.surfState = hasMoveInput
         ? PlayerSurfState.SurfmingMoving
         : PlayerSurfState.SurfmingHidden;
@@ -513,7 +513,7 @@ function stepAirborne(
   cfg: StepConfig,
   terrainProvider?: TerrainSurfaceProvider,
 ): void {
-  state.isOnFriendlyPaint = false;
+  state.isOnFriendlySlime = false;
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
   const anchorPressed = (input.keys & InputKey.Anchor) !== 0;
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
@@ -602,14 +602,14 @@ export function stepPlayer(
   dt: number,
   planets: PlanetData[],
   cfg: StepConfig,
-  planetPaint: Map<string, SimPlanetPaintState>,
+  planetSlime: Map<string, SimPlanetSlimeState>,
   rails: ComputedRail[] = [],
   terrainProvider?: TerrainSurfaceProvider,
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
     state.surfState = PlayerSurfState.None;
     state.isCarving = false;
-    state.isOnFriendlyPaint = false;
+    state.isOnFriendlySlime = false;
     return;
   }
   if (state.movementState === PlayerMovementState.Grinding) {
@@ -617,7 +617,7 @@ export function stepPlayer(
     return;
   }
   if (state.planetId !== "") {
-    stepOnSurface(state, input, dt, planets, cfg, planetPaint, terrainProvider);
+    stepOnSurface(state, input, dt, planets, cfg, planetSlime, terrainProvider);
   } else {
     stepAirborne(state, input, dt, planets, cfg, terrainProvider);
     // After airborne integration, check if the player is close enough to a rail to snap.

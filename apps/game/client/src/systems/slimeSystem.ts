@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
-import type { PaintStampMessage } from "@splat/protocol/network/serverMessages.ts";
+import type { SlimeStampMessage } from "@splat/protocol/network/serverMessages.ts";
 import { stampVertexShader, stampFragmentShader } from "../shaders/stampShader.ts";
 
 const FRAME_MS = 1000 / 60;
@@ -17,7 +17,7 @@ interface AnimatedSplat {
   edgeNoiseOffset: THREE.Vector3;
 }
 
-export class PaintSystem {
+export class SlimeSystem {
   private readonly renderTargets = new Map<string, THREE.WebGLRenderTarget>();
   private readonly permanentRenderTargets = new Map<string, THREE.WebGLRenderTarget>();
   private readonly brushScene = new THREE.Scene();
@@ -28,7 +28,7 @@ export class PaintSystem {
   private readonly seenStamps = new Set<string>();
   private readonly activeSplats: AnimatedSplat[] = [];
 
-  private readonly stampHistory = new Map<string, PaintStampMessage[]>();
+  private readonly stampHistory = new Map<string, SlimeStampMessage[]>();
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
     this.brushMaterial = new THREE.ShaderMaterial({
@@ -38,11 +38,11 @@ export class PaintSystem {
         stampNormal: { value: new THREE.Vector3(0, 1, 0) },
         stampRadius: { value: 0.1 },
         bloomProgress: { value: 1 },
-        bloomStartScale: { value: GAME_CONFIG.paint.splatBloomStartScale },
-        bloomOvershootScale: { value: GAME_CONFIG.paint.splatBloomOvershootScale },
-        brushSoftness: { value: GAME_CONFIG.paint.brushSoftness },
-        edgeNoiseScale: { value: GAME_CONFIG.paint.edgeNoiseScale },
-        edgeNoiseStrength: { value: GAME_CONFIG.paint.edgeNoiseStrength },
+        bloomStartScale: { value: GAME_CONFIG.slimeStamp.splatBloomStartScale },
+        bloomOvershootScale: { value: GAME_CONFIG.slimeStamp.splatBloomOvershootScale },
+        brushSoftness: { value: GAME_CONFIG.slimeStamp.brushSoftness },
+        edgeNoiseScale: { value: GAME_CONFIG.slimeStamp.edgeNoiseScale },
+        edgeNoiseStrength: { value: GAME_CONFIG.slimeStamp.edgeNoiseStrength },
         edgeNoiseOffset: { value: new THREE.Vector3() },
       },
       vertexShader: stampVertexShader,
@@ -80,24 +80,24 @@ export class PaintSystem {
 
   getRenderTarget(planetId: string): THREE.WebGLRenderTarget {
     if (!this.renderTargets.has(planetId)) {
-      this.renderTargets.set(planetId, this.createPaintRenderTarget());
-      this.permanentRenderTargets.set(planetId, this.createPaintRenderTarget());
+      this.renderTargets.set(planetId, this.createSlimeRenderTarget());
+      this.permanentRenderTargets.set(planetId, this.createSlimeRenderTarget());
     }
     return this.renderTargets.get(planetId)!;
   }
 
-  getStampHistory(planetId: string): readonly PaintStampMessage[] {
+  getStampHistory(planetId: string): readonly SlimeStampMessage[] {
     return this.stampHistory.get(planetId) ?? [];
   }
 
-  addStamp(stamp: PaintStampMessage): boolean {
+  addStamp(stamp: SlimeStampMessage): boolean {
     const stampKey = `${stamp.planetId}:${stamp.seq}`;
     if (this.seenStamps.has(stampKey)) return false;
     this.seenStamps.add(stampKey);
 
     const history = this.stampHistory.get(stamp.planetId) ?? [];
     history.push(stamp);
-    if (history.length > GAME_CONFIG.paint.maxVisualStampsPerPlanet) {
+    if (history.length > GAME_CONFIG.slimeStamp.maxVisualStampsPerPlanet) {
       history.shift();
     }
     this.stampHistory.set(stamp.planetId, history);
@@ -117,7 +117,7 @@ export class PaintSystem {
     this.renderer.autoClear = false;
 
     const activePlanetIds = new Set<string>();
-    const bloomMs = GAME_CONFIG.paint.splatBloomFrames * FRAME_MS;
+    const bloomMs = GAME_CONFIG.slimeStamp.splatBloomFrames * FRAME_MS;
 
     for (let i = this.activeSplats.length - 1; i >= 0; i--) {
       const splat = this.activeSplats[i]!;
@@ -174,10 +174,10 @@ export class PaintSystem {
     this.renderer.setRenderTarget(currentRenderTarget);
   }
 
-  private createPaintRenderTarget(): THREE.WebGLRenderTarget {
+  private createSlimeRenderTarget(): THREE.WebGLRenderTarget {
     return new THREE.WebGLRenderTarget(
-      GAME_CONFIG.paint.maskResolution,
-      GAME_CONFIG.paint.maskResolution,
+      GAME_CONFIG.slimeStamp.maskResolution,
+      GAME_CONFIG.slimeStamp.maskResolution,
       {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
@@ -189,10 +189,10 @@ export class PaintSystem {
     );
   }
 
-  private enqueueStampSplats(stamp: PaintStampMessage, startMs: number): void {
+  private enqueueStampSplats(stamp: SlimeStampMessage, startMs: number): void {
     const rng = createSeededRandom(`${stamp.planetId}:${stamp.seq}`);
     const normal = new THREE.Vector3(stamp.nx, stamp.ny, stamp.nz).normalize();
-    const radius = stamp.radius * GAME_CONFIG.paint.projectileStampRadiusMultiplier;
+    const radius = stamp.radius * GAME_CONFIG.slimeStamp.projectileStampRadiusMultiplier;
     const tangentA = this.getStableTangent(normal);
     const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
     const impactDirection = this.getTangentDirection(tangentA, tangentB, rng() * TAU);
@@ -211,8 +211,8 @@ export class PaintSystem {
 
     const dropletCount = randomInt(
       rng,
-      GAME_CONFIG.paint.secondaryDropletMinCount,
-      GAME_CONFIG.paint.secondaryDropletMaxCount,
+      GAME_CONFIG.slimeStamp.secondaryDropletMinCount,
+      GAME_CONFIG.slimeStamp.secondaryDropletMaxCount,
     );
     for (let i = 0; i < dropletCount; i++) {
       const angle = (rng() - 0.5) * Math.PI;
@@ -223,13 +223,13 @@ export class PaintSystem {
         .add(sideDirection.multiplyScalar((rng() - 0.5) * 0.7))
         .normalize();
       const distance =
-        Math.sqrt(rng()) * radius * GAME_CONFIG.paint.secondaryDropletSpreadRadiusMultiplier;
+        Math.sqrt(rng()) * radius * GAME_CONFIG.slimeStamp.secondaryDropletSpreadRadiusMultiplier;
       const dropletNormal = normal.clone().add(direction.multiplyScalar(distance)).normalize();
       const dropletRadius =
         radius *
         lerp(
-          GAME_CONFIG.paint.secondaryDropletMinRadiusMultiplier,
-          GAME_CONFIG.paint.secondaryDropletMaxRadiusMultiplier,
+          GAME_CONFIG.slimeStamp.secondaryDropletMinRadiusMultiplier,
+          GAME_CONFIG.slimeStamp.secondaryDropletMaxRadiusMultiplier,
           rng(),
         );
 
@@ -240,10 +240,11 @@ export class PaintSystem {
         normal: dropletNormal,
         radius: dropletRadius,
         startMs,
-        delayMs: randomInt(rng, 0, GAME_CONFIG.paint.secondaryDropletMaxDelayFrames) * FRAME_MS,
+        delayMs:
+          randomInt(rng, 0, GAME_CONFIG.slimeStamp.secondaryDropletMaxDelayFrames) * FRAME_MS,
         edgeNoiseOffset: this.createEdgeNoiseOffset(rng),
       };
-      if (i < GAME_CONFIG.paint.secondaryDropletMaxAnimatedPerStamp) {
+      if (i < GAME_CONFIG.slimeStamp.secondaryDropletMaxAnimatedPerStamp) {
         this.enqueueOrSettleSplat(dropletSplat);
       } else {
         this.settleSplatImmediately(dropletSplat);
@@ -252,7 +253,7 @@ export class PaintSystem {
   }
 
   private enqueueOrSettleSplat(splat: AnimatedSplat): void {
-    if (this.activeSplats.length >= GAME_CONFIG.paint.maxActiveAnimatedSplats) {
+    if (this.activeSplats.length >= GAME_CONFIG.slimeStamp.maxActiveAnimatedSplats) {
       this.settleSplatImmediately(splat);
       return;
     }

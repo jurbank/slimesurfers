@@ -11,7 +11,7 @@ import type {
 } from "@splat/content/map/runtimeMapData.ts";
 
 export interface PlanetMaterialOptions {
-  paintMask: THREE.Texture | null;
+  slimeMask: THREE.Texture | null;
   planetCenter: THREE.Vector3;
   planetRadius: number;
   waterRadius: number;
@@ -55,7 +55,7 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
 
   return new THREE.ShaderMaterial({
     uniforms: {
-      paintMask: { value: options.paintMask },
+      slimeMask: { value: options.slimeMask },
       planetCenter: { value: options.planetCenter },
       planetRadius: { value: options.planetRadius },
       waterRadius: { value: options.waterRadius },
@@ -69,17 +69,17 @@ export function createPlanetMaterial(options: PlanetMaterialOptions): THREE.Shad
       rockColor: { value: new THREE.Color(colors.rock) },
       snowColor: { value: new THREE.Color(colors.snow) },
       time: { value: 0 },
-      edgeNoiseScale: { value: GAME_CONFIG.paint.edgeNoiseScale },
-      edgeNoiseStrength: { value: GAME_CONFIG.paint.edgeNoiseStrength },
-      normalPerturbationStrength: { value: GAME_CONFIG.paint.normalPerturbationStrength },
-      paintBlendStrength: { value: GAME_CONFIG.paint.paintBlendStrength },
-      slimeFlowSpeed: { value: GAME_CONFIG.paint.slimeFlowSpeed },
-      slimeFlowStrength: { value: GAME_CONFIG.paint.slimeFlowStrength },
-      slimeShineStrength: { value: GAME_CONFIG.paint.slimeShineStrength },
-      slimeFresnelStrength: { value: GAME_CONFIG.paint.slimeFresnelStrength },
-      slimeSpecularPower: { value: GAME_CONFIG.paint.slimeSpecularPower },
-      slimeEdgeWetness: { value: GAME_CONFIG.paint.slimeEdgeWetness },
-      slimePoolDarkening: { value: GAME_CONFIG.paint.slimePoolDarkening },
+      edgeNoiseScale: { value: GAME_CONFIG.slimeStamp.edgeNoiseScale },
+      edgeNoiseStrength: { value: GAME_CONFIG.slimeStamp.edgeNoiseStrength },
+      normalPerturbationStrength: { value: GAME_CONFIG.slimeStamp.normalPerturbationStrength },
+      slimeBlendStrength: { value: GAME_CONFIG.slimeStamp.slimeBlendStrength },
+      slimeFlowSpeed: { value: GAME_CONFIG.slimeStamp.slimeFlowSpeed },
+      slimeFlowStrength: { value: GAME_CONFIG.slimeStamp.slimeFlowStrength },
+      slimeShineStrength: { value: GAME_CONFIG.slimeStamp.slimeShineStrength },
+      slimeFresnelStrength: { value: GAME_CONFIG.slimeStamp.slimeFresnelStrength },
+      slimeSpecularPower: { value: GAME_CONFIG.slimeStamp.slimeSpecularPower },
+      slimeEdgeWetness: { value: GAME_CONFIG.slimeStamp.slimeEdgeWetness },
+      slimePoolDarkening: { value: GAME_CONFIG.slimeStamp.slimePoolDarkening },
       celEnabled: { value: "enabled" in cel && cel.enabled === false ? 0 : 1 },
       celBands: { value: cel.bands },
       celSoftness: { value: cel.softness },
