@@ -92,8 +92,8 @@ export class SlimeRechargeGauge {
 
     const alive = state.movementState !== PlayerMovementState.Dead;
     const surfing =
-      state.surfState === PlayerSurfState.SurfmingMoving ||
-      state.surfState === PlayerSurfState.SurfmingHidden;
+      state.surfState === PlayerSurfState.SurfingMoving ||
+      state.surfState === PlayerSurfState.SurfingHidden;
     const filling = state.slimeLevel > this.previousSlimeLevel + FILL_EPSILON;
     this.previousSlimeLevel = state.slimeLevel;
     const weapon = getWeaponDefinition(state.equippedWeaponId);

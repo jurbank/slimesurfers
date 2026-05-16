@@ -15,7 +15,7 @@ export const AUDIO: Record<string, AudioAsset> = {
   gunDry: { url: "/audio/gun_dry.mp3", category: "sfx", volume: 0.5 },
   bazookaPow: { url: "/audio/bazooka_pow.mp3", category: "sfx", volume: 0.7 },
   riflePow: { url: "/audio/rifle_pow.mp3", category: "sfx", volume: 0.65 },
-  skiLaunch: { url: "/audio/ski_launch.mp3", category: "sfx", volume: 0.25 },
+  surfLaunch: { url: "/audio/ski_launch.mp3", category: "sfx", volume: 0.25 },
   splat1: { url: "/audio/splat1.mp3", category: "sfx", volume: 0.75 },
   splat2: { url: "/audio/splat2.mp3", category: "sfx", volume: 0.8 },
   splat3: { url: "/audio/splat3.mp3", category: "sfx", volume: 0.8 },

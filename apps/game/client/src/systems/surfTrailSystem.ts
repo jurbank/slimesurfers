@@ -10,7 +10,7 @@ const WATER_TRAIL_COLOR = 0xc8ecff;
 const TRAIL_FADE_SPEED = 6.0;
 const TRAIL_SURFACE_OFFSET = 0.9;
 
-export class SkiTrailSystem {
+export class SurfTrailSystem {
   private readonly scene: THREE.Scene;
   private readonly geometry: THREE.BufferGeometry;
   private readonly posAttr: THREE.BufferAttribute;
@@ -106,13 +106,13 @@ export class SkiTrailSystem {
 
   update(state: RuntimePlayerState | null, planetCenter: THREE.Vector3, slimeColor: number): void {
     const surfState = state?.surfState ?? PlayerSurfState.None;
-    const isSkiing =
-      surfState === PlayerSurfState.SkiVisible ||
-      surfState === PlayerSurfState.SkiWater ||
-      surfState === PlayerSurfState.SurfmingMoving ||
-      surfState === PlayerSurfState.SurfmingHidden;
+    const isSurfing =
+      surfState === PlayerSurfState.SurfingVisible ||
+      surfState === PlayerSurfState.SurfingWater ||
+      surfState === PlayerSurfState.SurfingMoving ||
+      surfState === PlayerSurfState.SurfingHidden;
 
-    if (!isSkiing || !state) {
+    if (!isSurfing || !state) {
       this.clear();
       return;
     }
@@ -150,7 +150,7 @@ export class SkiTrailSystem {
       return;
     }
 
-    const trailHex = surfState === PlayerSurfState.SkiWater ? WATER_TRAIL_COLOR : slimeColor;
+    const trailHex = surfState === PlayerSurfState.SurfingWater ? WATER_TRAIL_COLOR : slimeColor;
     this.material.uniforms.trailColor.value.setHex(trailHex);
 
     // Surface up direction at current position (radial out from planet).
@@ -164,7 +164,7 @@ export class SkiTrailSystem {
       Math.min(1, speed / (TRAIL_FADE_SPEED * 2)) * Math.min(1, speed / TRAIL_FADE_SPEED);
 
     const halfWidth =
-      surfState === PlayerSurfState.SkiWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
+      surfState === PlayerSurfState.SurfingWater ? TRAIL_HALF_WIDTH_WATER : TRAIL_HALF_WIDTH;
 
     const N = this.trailCount;
     const posArr = this.posAttr.array as Float32Array;

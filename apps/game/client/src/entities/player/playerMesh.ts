@@ -5,7 +5,7 @@ import { createSlimeMaterial } from "../../materials/slimeMaterial.ts";
 import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import { createPlayerDeathParticles, type PlayerDeathParticles } from "./playerDeath.ts";
 
-function buildSnowboardGeom(
+function buildSurfboardGeom(
   halfW: number,
   halfLen: number,
   halfT: number,
@@ -89,7 +89,7 @@ export interface PlayerMeshRig {
   poseRig: PlayerPoseRig;
   weaponMesh: THREE.Group;
   weaponFallbackMesh: THREE.Mesh;
-  snowboardMesh: THREE.Group;
+  surfboardMesh: THREE.Group;
   outlineMesh: THREE.Group;
   jsrOutline: THREE.Group;
   disturbanceMesh: THREE.Mesh;
@@ -355,7 +355,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const face = createPlayerFace(bodyRadius);
   liveVisualMesh.add(face.mesh);
 
-  const snowboardMesh = new THREE.Group();
+  const surfboardMesh = new THREE.Group();
 
   const BOARD_HALF_W = 0.39;
   const BOARD_HALF_LEN = 0.675;
@@ -363,7 +363,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const BOARD_UPTURN = 0.14;
   const BOARD_SEGS = 20;
 
-  const boardGeom = buildSnowboardGeom(
+  const boardGeom = buildSurfboardGeom(
     BOARD_HALF_W,
     BOARD_HALF_LEN,
     BOARD_HALF_T,
@@ -377,12 +377,12 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     emissiveIntensity: 0.18,
   });
   const board = new THREE.Mesh(boardGeom, boardMat);
-  snowboardMesh.add(board);
+  surfboardMesh.add(board);
 
   const stripeGeom = buildStripeGeom(0.04, BOARD_HALF_LEN, BOARD_HALF_T, BOARD_UPTURN, BOARD_SEGS);
   const stripeMat = new THREE.MeshBasicMaterial({ color: slimeColor });
   const stripe = new THREE.Mesh(stripeGeom, stripeMat);
-  snowboardMesh.add(stripe);
+  surfboardMesh.add(stripe);
 
   // Bindings
   const boardTopAt = (z: number) =>
@@ -395,14 +395,14 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
   const bindingGeom = new THREE.BoxGeometry(0.3, 0.026, 0.21);
   const frontBinding = new THREE.Mesh(bindingGeom, bindingMat);
   frontBinding.position.set(0, boardTopAt(0.27) + 0.013, 0.27);
-  snowboardMesh.add(frontBinding);
+  surfboardMesh.add(frontBinding);
   const rearBinding = new THREE.Mesh(bindingGeom, bindingMat);
   rearBinding.position.set(0, boardTopAt(-0.23) + 0.013, -0.23);
-  snowboardMesh.add(rearBinding);
+  surfboardMesh.add(rearBinding);
 
-  snowboardMesh.position.set(0, -0.58, 0);
-  snowboardMesh.visible = false;
-  liveVisualMesh.add(snowboardMesh);
+  surfboardMesh.position.set(0, -0.58, 0);
+  surfboardMesh.visible = false;
+  liveVisualMesh.add(surfboardMesh);
 
   // 6. Debug Collider
   if (GAME_CONFIG.debug.showColliders) {
@@ -590,7 +590,7 @@ export function createPlayerMesh(slimeColor: number, patternId = 0): PlayerMeshR
     poseRig,
     weaponMesh,
     weaponFallbackMesh,
-    snowboardMesh,
+    surfboardMesh,
     outlineMesh,
     jsrOutline,
     disturbanceMesh,

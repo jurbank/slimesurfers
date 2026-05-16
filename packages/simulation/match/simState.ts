@@ -101,10 +101,10 @@ export type PlayerMovementState = (typeof PlayerMovementState)[keyof typeof Play
 
 export const PlayerSurfState = {
   None: 0,
-  SurfmingMoving: 1,
-  SurfmingHidden: 2,
-  SkiVisible: 3,
-  SkiWater: 4,
+  SurfingMoving: 1,
+  SurfingHidden: 2,
+  SurfingVisible: 3,
+  SurfingWater: 4,
 } as const;
 export type PlayerSurfState = (typeof PlayerSurfState)[keyof typeof PlayerSurfState];
 

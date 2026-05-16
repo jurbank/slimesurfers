@@ -7,7 +7,7 @@ import {
 } from "./playerVisualRig.ts";
 import { SlimeRechargeGauge } from "./slimeRechargeGauge.ts";
 
-const SKI_ROTATION_LERP_SPEED = 7;
+const SURF_ROTATION_LERP_SPEED = 7;
 const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
 const OPACITY_FADE_IN_SPEED = 6; // ~0.35s to fully reveal
 const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
@@ -23,9 +23,9 @@ export class LocalPlayer {
   readonly mesh: THREE.Group;
   private readonly visual: PlayerVisualRig;
   private readonly slimeRechargeGauge: SlimeRechargeGauge;
-  private readonly skiVisualRotation = new THREE.Quaternion();
-  private readonly skiTargetRotation = new THREE.Quaternion();
-  private skiLaunchTimer = 0;
+  private readonly surfVisualRotation = new THREE.Quaternion();
+  private readonly surfTargetRotation = new THREE.Quaternion();
+  private surfLaunchTimer = 0;
   private currentOpacity = 1;
   private submersionTimer = 0;
 
@@ -51,18 +51,18 @@ export class LocalPlayer {
   ): void {
     this.mesh.position.set(state.pos.x, state.pos.y, state.pos.z);
     if (visualRotation) {
-      this.skiVisualRotation.copy(visualRotation);
+      this.surfVisualRotation.copy(visualRotation);
       this.mesh.quaternion.copy(visualRotation);
     } else if (state.surfState !== PlayerSurfState.None) {
-      this.skiTargetRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
-      this.skiVisualRotation.slerp(
-        this.skiTargetRotation,
-        Math.min(1, dt * SKI_ROTATION_LERP_SPEED),
+      this.surfTargetRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
+      this.surfVisualRotation.slerp(
+        this.surfTargetRotation,
+        Math.min(1, dt * SURF_ROTATION_LERP_SPEED),
       );
-      this.mesh.quaternion.copy(this.skiVisualRotation);
+      this.mesh.quaternion.copy(this.surfVisualRotation);
     } else {
-      this.skiVisualRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
-      this.mesh.quaternion.copy(this.skiVisualRotation);
+      this.surfVisualRotation.set(state.rot.x, state.rot.y, state.rot.z, state.rot.w);
+      this.mesh.quaternion.copy(this.surfVisualRotation);
     }
 
     if (this.visual.updateDeath(state, dt)) {
@@ -76,9 +76,9 @@ export class LocalPlayer {
     this.visual.updateAlivePose(state, dt);
     this.visual.updateWeapon(state.equippedWeaponId, aimDir);
 
-    if (!state.isCarving && this.skiLaunchTimer > 0) {
-      this.skiLaunchTimer = Math.max(0, this.skiLaunchTimer - dt);
-      const t = this.skiLaunchTimer / 0.4;
+    if (!state.isCarving && this.surfLaunchTimer > 0) {
+      this.surfLaunchTimer = Math.max(0, this.surfLaunchTimer - dt);
+      const t = this.surfLaunchTimer / 0.4;
       const stretch = 1 + Math.sin(t * Math.PI) * 0.6;
       const squash = 1 / Math.sqrt(stretch);
       this.visual.liveMesh.scale.set(squash, stretch, squash);
@@ -104,8 +104,8 @@ export class LocalPlayer {
     this.slimeRechargeGauge.update(state, dt, dryFirePulseSeq, gaugeActivityPulseSeq);
   }
 
-  triggerSkiLaunch(): void {
-    this.skiLaunchTimer = 0.4;
+  triggerSurfLaunch(): void {
+    this.surfLaunchTimer = 0.4;
   }
 
   triggerTrick(trickId: string, combo?: number): void {

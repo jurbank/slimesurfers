@@ -34,7 +34,7 @@ export const InputKey = {
   Right: 1 << 3, // D
   Anchor: 1 << 4, // Space carve/anchor
   Fire: 1 << 5,
-  Submerge: 1 << 6, // E ski/surf toggle
+  Submerge: 1 << 6, // E surf toggle
 } as const;
 
 export type InputKeys = number; // bitmask — see InputKey flags above

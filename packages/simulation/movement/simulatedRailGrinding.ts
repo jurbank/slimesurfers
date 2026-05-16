@@ -47,7 +47,7 @@ function applyGrindSnap(
   state.grindSpeed = snapSpeed;
   state.movementState = PlayerMovementState.Grinding;
   state.planetId = "";
-  state.surfState = PlayerSurfState.SkiVisible;
+  state.surfState = PlayerSurfState.SurfingVisible;
 }
 
 function exitGrind(

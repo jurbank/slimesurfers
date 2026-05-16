@@ -430,13 +430,13 @@ function stepOnSurface(
       state.isCarving = false;
     }
     if (onWater) {
-      state.surfState = PlayerSurfState.SkiWater;
+      state.surfState = PlayerSurfState.SurfingWater;
     } else if (onFriendlySlime) {
       state.surfState = hasMoveInput
-        ? PlayerSurfState.SurfmingMoving
-        : PlayerSurfState.SurfmingHidden;
+        ? PlayerSurfState.SurfingMoving
+        : PlayerSurfState.SurfingHidden;
     } else {
-      state.surfState = PlayerSurfState.SkiVisible;
+      state.surfState = PlayerSurfState.SurfingVisible;
     }
   } else {
     state.isCarving = false;
@@ -519,7 +519,7 @@ function stepAirborne(
   const toggleSubmerge = (input.keys & InputKey.Submerge) !== 0;
   state.skiJumpCharge = 0;
   if (toggleSubmerge && state.surfState === PlayerSurfState.None) {
-    state.surfState = PlayerSurfState.SkiVisible;
+    state.surfState = PlayerSurfState.SurfingVisible;
   } else if (toggleSubmerge && state.surfState !== PlayerSurfState.None) {
     state.surfState = PlayerSurfState.None;
   }

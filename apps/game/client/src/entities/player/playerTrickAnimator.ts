@@ -88,7 +88,7 @@ export class PlayerTrickAnimator {
 
   update(
     liveMesh: THREE.Group,
-    snowboardMesh: THREE.Group,
+    surfboardMesh: THREE.Group,
     poseRig: PlayerPoseRig,
     state: PlayerAnimatorState,
     dt: number,
@@ -97,20 +97,20 @@ export class PlayerTrickAnimator {
     this.walkTime += dt * Math.max(0.65, Math.min(1.85, speed * 0.12));
 
     liveMesh.rotation.set(0, 0, 0);
-    snowboardMesh.rotation.set(0, 0, 0);
-    snowboardMesh.position.set(0, BOARD_BASE_Y, 0);
+    surfboardMesh.rotation.set(0, 0, 0);
+    surfboardMesh.position.set(0, BOARD_BASE_Y, 0);
 
     const surfing = state.surfState !== PlayerSurfState.None;
     const airborne = state.movementState === PlayerMovementState.Airborne;
 
     if (surfing) {
-      this.applySurfPose(poseRig, snowboardMesh, state, airborne);
+      this.applySurfPose(poseRig, surfboardMesh, state, airborne);
     } else {
       this.applyGroundPose(poseRig, speed);
     }
 
     if (airborne && surfing) this.applyAirTuck(poseRig, speed);
-    this.applyTrickOverlay(liveMesh, snowboardMesh, poseRig, dt);
+    this.applyTrickOverlay(liveMesh, surfboardMesh, poseRig, dt);
     syncPoseRigOutlines(poseRig);
   }
 
@@ -129,7 +129,7 @@ export class PlayerTrickAnimator {
 
   private applySurfPose(
     poseRig: PlayerPoseRig,
-    snowboardMesh: THREE.Group,
+    surfboardMesh: THREE.Group,
     state: PlayerAnimatorState,
     airborne: boolean,
   ): void {
@@ -143,8 +143,8 @@ export class PlayerTrickAnimator {
     setPart(poseRig.rearFoot, 0.12, footY, REAR_BINDING_Z, 1.18, 0.72, 1.34);
 
     if (state.isCarving) {
-      snowboardMesh.rotation.z = 0.16;
-      snowboardMesh.rotation.x = -0.08;
+      surfboardMesh.rotation.z = 0.16;
+      surfboardMesh.rotation.x = -0.08;
     }
   }
 
@@ -160,7 +160,7 @@ export class PlayerTrickAnimator {
 
   private applyTrickOverlay(
     liveMesh: THREE.Group,
-    snowboardMesh: THREE.Group,
+    surfboardMesh: THREE.Group,
     poseRig: PlayerPoseRig,
     dt: number,
   ): void {
@@ -175,19 +175,19 @@ export class PlayerTrickAnimator {
     if (trick.animation === "yawSpin") {
       const rotations = Math.max(1, (trick.degrees ?? 360) / 360);
       liveMesh.rotation.y = eased * Math.PI * 2 * rotations;
-      snowboardMesh.rotation.z += arc * 0.28;
+      surfboardMesh.rotation.z += arc * 0.28;
       poseRig.leftArm.mesh.position.x -= arc * 0.12;
       poseRig.rightArm.mesh.position.x += arc * 0.12;
     } else if (trick.animation === "boardRoll") {
-      snowboardMesh.rotation.z += eased * Math.PI * 2;
-      snowboardMesh.rotation.x += arc * 0.28;
+      surfboardMesh.rotation.z += eased * Math.PI * 2;
+      surfboardMesh.rotation.x += arc * 0.28;
       liveMesh.rotation.z = arc * -0.18;
       poseRig.frontFoot.mesh.position.x -= arc * 0.18;
       poseRig.frontFoot.mesh.position.y += arc * 0.16;
       poseRig.rearFoot.mesh.position.y += arc * 0.08;
     } else if (trick.animation === "boardFlip") {
-      snowboardMesh.rotation.x += eased * Math.PI * 2;
-      snowboardMesh.position.y = BOARD_BASE_Y + arc * 0.16;
+      surfboardMesh.rotation.x += eased * Math.PI * 2;
+      surfboardMesh.position.y = BOARD_BASE_Y + arc * 0.16;
       liveMesh.rotation.x = arc * 0.16;
       poseRig.rightArm.mesh.position.set(0.38, -0.08 + arc * 0.2, REAR_BINDING_Z - arc * 0.18);
       poseRig.leftArm.mesh.position.set(-0.5, 0.14 + arc * 0.1, 0.12);
@@ -196,15 +196,15 @@ export class PlayerTrickAnimator {
       const direction = trick.animation === "frontFlip" ? 1 : -1;
       const rotations = Math.max(1, Math.abs(trick.degrees ?? 360) / 360);
       liveMesh.rotation.x = direction * eased * Math.PI * 2 * rotations;
-      snowboardMesh.rotation.x += direction * eased * Math.PI * 2 * rotations;
-      snowboardMesh.position.y = BOARD_BASE_Y + arc * 0.2;
+      surfboardMesh.rotation.x += direction * eased * Math.PI * 2 * rotations;
+      surfboardMesh.position.y = BOARD_BASE_Y + arc * 0.2;
       poseRig.leftArm.mesh.position.y += arc * 0.16;
       poseRig.rightArm.mesh.position.y += arc * 0.16;
       poseRig.frontFoot.mesh.position.z += direction * arc * 0.08;
       poseRig.rearFoot.mesh.position.z -= direction * arc * 0.08;
     } else {
-      snowboardMesh.rotation.x += eased * Math.PI * 2;
-      snowboardMesh.position.y = BOARD_BASE_Y + arc * 0.18;
+      surfboardMesh.rotation.x += eased * Math.PI * 2;
+      surfboardMesh.position.y = BOARD_BASE_Y + arc * 0.18;
       liveMesh.rotation.x = arc * 0.18;
     }
 

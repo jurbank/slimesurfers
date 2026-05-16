@@ -50,7 +50,7 @@ export class PlayerVisualRig {
   private readonly poseRig: PlayerPoseRig;
   private readonly weaponMesh: THREE.Group;
   private readonly weaponFallbackMesh: THREE.Mesh;
-  private readonly snowboardMesh: THREE.Group;
+  private readonly surfboardMesh: THREE.Group;
   private readonly trickChargeEffect: PlayerTrickChargeEffect;
   private readonly trickAnimator = new PlayerTrickAnimator();
   private readonly materials: THREE.Material[] = [];
@@ -83,7 +83,7 @@ export class PlayerVisualRig {
     this.poseRig = rig.poseRig;
     this.weaponMesh = rig.weaponMesh;
     this.weaponFallbackMesh = rig.weaponFallbackMesh;
-    this.snowboardMesh = rig.snowboardMesh;
+    this.surfboardMesh = rig.surfboardMesh;
     this.outlineMesh = rig.outlineMesh;
     this.jsrOutline = rig.jsrOutline;
     this.disturbanceMesh = rig.disturbanceMesh;
@@ -118,7 +118,7 @@ export class PlayerVisualRig {
     this.liveMesh.visible = false;
     this.deadMesh.visible = true;
     this.weaponMesh.visible = false;
-    this.snowboardMesh.visible = false;
+    this.surfboardMesh.visible = false;
     this.outlineMesh.visible = false;
     this.jsrOutline.visible = false;
     this.disturbanceMesh.visible = false;
@@ -131,9 +131,9 @@ export class PlayerVisualRig {
     this.liveMesh.visible = true;
     this.deadMesh.visible = false;
     this.jsrOutline.visible = true;
-    this.snowboardMesh.visible = state.surfState !== PlayerSurfState.None;
+    this.surfboardMesh.visible = state.surfState !== PlayerSurfState.None;
     this.liveMesh.scale.set(1, 1, 1);
-    this.trickAnimator.update(this.liveMesh, this.snowboardMesh, this.poseRig, state, dt);
+    this.trickAnimator.update(this.liveMesh, this.surfboardMesh, this.poseRig, state, dt);
     this.trickChargeEffect.update(state, dt);
     this.face.setExpression(state.isShooting ? "spewing" : "normal");
     if (state.isCarving) this.liveMesh.scale.set(1.12, 0.68, 1.08);
@@ -281,13 +281,13 @@ export function isPlayerEffectivelySubmerged(state: PlayerVisualState): boolean 
   const airborne = state.movementState === PlayerMovementState.Airborne;
   return (
     (state.isOnFriendlySlime && !airborne && !state.isShooting) ||
-    state.surfState === PlayerSurfState.SurfmingHidden
+    state.surfState === PlayerSurfState.SurfingHidden
   );
 }
 
 function isPlayerVisuallyMoving(state: PlayerVisualState): boolean {
   return (
     state.movementState === PlayerMovementState.Moving ||
-    state.surfState === PlayerSurfState.SurfmingMoving
+    state.surfState === PlayerSurfState.SurfingMoving
   );
 }

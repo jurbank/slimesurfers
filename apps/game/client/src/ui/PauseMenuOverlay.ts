@@ -16,7 +16,7 @@ const CONTROLS = [
 const GAMEPLAY_NOTES = [
   "Recharge slime faster on your own slime.",
   "Recharge even faster while submerged in your own slime.",
-  "Hide inside your own slime while ski mode is active and you stop moving.",
+  "Hide inside your own slime while surf mode is active and you stop moving.",
   "Enemy slime slows you down and only gives passive recharge.",
   "Slime more territory than the other team before time runs out.",
   "Land epic air tricks for big splats!",

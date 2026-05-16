@@ -24,7 +24,7 @@ import { PickupSystem } from "../systems/pickup/pickupSystem.ts";
 import { HealthPickupSystem } from "../systems/pickup/healthPickupSystem.ts";
 import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
-import { SkiTrailSystem } from "../systems/skiTrailSystem.ts";
+import { SurfTrailSystem } from "../systems/surfTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { RailSystem } from "../systems/railSystem.ts";
@@ -36,7 +36,7 @@ import { LocalPlayer } from "../entities/player/player.ts";
 import { RemotePlayer } from "../entities/player/remotePlayer.ts";
 import { ClientRuntimeState } from "../network/runtimeState.ts";
 import { CombatHud } from "../ui/CombatHud.ts";
-import { SkiDebugHud } from "../ui/SkiDebugHud.ts";
+import { SurfDebugHud } from "../ui/SurfDebugHud.ts";
 import { CountdownOverlay } from "../ui/CountdownOverlay.ts";
 import { LeaderboardOverlay } from "../ui/LeaderboardOverlay.ts";
 import { MatchEndOverlay } from "../ui/MatchEndOverlay.ts";
@@ -94,7 +94,7 @@ export class MatchScene {
   private readonly connection: RoomConnection;
   private readonly runtime: ClientRuntimeState;
   private readonly combatHud: CombatHud;
-  private readonly skiDebugHud: SkiDebugHud;
+  private readonly surfDebugHud: SurfDebugHud;
   private readonly leaderboard: LeaderboardOverlay;
   private readonly countdown: CountdownOverlay;
   private readonly matchEnd: MatchEndOverlay;
@@ -116,9 +116,9 @@ export class MatchScene {
   private localPlayer: LocalPlayer | null = null;
   private localPlayerColor = -1;
   private localPlayerPatternId = -1;
-  private localTrail: SkiTrailSystem | null = null;
+  private localTrail: SurfTrailSystem | null = null;
   private readonly remotePlayers = new Map<string, RemotePlayer>();
-  private readonly remoteTrails = new Map<string, SkiTrailSystem>();
+  private readonly remoteTrails = new Map<string, SurfTrailSystem>();
   private readonly playerColors = new Map<string, number>();
   private readonly playerPatterns = new Map<string, number>();
   private readonly removedSessions = new Set<string>();
@@ -288,8 +288,8 @@ export class MatchScene {
     this.connection = new RoomConnection();
     this.runtime = new ClientRuntimeState();
     this.combatHud = new CombatHud();
-    this.skiDebugHud = new SkiDebugHud();
-    this.skiDebugHud.setVisible(import.meta.env.VITE_DEV_MODE === "true");
+    this.surfDebugHud = new SurfDebugHud();
+    this.surfDebugHud.setVisible(import.meta.env.VITE_DEV_MODE === "true");
     this.leaderboard = new LeaderboardOverlay();
     this.countdown = new CountdownOverlay();
     this.matchEnd = new MatchEndOverlay(
@@ -760,7 +760,7 @@ export class MatchScene {
     this.localPlayer?.dispose(this.render.scene);
     this.localTrail?.dispose();
     this.localPlayer = new LocalPlayer(this.render.scene, slimeColor, patternId);
-    this.localTrail = new SkiTrailSystem(this.render.scene, slimeColor);
+    this.localTrail = new SurfTrailSystem(this.render.scene, slimeColor);
     this.localPlayerColor = slimeColor;
     this.localPlayerPatternId = patternId;
   }
@@ -814,7 +814,7 @@ export class MatchScene {
       sessionId,
       new RemotePlayer(this.render.scene, slimeColor, patternId, name),
     );
-    this.remoteTrails.set(sessionId, new SkiTrailSystem(this.render.scene, slimeColor));
+    this.remoteTrails.set(sessionId, new SurfTrailSystem(this.render.scene, slimeColor));
     this.playerColors.set(sessionId, slimeColor);
     this.playerPatterns.set(sessionId, patternId);
   }
@@ -1226,8 +1226,8 @@ export class MatchScene {
       const predictedLocalState = this.runtime.getLocalPlayerState();
       if (predictedLocalState) {
         const isNowAirborne = predictedLocalState.movementState === PlayerMovementState.Airborne;
-        const isNowSki = predictedLocalState.surfState !== PlayerSurfState.None;
-        this.input.setSubmergeActive(isNowSki);
+        const isNowSurfing = predictedLocalState.surfState !== PlayerSurfState.None;
+        this.input.setSubmergeActive(isNowSurfing);
 
         const { vel } = predictedLocalState;
         const velMag = Math.hypot(vel.x, vel.y, vel.z);
@@ -1235,14 +1235,14 @@ export class MatchScene {
           this.lastWasCarving &&
           !this.lastWasAirborne &&
           isNowAirborne &&
-          isNowSki &&
+          isNowSurfing &&
           velMag > GAME_CONFIG.movement.jumpImpulse;
         if (justLaunched) {
-          this.localPlayer?.triggerSkiLaunch();
-          this.sound.playSfx("skiLaunch");
+          this.localPlayer?.triggerSurfLaunch();
+          this.sound.playSfx("surfLaunch");
         }
         this.lastWasAirborne = isNowAirborne;
-        this.lastWasCarving = isNowSki && predictedLocalState.isCarving && !isNowAirborne;
+        this.lastWasCarving = isNowSurfing && predictedLocalState.isCarving && !isNowAirborne;
       }
       if (predictedLocalState && this.localPlayer) {
         const visualRotation =
@@ -1313,7 +1313,7 @@ export class MatchScene {
 
       if (predictedLocalState) {
         const { vel, pos } = predictedLocalState;
-        const isSki = predictedLocalState.surfState !== PlayerSurfState.None;
+        const isSurfing = predictedLocalState.surfState !== PlayerSurfState.None;
         const speed = Math.hypot(vel.x, vel.y, vel.z);
         const pLen = Math.hypot(pos.x, pos.y, pos.z);
         const gravDirX = pLen > 1e-6 ? pos.x / pLen : 0;
@@ -1332,12 +1332,12 @@ export class MatchScene {
           baseSpeed * 0.5,
           baseSpeed + Math.max(0, slopeAccel) * 0.6,
         );
-        this.skiDebugHud.update(
+        this.surfDebugHud.update(
           speed,
           slopeAccel,
           dynamicMaxSpeed,
           predictedLocalState.isCarving,
-          isSki,
+          isSurfing,
         );
       }
 

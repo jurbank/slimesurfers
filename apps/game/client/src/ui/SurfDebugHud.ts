@@ -1,4 +1,4 @@
-export class SkiDebugHud {
+export class SurfDebugHud {
   private readonly root: HTMLDivElement;
   private readonly speedLabel: HTMLDivElement;
   private readonly slopeLabel: HTMLDivElement;
@@ -28,7 +28,7 @@ export class SkiDebugHud {
     });
 
     const title = document.createElement("div");
-    title.textContent = "SKI DEBUG";
+    title.textContent = "SURF DEBUG";
     Object.assign(title.style, {
       fontSize: "0.65rem",
       textTransform: "uppercase",
@@ -62,9 +62,9 @@ export class SkiDebugHud {
     slopeAccel: number,
     dynamicMaxSpeed: number,
     isCarving: boolean,
-    isSki: boolean,
+    isSurfing: boolean,
   ): void {
-    if (!this.visible || !isSki) {
+    if (!this.visible || !isSurfing) {
       if (this.visible) this.root.style.display = "none";
       return;
     }

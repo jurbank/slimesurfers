@@ -229,7 +229,7 @@ describe("stepPlayer", () => {
     expect(dist).toBeCloseTo(expectedRadius, 3);
   });
 
-  it("jumps with space outside ski mode", () => {
+  it("jumps with space outside surf mode", () => {
     const player = createPlayer();
 
     stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
@@ -258,13 +258,13 @@ describe("stepPlayer", () => {
     expect(player.vel.z).toBeGreaterThan(0);
   });
 
-  it("accelerates forward faster in ski mode when holding forward and anchor together", () => {
+  it("accelerates forward faster in surf mode when holding forward and anchor together", () => {
     const normalPlayer = createPlayer();
     const boostedPlayer = createPlayer();
     const paint = createSlimeMap(boostedPlayer.slimeGroupId);
 
     stepPlayer(normalPlayer, createInput(InputKey.Forward), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
-    // Enter ski mode then ramp up with carving — needs several steps to surpass normal speed
+    // Enter surf mode then ramp up with carving — needs several steps to surpass normal speed
     stepPlayer(
       boostedPlayer,
       createInput(InputKey.Submerge),
@@ -285,7 +285,7 @@ describe("stepPlayer", () => {
     }
 
     expect(boostedPlayer.planetId).toBe("planet-0");
-    expect(boostedPlayer.surfState).toBe(PlayerSurfState.SurfmingMoving);
+    expect(boostedPlayer.surfState).toBe(PlayerSurfState.SurfingMoving);
     expect(
       Math.hypot(boostedPlayer.vel.x, boostedPlayer.vel.y, boostedPlayer.vel.z),
     ).toBeGreaterThan(Math.hypot(normalPlayer.vel.x, normalPlayer.vel.y, normalPlayer.vel.z));
@@ -319,7 +319,7 @@ describe("stepPlayer", () => {
     expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
-  it("lets ski traversal leave the surface when the free path rises beyond snap distance", () => {
+  it("lets surf traversal leave the surface when the free path rises beyond snap distance", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
@@ -329,15 +329,15 @@ describe("stepPlayer", () => {
 
     expect(player.planetId).toBe("");
     expect(player.movementState).toBe(PlayerMovementState.Airborne);
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingHidden);
   });
 
-  it("keeps ski mode when landing back on slime after becoming airborne", () => {
+  it("keeps surf mode when landing back on slime after becoming airborne", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.surfState = PlayerSurfState.SurfmingMoving;
+    player.surfState = PlayerSurfState.SurfingMoving;
     player.pos.y += 1;
     player.vel.y = -20;
 
@@ -348,11 +348,11 @@ describe("stepPlayer", () => {
     expect(player.surfState).not.toBe(PlayerSurfState.None);
   });
 
-  it("keeps ski mode after landing on neutral ground", () => {
+  it("keeps surf mode after landing on neutral ground", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.surfState = PlayerSurfState.SurfmingMoving;
+    player.surfState = PlayerSurfState.SurfingMoving;
     player.pos.y += 1;
     player.vel.y = -20;
 
@@ -507,7 +507,7 @@ describe("stepPlayer", () => {
     );
   });
 
-  it("shows a subtle moving indicator while skiing on friendly slime with movement input", () => {
+  it("shows a subtle moving indicator while surfing on friendly slime with movement input", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
@@ -520,31 +520,31 @@ describe("stepPlayer", () => {
       paint,
     );
 
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingMoving);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingMoving);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeGreaterThan(0);
   });
 
-  it("becomes hidden in ski mode when stationary", () => {
+  it("becomes hidden in surf mode when stationary", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingHidden);
     expect(player.movementState).toBe(PlayerMovementState.Idle);
   });
 
-  it("stays in ski mode after the toggle input is released", () => {
+  it("stays in surf mode after the toggle input is released", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingHidden);
   });
 
-  it("exits ski mode when toggled again", () => {
+  it("exits surf mode when toggled again", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
@@ -554,17 +554,17 @@ describe("stepPlayer", () => {
     expect(player.surfState).toBe(PlayerSurfState.None);
   });
 
-  it("keeps ski mode while firing", () => {
+  it("keeps surf mode while firing", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
     stepPlayer(player, createInput(InputKey.Submerge), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
     stepPlayer(player, createInput(InputKey.Fire), 0.1, TEST_PLANETS, TEST_CONFIG, paint);
 
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingHidden);
   });
 
-  it("allows visible ski mode on enemy slime", () => {
+  it("allows visible surf mode on enemy slime", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId + 1);
 
@@ -577,11 +577,11 @@ describe("stepPlayer", () => {
       paint,
     );
 
-    expect(player.surfState).toBe(PlayerSurfState.SkiVisible);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingVisible);
     expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeGreaterThan(0);
   });
 
-  it("keeps ski momentum when crossing from friendly slime onto enemy slime", () => {
+  it("keeps surf momentum when crossing from friendly slime onto enemy slime", () => {
     const player = createPlayer();
     const friendlySlime = createSlimeMap(player.slimeGroupId);
     const enemySlime = createSlimeMap(player.slimeGroupId + 1);
@@ -597,11 +597,11 @@ describe("stepPlayer", () => {
     player.vel.z = 18;
     stepPlayer(player, createInput(0), 0.1, TEST_PLANETS, TEST_CONFIG, enemySlime);
 
-    expect(player.surfState).toBe(PlayerSurfState.SkiVisible);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingVisible);
     expect(player.vel.z).toBeGreaterThan(TEST_CONFIG.movement.moveSpeed);
   });
 
-  it("anchoring while in ski mode keeps ski mode active", () => {
+  it("anchoring while in surf mode keeps surf mode active", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
@@ -623,13 +623,13 @@ describe("stepPlayer", () => {
     );
 
     expect(player.planetId).toBe("planet-0");
-    expect(player.surfState).toBe(PlayerSurfState.SurfmingMoving);
+    expect(player.surfState).toBe(PlayerSurfState.SurfingMoving);
     expect(player.isCarving).toBe(true);
     expect(player.movementState).toBe(PlayerMovementState.Moving);
     expect(player.vel.z).toBeGreaterThan(0);
   });
 
-  it("clears carve pose when space is released in ski mode", () => {
+  it("clears carve pose when space is released in surf mode", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 
@@ -647,18 +647,18 @@ describe("stepPlayer", () => {
     expect(player.isCarving).toBe(false);
   });
 
-  it("keeps carve pose while airborne if space is held in ski mode", () => {
+  it("keeps carve pose while airborne if space is held in surf mode", () => {
     const player = createPlayer();
     player.planetId = "";
     player.movementState = PlayerMovementState.Airborne;
-    player.surfState = PlayerSurfState.SurfmingMoving;
+    player.surfState = PlayerSurfState.SurfingMoving;
 
     stepPlayer(player, createInput(InputKey.Anchor), 0.1, TEST_PLANETS, TEST_CONFIG, EMPTY_SLIME);
 
     expect(player.isCarving).toBe(true);
   });
 
-  it("exiting ski mode with the toggle brakes back into normal movement", () => {
+  it("exiting surf mode with the toggle brakes back into normal movement", () => {
     const player = createPlayer();
     const paint = createSlimeMap(player.slimeGroupId);
 

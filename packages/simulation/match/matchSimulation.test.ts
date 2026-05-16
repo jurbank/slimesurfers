@@ -128,7 +128,7 @@ function slimePlayerSurface(
   });
 }
 
-function makeAirborneSkier(player: ReturnType<MatchSimulation["addPlayer"]>): void {
+function makeAirborneSurfer(player: ReturnType<MatchSimulation["addPlayer"]>): void {
   const planet = DEV_MAP.planets[0]!;
   player.pos = {
     x: planet.center.x,
@@ -138,7 +138,7 @@ function makeAirborneSkier(player: ReturnType<MatchSimulation["addPlayer"]>): vo
   player.vel = { x: 0, y: 6, z: 0 };
   player.planetId = "";
   player.movementState = PlayerMovementState.Airborne;
-  player.surfState = PlayerSurfState.SkiVisible;
+  player.surfState = PlayerSurfState.SurfingVisible;
   player.airTrickAirTimeMs = GAME_CONFIG.tricks.minAirTimeMs;
 }
 
@@ -160,7 +160,7 @@ function landAirbornePlayer(
   simulation.tick(simulation.tickIntervalMs);
 }
 
-function makeGrindingSkier(player: ReturnType<MatchSimulation["addPlayer"]>): void {
+function makeGrindingSurfer(player: ReturnType<MatchSimulation["addPlayer"]>): void {
   const railDef = DEV_MAP.rails[0]!;
   const planet =
     DEV_MAP.planets.find((entry) => entry.id === railDef.planetId) ?? DEV_MAP.planets[0]!;
@@ -188,7 +188,7 @@ function makeGrindingSkier(player: ReturnType<MatchSimulation["addPlayer"]>): vo
   };
   player.planetId = "";
   player.movementState = PlayerMovementState.Grinding;
-  player.surfState = PlayerSurfState.SkiVisible;
+  player.surfState = PlayerSurfState.SurfingVisible;
   player.grindRailId = railDef.id;
   player.grindT = railT;
   player.lastGrindT = railT;
@@ -305,7 +305,7 @@ describe("MatchSimulation", () => {
 
     expect(snapshot.players).toHaveLength(1);
     expect(snapshot.players[0]?.slimeGroupId).toBe(player.slimeGroupId);
-    expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.SkiVisible);
+    expect(snapshot.players[0]?.surfState).toBe(PlayerSurfState.SurfingVisible);
     expect(snapshot.players[0]?.equippedWeaponId).toBe(player.equippedWeaponId);
     expect(snapshot.players[0]?.slimeLevel).toBe(player.slimeLevel);
     expect(snapshot.pickups.length).toBeGreaterThan(0);
@@ -792,14 +792,14 @@ describe("MatchSimulation", () => {
     expect(shooter.disposableShotsRemaining).toBe(0);
   });
 
-  it("keeps ski mode active and fires on the same tick", () => {
+  it("keeps surf mode active and fires on the same tick", () => {
     const simulation = new MatchSimulation();
     const surfmer = simulation.addPlayer("session-1", "Alpha");
     slimePlayerSurface(simulation, surfmer.sessionId, surfmer.slimeGroupId);
 
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(surfmer.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(surfmer.surfState).toBe(PlayerSurfState.SurfingHidden);
 
     simulation.recordInput("session-1", {
       seq: 2,
@@ -809,15 +809,15 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(surfmer.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(surfmer.surfState).toBe(PlayerSurfState.SurfingHidden);
     expect(simulation.matchState.projectiles.size).toBe(1);
     expect(simulation.buildSnapshotMessage().players[0]?.isShooting).toBe(true);
   });
 
-  it("creates capped trick slime while airborne in ski mode", () => {
+  it("creates capped trick slime while airborne in surf mode", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(player);
+    makeAirborneSurfer(player);
     player.slimeLevel = GAME_CONFIG.tricks.minSlimeToTrick;
 
     simulation.recordInput("session-1", trickInput(1, InputKey.Left));
@@ -855,7 +855,7 @@ describe("MatchSimulation", () => {
   it("turns advanced air trick sequences into larger landing splats", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(player);
+    makeAirborneSurfer(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
 
     const sequence = [InputKey.Left, InputKey.Forward, InputKey.Right, InputKey.Backward];
@@ -886,7 +886,7 @@ describe("MatchSimulation", () => {
   it("lets grinding players trigger trick combos and carry them until they land", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeGrindingSkier(player);
+    makeGrindingSurfer(player);
     player.slimeLevel = GAME_CONFIG.slime.maxLevel;
 
     simulation.recordInput("session-1", trickInput(1, InputKey.Left));
@@ -923,7 +923,7 @@ describe("MatchSimulation", () => {
   it("includes rail grinding state in snapshots for client reconciliation", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeGrindingSkier(player);
+    makeGrindingSurfer(player);
 
     const snapshot = simulation.buildSnapshotMessage();
     const playerSnapshot = snapshot.players.find((entry) => entry.sessionId === player.sessionId);
@@ -936,10 +936,10 @@ describe("MatchSimulation", () => {
     expect(playerSnapshot?.grindCooldownMs).toBe(player.grindCooldownMs);
   });
 
-  it("gates trick slime by ski mode, airtime, cooldown, and landing reset", () => {
+  it("gates trick slime by surf mode, airtime, cooldown, and landing reset", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(player);
+    makeAirborneSurfer(player);
 
     player.surfState = PlayerSurfState.None;
     simulation.recordInput("session-1", trickInput(1, InputKey.Left));
@@ -949,7 +949,7 @@ describe("MatchSimulation", () => {
     expect(player.airTrickCombo).toBe(0);
     expect(simulation.drainSlimeStampMessages()).toHaveLength(0);
 
-    player.surfState = PlayerSurfState.SkiVisible;
+    player.surfState = PlayerSurfState.SurfingVisible;
     player.airTrickAirTimeMs = 0;
     simulation.recordInput("session-1", trickInput(3, InputKey.Left));
     simulation.tick(simulation.tickIntervalMs);
@@ -985,7 +985,7 @@ describe("MatchSimulation", () => {
   it("emits named spin trick events from held air rotation", () => {
     const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const player = simulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(player);
+    makeAirborneSurfer(player);
 
     for (let seq = 1; seq <= 10; seq++) {
       simulation.recordInput("session-1", {
@@ -1009,7 +1009,7 @@ describe("MatchSimulation", () => {
   it("emits named flip trick events from held forward and backward air rotation", () => {
     const frontSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const frontPlayer = frontSimulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(frontPlayer);
+    makeAirborneSurfer(frontPlayer);
 
     for (let seq = 1; seq <= 10; seq++) {
       frontSimulation.recordInput("session-1", {
@@ -1026,7 +1026,7 @@ describe("MatchSimulation", () => {
 
     const backSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const backPlayer = backSimulation.addPlayer("session-1", "Alpha");
-    makeAirborneSkier(backPlayer);
+    makeAirborneSurfer(backPlayer);
 
     for (let seq = 1; seq <= 10; seq++) {
       backSimulation.recordInput("session-1", {
@@ -1050,7 +1050,7 @@ describe("MatchSimulation", () => {
 
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(target.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(target.surfState).toBe(PlayerSurfState.SurfingHidden);
 
     simulation.matchState.projectiles.set("hit-submerged", {
       id: "hit-submerged",
@@ -1066,15 +1066,15 @@ describe("MatchSimulation", () => {
     });
     simulation.tick(simulation.tickIntervalMs);
 
-    expect(target.surfState).toBe(PlayerSurfState.SurfmingHidden);
+    expect(target.surfState).toBe(PlayerSurfState.SurfingHidden);
     expect(target.health).toBeLessThan(GAME_CONFIG.player.maxHealth);
   });
 
   it.each([
-    PlayerSurfState.SurfmingHidden,
-    PlayerSurfState.SurfmingMoving,
-    PlayerSurfState.SkiVisible,
-    PlayerSurfState.SkiWater,
+    PlayerSurfState.SurfingHidden,
+    PlayerSurfState.SurfingMoving,
+    PlayerSurfState.SurfingVisible,
+    PlayerSurfState.SurfingWater,
   ])("preserves surf mode %s when the player survives a hit", (surfState) => {
     const simulation = new MatchSimulation();
     const shooter = simulation.addPlayer("session-1", "Alpha");
@@ -1121,7 +1121,7 @@ describe("MatchSimulation", () => {
       bot.teamId = 255;
 
       slimePlayerSurface(simulation, target.sessionId, target.slimeGroupId);
-      target.surfState = PlayerSurfState.SurfmingHidden;
+      target.surfState = PlayerSurfState.SurfingHidden;
 
       const hiddenInput = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
       expect(hiddenInput.keys & InputKey.Fire).toBe(0);
@@ -1135,7 +1135,7 @@ describe("MatchSimulation", () => {
     }
   });
 
-  it("keeps bots in ski mode on the surface instead of leaving them unsurfed", () => {
+  it("keeps bots in surf mode on the surface instead of leaving them unsurfed", () => {
     const simulation = new MatchSimulation();
     const bot = simulation.addBot("bot-surf", undefined, {
       profile: {
@@ -1187,7 +1187,7 @@ describe("MatchSimulation", () => {
         },
       });
 
-      makeAirborneSkier(bot);
+      makeAirborneSurfer(bot);
 
       const first = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
       const second = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
@@ -1214,7 +1214,7 @@ describe("MatchSimulation", () => {
         },
       });
 
-      makeAirborneSkier(bot);
+      makeAirborneSurfer(bot);
 
       const input = generateBotInput(bot, simulation.matchState, simulation.tickIntervalMs);
 
@@ -1225,33 +1225,33 @@ describe("MatchSimulation", () => {
     }
   });
 
-  it("recharges slime slowly by default, faster on friendly slime, and fastest while skiing", () => {
+  it("recharges slime slowly by default, faster on friendly slime, and fastest while surfing", () => {
     const neutralSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
     const slimedSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
-    const skiingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const surfingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
     const slimed = slimedSimulation.addPlayer("session-1", "Slimed");
-    const skier = skiingSimulation.addPlayer("session-1", "Skier");
+    const surfer = surfingSimulation.addPlayer("session-1", "Surfer");
 
     neutral.slimeLevel = 0;
     slimed.slimeLevel = 0;
-    skier.slimeLevel = 0;
+    surfer.slimeLevel = 0;
     slimed.surfState = PlayerSurfState.None;
 
     slimePlayerSurface(slimedSimulation, slimed.sessionId, slimed.slimeGroupId, 0.25);
-    slimePlayerSurface(skiingSimulation, skier.sessionId, skier.slimeGroupId, 0.25);
-    skier.surfState = PlayerSurfState.SkiVisible;
+    slimePlayerSurface(surfingSimulation, surfer.sessionId, surfer.slimeGroupId, 0.25);
+    surfer.surfState = PlayerSurfState.SurfingVisible;
 
     neutralSimulation.tick(1000);
     slimedSimulation.tick(1000);
-    skiingSimulation.tick(1000);
+    surfingSimulation.tick(1000);
 
     expect(neutral.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.passiveRechargePerSecond, 5);
     expect(slimed.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.friendlySlimeRechargePerSecond, 5);
-    expect(skier.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.submergedRechargePerSecond, 5);
+    expect(surfer.slimeLevel).toBeCloseTo(GAME_CONFIG.slime.submergedRechargePerSecond, 5);
     expect(neutral.slimeLevel).toBeLessThan(slimed.slimeLevel);
-    expect(slimed.slimeLevel).toBeLessThan(skier.slimeLevel);
+    expect(slimed.slimeLevel).toBeLessThan(surfer.slimeLevel);
   });
 
   it("equips a bazooka when the player touches an active pickup", () => {
@@ -1674,7 +1674,7 @@ describe("MatchSimulation", () => {
 
     expect(target.health).toBe(GAME_CONFIG.player.maxHealth);
     expect(target.movementState).toBe(PlayerMovementState.Idle);
-    expect(target.surfState).toBe(PlayerSurfState.SkiVisible);
+    expect(target.surfState).toBe(PlayerSurfState.SurfingVisible);
     expect(target.respawnTimer).toBe(0);
     expect(distanceBetweenPlayers(shooter, target)).toBeGreaterThan(40);
   });

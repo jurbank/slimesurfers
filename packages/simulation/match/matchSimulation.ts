@@ -382,7 +382,7 @@ function createSimPlayer(
     spawnPlanetId: planetPos.id,
     spawnNormal: { ...spawn.normal },
     movementState: PlayerMovementState.Idle,
-    surfState: PlayerSurfState.SkiVisible,
+    surfState: PlayerSurfState.SurfingVisible,
     isCarving: false,
     skiJumpCharge: 0,
     grindRailId: -1,
