@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
+import { Metadata } from "@colyseus/schema";
 import { TEAMS_MODE } from "@splat/content/modes/gameModes.ts";
+import { PlayerState } from "@splat/protocol/schemas/playerState.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
 import { WeaponId } from "@splat/protocol/network/weaponIds.ts";
 import { NO_WINNING_TEAM_ID } from "@splat/protocol/schemas/gameState.ts";
@@ -20,6 +22,33 @@ import { getWeaponDefinition } from "@splat/content/combat/weaponDefs.ts";
 const MACHINE_GUN_KILL_SHOTS = Math.ceil(
   GAME_CONFIG.player.maxHealth / getWeaponDefinition(WeaponId.MachineGun).directDamage,
 );
+
+describe("PlayerState schema boundary", () => {
+  // Tripwire: if this fails, a field was added to the Colyseus schema that shouldn't be there.
+  // Physics state (pos, vel, rot, movementState, ...) must travel via SnapshotMessage, NOT schema.
+  // Schema fields are replicated incrementally to ALL clients on every mutation — adding physics
+  // here would balloon replication cost invisibly. See playerState.ts for the full boundary rules.
+  it("has exactly the expected fields — no physics state", () => {
+    const EXPECTED = new Set([
+      "sessionId",
+      "isBot",
+      "name",
+      "teamId",
+      "paintGroupId",
+      "paletteIndex",
+      "patternId",
+      "slimeColor",
+      "health",
+      "slimeLevel",
+      "paintScore",
+      "killCount",
+      "deathCount",
+      "respawnTimer",
+    ]);
+    const actual = new Set(Object.keys(Metadata.getFields(PlayerState)));
+    expect(actual).toEqual(EXPECTED);
+  });
+});
 
 describe("matchRoomReplication", () => {
   const { rows } = getPaintTerritoryDimensions(DEV_MAP.planets[0]!.radius);

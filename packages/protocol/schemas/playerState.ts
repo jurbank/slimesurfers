@@ -31,8 +31,22 @@ export class Quat extends Schema {
 defineTypes(Quat, { x: "float32", y: "float32", z: "float32", w: "float32" });
 
 // -- PlayerState -------------------------------------------------------------
-// Identity and gameplay counters only — physics is NOT replicated here.
-// Physics travels exclusively via SnapshotMessage for client reconciliation.
+// Schema/snapshot boundary — read this before adding fields.
+//
+// SCHEMA (Colyseus incremental replication, sent to ALL clients on every change):
+//   Identity fields stable for the lifetime of a player slot.
+//   Gameplay counters that drive HUD and scoreboard UI.
+//   Keep this set small. Every field added here costs bandwidth on each mutation.
+//
+// SNAPSHOT (broadcast at snapshotRateHz for client-side prediction/reconciliation):
+//   Physics: pos, vel, rot, movementState, grind state, etc.
+//   Per-tick derived values: isOnFriendlyPaint, isShooting.
+//   Anything needed for client prediction must go in SnapshotMessage → PlayerSnapshot,
+//   not here. See packages/protocol/network/serverMessages.ts.
+//
+// Intentional denormalization (fields in both):
+//   health, slimeLevel, respawnTimer — schema keeps HUD current between snapshots;
+//   snapshot carries the authoritative value for mid-prediction accuracy.
 
 export class PlayerState extends Schema {
   // Identity
