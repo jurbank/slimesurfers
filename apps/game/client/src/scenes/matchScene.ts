@@ -22,7 +22,7 @@ import { CloudSystem } from "../systems/cloudSystem.ts";
 import { PropSystem } from "../systems/propSystem.ts";
 import { PickupSystem } from "../systems/pickup/pickupSystem.ts";
 import { HealthPickupSystem } from "../systems/pickup/healthPickupSystem.ts";
-import { PORTAL_ENABLED, PortalSystem } from "../systems/portalSystem.ts";
+import { PortalSystem } from "../systems/portalSystem.ts";
 import { ProjectileSystem } from "../systems/projectileSystem.ts";
 import { SurfTrailSystem } from "../systems/surfTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
@@ -337,7 +337,7 @@ export class MatchScene {
     const initialAudioEntries = Object.entries(AUDIO).filter(
       ([, asset]) => !asset.context || asset.context === "initial",
     );
-    const totalSteps = initialAudioEntries.length + 2; // audio + sky + portal
+    const totalSteps = initialAudioEntries.length + 1; // audio + sky
     let completedSteps = 0;
 
     const increment = (): void => {
@@ -355,16 +355,6 @@ export class MatchScene {
 
     // 2. Sky
     this.buildSkyReference();
-    increment();
-
-    // 3. Portal
-    if (PORTAL_ENABLED) {
-      const portalTerrainCfg: TerrainConfig = {
-        planet: { radius: DEV_MAP.planets[0]!.radius },
-        terrain: DEV_MAP.planets[0]!.terrain,
-      };
-      this.portal = new PortalSystem(this.render.scene, performance.now(), portalTerrainCfg);
-    }
     increment();
   }
 
@@ -557,6 +547,15 @@ export class MatchScene {
         terrain: p.terrain,
         props: p.props,
       });
+    }
+
+    const firstPlanet = this.mapPlanets[0];
+    if (firstPlanet && !this.portal) {
+      this.portal = new PortalSystem(
+        this.render.scene,
+        performance.now(),
+        this.getPlanetTerrainCfg(firstPlanet.id),
+      );
     }
   }
 

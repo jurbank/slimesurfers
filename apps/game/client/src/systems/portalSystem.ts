@@ -5,8 +5,6 @@ import {
   type TerrainConfig,
 } from "@splat/simulation/terrain/planetTerrain.ts";
 
-export const PORTAL_ENABLED = true; // temp, will enable when ready
-
 const PORTAL_URL = "https://vibejam.cc/portal/2026";
 const COLLECT_RADIUS_SQ = 4.5 * 4.5;
 const HOVER_HEIGHT = 1.2;
@@ -146,7 +144,7 @@ export class PortalSystem {
     const dx = playerPos.x - this.position.x;
     const dy = playerPos.y - this.position.y;
     const dz = playerPos.z - this.position.z;
-    if (PORTAL_ENABLED && dx * dx + dy * dy + dz * dz < COLLECT_RADIUS_SQ) {
+    if (dx * dx + dy * dy + dz * dz < COLLECT_RADIUS_SQ) {
       this.triggered = true;
       window.location.href = PORTAL_URL;
     }
