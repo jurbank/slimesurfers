@@ -9,6 +9,7 @@ import type {
   KillEventMessage,
   LeaderboardMessage,
   MapDataMessage,
+  SlimeStampMessage,
   SnapshotMessage,
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
@@ -646,6 +647,147 @@ export class MatchScene {
     }
   }
 
+  private handlePlayerJoined(
+    sessionId: string,
+    name: string,
+    slimeColor: number,
+    patternId: number,
+    slimeGroupId: number,
+  ): void {
+    const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
+    this.playerColors.set(sessionId, visual.slimeColor);
+    this.playerPatterns.set(sessionId, visual.patternId);
+    if (sessionId === this.connection.sessionId) {
+      this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
+      this.runtime.setLocalSlimeGroupId(slimeGroupId);
+    } else {
+      this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
+      this.applyTeamRelation(sessionId);
+    }
+  }
+
+  private handlePlayerRemoved(sessionId: string): void {
+    this.removedSessions.add(sessionId);
+    this.playerColors.delete(sessionId);
+    this.playerPatterns.delete(sessionId);
+    this.matchAudio.removePlayer(sessionId);
+    this.runtime.removePlayer(sessionId);
+    if (sessionId === this.connection.sessionId) {
+      this.localPlayer?.dispose(this.render.scene);
+      this.localPlayer = null;
+      this.localPlayerColor = -1;
+      this.lastLocalHealth = null;
+      this.combatHud.clear();
+    } else {
+      this.remotePlayers.get(sessionId)?.dispose(this.render.scene);
+      this.remoteTrails.get(sessionId)?.dispose();
+      this.remotePlayers.delete(sessionId);
+      this.remoteTrails.delete(sessionId);
+    }
+    this.trickText.clear();
+    this.emoteBubbles.clearPlayer(sessionId);
+  }
+
+  private handleSlimeStamps(stamps: SlimeStampMessage[]): void {
+    this.matchAudio.handleSlimeStamps(stamps);
+    for (const stamp of stamps) {
+      const visual = this.resolveSlimeGroupVisual(stamp.slimeGroupId, stamp.color, stamp.patternId);
+      const visualStamp =
+        visual.slimeColor === stamp.color && visual.patternId === stamp.patternId
+          ? stamp
+          : { ...stamp, color: visual.slimeColor, patternId: visual.patternId };
+      if (this.slime.addStamp(visualStamp)) {
+        const planetState = this.planetSlime.get(stamp.planetId);
+        if (planetState) appendSlimeStamp(planetState, visualStamp);
+      }
+    }
+  }
+
+  private handleSnapshot(snapshot: SnapshotMessage, receivedAtMs: number): void {
+    const localSessionId = this.connection.sessionId;
+    const liveRemoteIds = new Set<string>();
+    this.matchAudio.handleSnapshotPlayers(snapshot.players);
+    for (const player of snapshot.players) {
+      const isLocal = player.sessionId === localSessionId;
+      const visual = this.resolveTeamVisual(player.sessionId, player.slimeColor, player.patternId);
+      const { slimeColor, patternId } = visual;
+      if (isLocal) {
+        this.ensureLocalPlayer(slimeColor, patternId);
+      } else {
+        liveRemoteIds.add(player.sessionId);
+        const name = this.connection.roomState?.players.get(player.sessionId)?.name || "";
+        this.ensureRemotePlayer(player.sessionId, slimeColor, patternId, name);
+      }
+      this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetSlime);
+    }
+    this.removeRemotePlayers(liveRemoteIds);
+    this.syncProjectiles(snapshot, receivedAtMs);
+    this.syncPickups(snapshot, receivedAtMs);
+  }
+
+  private handleLeaderboard(message: LeaderboardMessage): void {
+    this.lastLeaderboard = message;
+    this.syncLeaderboard(message);
+  }
+
+  private handleMatchPhase(phase: MatchPhase, winningTeamId?: number): void {
+    this.currentPhase = phase;
+    if (this.lastLeaderboard) this.syncLeaderboard(this.lastLeaderboard);
+    if (phase === MatchPhase.Countdown) {
+      this.syncCenterCountdown(0);
+    } else if (phase === MatchPhase.Active) {
+      this.slime.clear();
+      this.clearPlanetSlime();
+      this.projectiles.clear();
+      this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
+      this.playMatchMusic();
+    } else if (phase === MatchPhase.Ended) {
+      this.countdown.hide();
+      const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
+      this.matchEnd.show(
+        this.lastLeaderboard,
+        this.connection.sessionId,
+        winningTeamId ?? this.connection.winningTeamId,
+        teamColors,
+      );
+      this.input.setEnabled(false);
+      this.sound.stopMusic();
+    }
+  }
+
+  private handleDisconnect(): void {
+    this.clearPlayerEntities();
+    this.runtime.clear();
+    this.slime.clear();
+    this.clearPlanetSlime();
+    this.clouds.dispose();
+    this.props.dispose();
+    this.pickups.clear();
+    this.healthPickups.clear();
+    this.projectiles.clear();
+    this.rails.dispose(this.render.scene);
+    this.trickText.clear();
+    this.emoteBubbles.clear();
+    this.leaderboard.clear();
+    this.matchAudio.clear();
+    this.sound.stopMusic();
+    this.countdown.hide();
+    this.matchEnd.hide();
+    this.lastLeaderboard = null;
+    this.currentPhase = MatchPhase.Lobby;
+    this.emoteMenu.close(false);
+    this.lastLocalHealth = null;
+    this.combatHud.clear();
+    this.setPaused(false);
+    if (this.reconnecting) {
+      this.reconnecting = false;
+      const { name, colorIndex, playerUuid, matchMode, teamId } = this.connectParams!;
+      void this.connect(name, colorIndex, playerUuid, matchMode, teamId);
+    } else {
+      this.onDisconnectCb?.();
+    }
+  }
+
   onDisconnect(cb: () => void): void {
     this.onDisconnectCb = cb;
   }
@@ -681,187 +823,24 @@ export class MatchScene {
     await this.connection.join(
       { name, colorIndex, playerUuid, matchMode, teamId },
       {
-        onMapData: (msg) => {
-          this.applyMapData(msg);
-        },
-        onPlayerInit: (
-          sessionId: string,
-          name: string,
-          slimeColor: number,
-          patternId: number,
-          slimeGroupId: number,
-        ) => {
-          // Join successful, start preloading match assets
+        onMapData: (msg) => this.applyMapData(msg),
+        onPlayerInit: (sessionId, playerName, slimeColor, patternId, slimeGroupId) => {
           this.playMatchMusic();
-
-          const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
-          this.playerColors.set(sessionId, visual.slimeColor);
-          this.playerPatterns.set(sessionId, visual.patternId);
-          if (sessionId === this.connection.sessionId) {
-            this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
-            this.runtime.setLocalSlimeGroupId(slimeGroupId);
-          } else {
-            this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
-            this.applyTeamRelation(sessionId);
-          }
+          this.handlePlayerJoined(sessionId, playerName, slimeColor, patternId, slimeGroupId);
         },
-        onPlayerAdded: (
-          sessionId: string,
-          name: string,
-          slimeColor: number,
-          patternId: number,
-          slimeGroupId: number,
-        ) => {
+        onPlayerAdded: (sessionId, playerName, slimeColor, patternId, slimeGroupId) => {
           this.removedSessions.delete(sessionId);
-          const visual = this.resolveTeamVisual(sessionId, slimeColor, patternId);
-          this.playerColors.set(sessionId, visual.slimeColor);
-          this.playerPatterns.set(sessionId, visual.patternId);
-          if (sessionId === this.connection.sessionId) {
-            this.ensureLocalPlayer(visual.slimeColor, visual.patternId);
-            this.runtime.setLocalSlimeGroupId(slimeGroupId);
-          } else {
-            this.ensureRemotePlayer(sessionId, visual.slimeColor, visual.patternId, name);
-            this.applyTeamRelation(sessionId);
-          }
+          this.handlePlayerJoined(sessionId, playerName, slimeColor, patternId, slimeGroupId);
         },
-        onPlayerRemoved: (sessionId: string) => {
-          this.removedSessions.add(sessionId);
-          this.playerColors.delete(sessionId);
-          this.playerPatterns.delete(sessionId);
-          this.matchAudio.removePlayer(sessionId);
-          this.runtime.removePlayer(sessionId);
-          if (sessionId === this.connection.sessionId) {
-            this.localPlayer?.dispose(this.render.scene);
-            this.localPlayer = null;
-            this.localPlayerColor = -1;
-            this.lastLocalHealth = null;
-            this.combatHud.clear();
-          } else {
-            this.remotePlayers.get(sessionId)?.dispose(this.render.scene);
-            this.remoteTrails.get(sessionId)?.dispose();
-            this.remotePlayers.delete(sessionId);
-            this.remoteTrails.delete(sessionId);
-          }
-          this.trickText.clear();
-          this.emoteBubbles.clearPlayer(sessionId);
-        },
-        onSlimeStamps: (stamps) => {
-          this.matchAudio.handleSlimeStamps(stamps);
-          for (const stamp of stamps) {
-            const visual = this.resolveSlimeGroupVisual(
-              stamp.slimeGroupId,
-              stamp.color,
-              stamp.patternId,
-            );
-            const visualStamp =
-              visual.slimeColor === stamp.color && visual.patternId === stamp.patternId
-                ? stamp
-                : { ...stamp, color: visual.slimeColor, patternId: visual.patternId };
-            // SlimeSystem is the single dedup authority for both visual and gameplay stamp state.
-            // Gate appendSlimeStamp on the same check to prevent bootstrap+incremental overlap
-            // from applying the same stamp twice to stampBuckets.
-            if (this.slime.addStamp(visualStamp)) {
-              const planetState = this.planetSlime.get(stamp.planetId);
-              if (planetState) {
-                appendSlimeStamp(planetState, visualStamp);
-              }
-            }
-          }
-        },
-        onTrickEvents: (events) => {
-          this.handleTrickEvents(events);
-        },
-        onEmoteEvents: (events) => {
-          this.handleEmoteEvents(events);
-        },
-        onKillEvents: (events: KillEventMessage[]) => {
-          this.handleKillEvents(events);
-        },
-        onSnapshot: (snapshot, receivedAtMs) => {
-          const localSessionId = this.connection.sessionId;
-          const liveRemoteIds = new Set<string>();
-          this.matchAudio.handleSnapshotPlayers(snapshot.players);
-          for (const player of snapshot.players) {
-            const isLocal = player.sessionId === localSessionId;
-            const visual = this.resolveTeamVisual(
-              player.sessionId,
-              player.slimeColor,
-              player.patternId,
-            );
-            const slimeColor = visual.slimeColor;
-            const patternId = visual.patternId;
-            if (isLocal) this.ensureLocalPlayer(slimeColor, patternId);
-            else {
-              liveRemoteIds.add(player.sessionId);
-              const name = this.connection.roomState?.players.get(player.sessionId)?.name || "";
-              this.ensureRemotePlayer(player.sessionId, slimeColor, patternId, name);
-            }
-            this.runtime.applySnapshot(player, isLocal, receivedAtMs, this.planetSlime);
-          }
-          this.removeRemotePlayers(liveRemoteIds);
-          this.syncProjectiles(snapshot, receivedAtMs);
-          this.syncPickups(snapshot, receivedAtMs);
-        },
-        onLeaderboard: (message) => {
-          this.lastLeaderboard = message;
-          this.syncLeaderboard(message);
-        },
-        onMatchPhase: (phase, _timer, winningTeamId) => {
-          this.currentPhase = phase;
-          if (this.lastLeaderboard) this.syncLeaderboard(this.lastLeaderboard);
-          if (phase === MatchPhase.Countdown) {
-            this.syncCenterCountdown(0);
-          } else if (phase === MatchPhase.Active) {
-            this.slime.clear();
-            this.clearPlanetSlime();
-            this.projectiles.clear();
-            this.syncCenterCountdown(this.runtime.getLocalPlayerState()?.respawnTimer ?? 0);
-            this.playMatchMusic();
-          } else if (phase === MatchPhase.Ended) {
-            this.countdown.hide();
-            const teamColors = Array.from(this.connection.roomState?.teamColors ?? []);
-            this.matchEnd.show(
-              this.lastLeaderboard,
-              this.connection.sessionId,
-              winningTeamId ?? this.connection.winningTeamId,
-              teamColors,
-            );
-            this.input.setEnabled(false);
-            this.sound.stopMusic();
-          }
-        },
-        onDisconnect: () => {
-          this.clearPlayerEntities();
-          this.runtime.clear();
-          this.slime.clear();
-          this.clearPlanetSlime();
-          this.clouds.dispose();
-          this.props.dispose();
-          this.pickups.clear();
-          this.healthPickups.clear();
-          this.projectiles.clear();
-          this.rails.dispose(this.render.scene);
-          this.trickText.clear();
-          this.emoteBubbles.clear();
-          this.leaderboard.clear();
-          this.matchAudio.clear();
-          this.sound.stopMusic();
-          this.countdown.hide();
-          this.matchEnd.hide();
-          this.lastLeaderboard = null;
-          this.currentPhase = MatchPhase.Lobby;
-          this.emoteMenu.close(false);
-          this.lastLocalHealth = null;
-          this.combatHud.clear();
-          this.setPaused(false);
-          if (this.reconnecting) {
-            this.reconnecting = false;
-            const { name, colorIndex, playerUuid, matchMode, teamId } = this.connectParams!;
-            void this.connect(name, colorIndex, playerUuid, matchMode, teamId);
-          } else {
-            this.onDisconnectCb?.();
-          }
-        },
+        onPlayerRemoved: (sessionId) => this.handlePlayerRemoved(sessionId),
+        onSlimeStamps: (stamps) => this.handleSlimeStamps(stamps),
+        onTrickEvents: (events) => this.handleTrickEvents(events),
+        onEmoteEvents: (events) => this.handleEmoteEvents(events),
+        onKillEvents: (events) => this.handleKillEvents(events),
+        onSnapshot: (snapshot, receivedAtMs) => this.handleSnapshot(snapshot, receivedAtMs),
+        onLeaderboard: (message) => this.handleLeaderboard(message),
+        onMatchPhase: (phase, _timer, winningTeamId) => this.handleMatchPhase(phase, winningTeamId),
+        onDisconnect: () => this.handleDisconnect(),
       },
     );
   }
