@@ -57,8 +57,7 @@
         "seed": 12345,
         "rocketEnabled": true
       },
-      "hasWater": true,
-      "terrainFeatures": []
+      "hasWater": true
     },
     {
       "id": "planet-1",
@@ -114,8 +113,7 @@
         "seed": 12345,
         "rocketEnabled": true
       },
-      "hasWater": true,
-      "terrainFeatures": []
+      "hasWater": true
     }
   ],
   "cel": {

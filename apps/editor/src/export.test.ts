@@ -83,6 +83,7 @@ describe("editorStateToRuntimeMap rail export", () => {
     );
 
     expect(map.rails).toEqual([]);
+    expect("terrainFeatures" in map.planets[0]!).toBe(false);
     expect(validateRuntimeMapData(map).valid).toBe(true);
   });
 

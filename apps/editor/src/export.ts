@@ -52,18 +52,21 @@ export function editorStateToRuntimeMap(
     version: 1,
     mapId: slugify(mapName),
     name: mapName || "Untitled Map",
-    planets: config.planets.map((p) => ({
-      id: p.id,
-      center: p.center,
-      radius: p.radius,
-      terrain: p.terrain,
-      colors: p.colors,
-      atmosphere: p.atmosphere,
-      lighting: p.lighting,
-      props: p.props,
-      hasWater: p.hasWater,
-      terrainFeatures: editorTerrainFeaturesToRuntime(p.terrainFeatures),
-    })),
+    planets: config.planets.map((p) => {
+      const terrainFeatures = editorTerrainFeaturesToRuntime(p.terrainFeatures);
+      return {
+        id: p.id,
+        center: p.center,
+        radius: p.radius,
+        terrain: p.terrain,
+        colors: p.colors,
+        atmosphere: p.atmosphere,
+        lighting: p.lighting,
+        props: p.props,
+        hasWater: p.hasWater,
+        ...(terrainFeatures.length > 0 ? { terrainFeatures } : {}),
+      };
+    }),
     cel: {
       bands: config.shaders.cel.bands,
       softness: config.shaders.cel.softness,

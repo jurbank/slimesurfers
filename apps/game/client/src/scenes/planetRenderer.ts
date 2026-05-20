@@ -18,6 +18,10 @@ import type { SlimeSystem } from "../systems/slimeSystem.ts";
 type MapPlanet = MapDataMessage["planets"][number];
 type MapCel = MapDataMessage["cel"];
 
+function toMapDataPlanets(planets: typeof DEV_MAP.planets): MapDataMessage["planets"] {
+  return planets.map((planet) => ({ ...planet, terrainFeatures: planet.terrainFeatures ?? [] }));
+}
+
 function hexToVec3(hex: number): THREE.Vector3 {
   return new THREE.Vector3(
     ((hex >> 16) & 0xff) / 255,
@@ -27,7 +31,7 @@ function hexToVec3(hex: number): THREE.Vector3 {
 }
 
 export class PlanetRenderer {
-  private _mapPlanets: MapDataMessage["planets"] = DEV_MAP.planets;
+  private _mapPlanets: MapDataMessage["planets"] = toMapDataPlanets(DEV_MAP.planets);
   private mapCel: MapCel = DEV_MAP.cel;
   private readonly planetTerrainCfgs = new Map<string, TerrainConfig>();
   private readonly planetMaterials: THREE.ShaderMaterial[] = [];

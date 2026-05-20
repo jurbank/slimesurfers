@@ -119,7 +119,7 @@ function migrateMapData(data: unknown): unknown {
         lighting: m.lighting ?? {},
         props: m.props ?? {},
         hasWater: typeof m.hasWater === "boolean" ? m.hasWater : true,
-        terrainFeatures: Array.isArray(m.terrainFeatures) ? m.terrainFeatures : [],
+        ...(Array.isArray(m.terrainFeatures) ? { terrainFeatures: m.terrainFeatures } : {}),
       },
     ];
   } else {
@@ -132,9 +132,6 @@ function migrateMapData(data: unknown): unknown {
         if (typeof t.icosahedronDetail !== "number") {
           t.icosahedronDetail = DEFAULT_RUNTIME_PLANET_TERRAIN.icosahedronDetail;
         }
-      }
-      if (!Array.isArray(p.terrainFeatures)) {
-        p.terrainFeatures = [];
       }
     }
   }
@@ -234,7 +231,10 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
       mapId: this.map.mapId,
       name: this.map.name,
       cel: this.map.cel,
-      planets: this.map.planets,
+      planets: this.map.planets.map((planet) => ({
+        ...planet,
+        terrainFeatures: planet.terrainFeatures ?? [],
+      })),
       rails: this.map.rails,
     });
 

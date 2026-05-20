@@ -55,13 +55,15 @@ export interface TerrainConfig {
   terrainFeatures?: RuntimeTerrainFeature[];
 }
 
+const EMPTY_TERRAIN_FEATURES: RuntimeTerrainFeature[] = [];
+
 export type TerrainConfigPlanet = Pick<RuntimeMapPlanet, "radius" | "terrain" | "terrainFeatures">;
 
 export function createTerrainConfig(planet: TerrainConfigPlanet): TerrainConfig {
   return {
     planet: { radius: planet.radius },
     terrain: planet.terrain,
-    terrainFeatures: planet.terrainFeatures,
+    terrainFeatures: planet.terrainFeatures ?? EMPTY_TERRAIN_FEATURES,
   };
 }
 
@@ -423,7 +425,7 @@ export function applyTerrainFeatures(
   baseRadius: number,
   cfg: TerrainConfig,
 ): number {
-  const features = cfg.terrainFeatures ?? [];
+  const features = cfg.terrainFeatures ?? EMPTY_TERRAIN_FEATURES;
   if (features.length === 0) return baseRadius;
 
   const normal = normalizeVec(nx, ny, nz);

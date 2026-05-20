@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PlanetPanel } from "./panels/PlanetPanel.tsx";
@@ -38,7 +38,7 @@ import {
 } from "./editorPersistence.ts";
 import { getLayerTitle, LayerNavigator, type LayerSelection } from "./LayerNavigator.tsx";
 
-const REBUILD_DELAY_MS = 600;
+const REBUILD_DELAY_MS = 160;
 
 export function App() {
   const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
@@ -73,6 +73,27 @@ export function App() {
   const activePlanetIdRef = useRef(activePlanetId);
   const sceneRef = useRef<EditorScene | null>(null);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelScheduledRebuild = useCallback(() => {
+    if (!rebuildTimerRef.current) return;
+    clearTimeout(rebuildTimerRef.current);
+    rebuildTimerRef.current = null;
+  }, []);
+
+  const rebuildPlanetNow = useCallback(() => {
+    cancelScheduledRebuild();
+    sceneRef.current?.rebuildPlanet(configRef.current);
+  }, [cancelScheduledRebuild]);
+
+  const scheduleRebuild = useCallback(() => {
+    if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    rebuildTimerRef.current = setTimeout(() => {
+      rebuildTimerRef.current = null;
+      sceneRef.current?.rebuildPlanet(configRef.current);
+    }, REBUILD_DELAY_MS);
+  }, []);
+
+  useEffect(() => cancelScheduledRebuild, [cancelScheduledRebuild]);
 
   const handleScene = useCallback((scene: EditorScene) => {
     sceneRef.current = scene;
@@ -127,26 +148,30 @@ export function App() {
     setSelectedTerrainFeaturePointId(pointId);
   }, []);
 
-  const handleTerrainFeatureChange = useCallback((nextFeature: EditorTerrainFeature) => {
-    setSaveStatus("idle");
-    const activeId = activePlanetIdRef.current;
-    const next = {
-      ...configRef.current,
-      planets: configRef.current.planets.map((planet) =>
-        planet.id === activeId
-          ? {
-              ...planet,
-              terrainFeatures: planet.terrainFeatures.map((feature) =>
-                feature.id === nextFeature.id ? nextFeature : feature,
-              ),
-            }
-          : planet,
-      ),
-    };
-    configRef.current = next;
-    setConfig(next);
-    sceneRef.current?.rebuildPlanet(next);
-  }, []);
+  const handleTerrainFeatureChange = useCallback(
+    (nextFeature: EditorTerrainFeature) => {
+      setSaveStatus("idle");
+      const activeId = activePlanetIdRef.current;
+      const next = {
+        ...configRef.current,
+        planets: configRef.current.planets.map((planet) =>
+          planet.id === activeId
+            ? {
+                ...planet,
+                terrainFeatures: planet.terrainFeatures.map((feature) =>
+                  feature.id === nextFeature.id ? nextFeature : feature,
+                ),
+              }
+            : planet,
+        ),
+      };
+      configRef.current = next;
+      setConfig(next);
+      sceneRef.current?.updateUniforms(next);
+      scheduleRebuild();
+    },
+    [scheduleRebuild],
+  );
 
   const handleSculptChange = useCallback((planetId: string, sculpt: EditorSculptState) => {
     setSaveStatus("idle");
@@ -278,13 +303,6 @@ export function App() {
     [],
   );
 
-  const scheduleRebuild = useCallback(() => {
-    if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
-    rebuildTimerRef.current = setTimeout(() => {
-      sceneRef.current?.rebuildPlanet(configRef.current);
-    }, REBUILD_DELAY_MS);
-  }, []);
-
   const handleActivePlanetChange = useCallback(
     (id: string) => {
       activePlanetIdRef.current = id;
@@ -359,7 +377,7 @@ export function App() {
       planets.find((p) => p.id === activeId)?.radius !==
       prev.planets.find((p) => p.id === activeId)?.radius;
     if (activeRadiusChanged) {
-      sceneRef.current?.rebuildPlanet(next);
+      rebuildPlanetNow();
       sceneRef.current?.rebuildWater(next);
     }
   }
@@ -393,7 +411,10 @@ export function App() {
     const needsRebuild = (Object.keys(terrain) as (keyof typeof terrain)[]).some(
       (k) => GEOMETRY_TERRAIN_KEYS.has(k) && terrain[k] !== prevPlanet.terrain[k],
     );
-    if (needsRebuild) scheduleRebuild();
+    if (needsRebuild) {
+      if (detailChanged) rebuildPlanetNow();
+      else scheduleRebuild();
+    }
   }
 
   function handleColorsChange(colors: EditorPlanet["colors"]) {
@@ -418,7 +439,7 @@ export function App() {
     configRef.current = next;
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
-    sceneRef.current?.rebuildPlanet(next);
+    scheduleRebuild();
   }
 
   function handlePlanetChange(planet: EditorPlanet) {

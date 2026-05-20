@@ -110,6 +110,27 @@ describe("validateRuntimeMapData", () => {
     expect(result.errors.some((e) => e.field === "rails[0].controlPoints[0]")).toBe(true);
   });
 
+  test("accepts omitted terrain features", () => {
+    const planet0 = DEV_MAP.planets[0]!;
+    const { terrainFeatures: _terrainFeatures, ...planetWithoutFeatures } = planet0;
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [planetWithoutFeatures],
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects non-array terrain features when present", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [{ ...DEV_MAP.planets[0]!, terrainFeatures: {} }],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "planets[0].terrainFeatures")).toBe(true);
+  });
+
   test("accepts slope terrain features", () => {
     const result = validateRuntimeMapData({
       ...DEV_MAP,

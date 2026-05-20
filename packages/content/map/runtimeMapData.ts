@@ -111,7 +111,7 @@ export interface RuntimeMapPlanet {
   lighting: RuntimeMapLighting;
   props: RuntimeMapProps;
   hasWater: boolean;
-  terrainFeatures: RuntimeTerrainFeature[];
+  terrainFeatures?: RuntimeTerrainFeature[];
 }
 
 export interface RuntimeMapData {
@@ -324,6 +324,7 @@ function validateTerrainFeatures(
   prefix: string,
   errors: ValidationError[],
 ): void {
+  if (features === undefined) return;
   if (!Array.isArray(features)) {
     errors.push({ field: prefix, message: "must be an array" });
     return;
@@ -498,7 +499,9 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
       validateAtmosphere(p.atmosphere, `planets[${i}].atmosphere`, errors);
       validateLighting(p.lighting, `planets[${i}].lighting`, errors);
       validateProps(p.props, `planets[${i}].props`, errors);
-      validateTerrainFeatures(p.terrainFeatures, `planets[${i}].terrainFeatures`, errors);
+      if ("terrainFeatures" in p) {
+        validateTerrainFeatures(p.terrainFeatures, `planets[${i}].terrainFeatures`, errors);
+      }
     }
   }
 
@@ -692,7 +695,6 @@ export const DEV_MAP: RuntimeMapData = {
       lighting: DEFAULT_RUNTIME_PLANET_LIGHTING,
       props: DEFAULT_RUNTIME_PLANET_PROPS,
       hasWater: true,
-      terrainFeatures: [],
     },
   ],
   cel: DEFAULT_RUNTIME_CEL,

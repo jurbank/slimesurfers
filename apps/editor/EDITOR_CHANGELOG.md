@@ -4,6 +4,14 @@ Agent-maintained notes for changes that touch `apps/editor`.
 
 ## 2026-05-20
 
+- Changed editor planet rebuild scheduling in `src/App.tsx`.
+- User-visible behavior: high-frequency terrain feature edits and terrain sliders no longer force a full high-detail planet mesh rebuild on every input event; the editor updates state immediately and debounces expensive geometry rebuilds to keep high-poly editing more responsive.
+- Validation: `vp fmt apps/editor/src/App.tsx`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test`.
+
+- Changed runtime map export in `src/export.ts`.
+- User-visible behavior: exported maps omit empty terrain feature arrays; maps with authored terrain features still include them.
+- Validation: `vp fmt packages/content/map/runtimeMapData.ts packages/content/map/runtimeMapData.test.ts packages/simulation/terrain/planetTerrain.ts apps/game/server/src/rooms/matchRoom.ts apps/game/client/src/scenes/planetRenderer.ts apps/editor/src/export.ts apps/editor/src/export.test.ts apps/editor/EDITOR_CHANGELOG.md apps/game/server/my-map.json`; `vp test packages/content/map/runtimeMapData.test.ts apps/editor/src/export.test.ts packages/simulation/terrain/terrainFeatures.test.ts apps/game/server/src/rooms/matchRoom.test.ts`; `vp check --no-fmt`; `vp exec tsx -e "import { readFileSync } from 'node:fs'; import { validateRuntimeMapData } from './packages/content/map/runtimeMapData.ts'; const map = JSON.parse(readFileSync('apps/game/server/my-map.json', 'utf8')); const result = validateRuntimeMapData(map); console.log(JSON.stringify(result, null, 2)); if (!result.valid) process.exit(1);"`
+
 - Improved jump preview handles in `src/tools/terrain/JumpFeatureTool.ts`.
 - User-visible behavior: jump center and direction handles are larger and easier to grab, with expanded invisible pick volumes and pointer capture during drag so jumps can be moved and aimed reliably.
 - Validation: `vp fmt apps/editor/src/tools/terrain/JumpFeatureTool.ts`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts packages/simulation/terrain/terrainFeatures.test.ts packages/content/map/runtimeMapData.test.ts`.
