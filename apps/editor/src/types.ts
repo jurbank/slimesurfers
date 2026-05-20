@@ -50,6 +50,52 @@ export interface EditorSculptState {
   samples: EditorSculptSample[];
 }
 
+export interface EditorTerrainFeaturePoint {
+  id: string;
+  normal: [number, number, number];
+  heightOffset: number;
+  width?: number;
+  bank?: number;
+  edgeFalloff?: number;
+  smoothing?: number;
+}
+
+export interface EditorTerrainSlopeFeature {
+  id: string;
+  kind: "slope";
+  name: string;
+  enabled: boolean;
+  width: number;
+  bank: number;
+  edgeFalloff: number;
+  smoothing: number;
+  transitionLength: number;
+  points: EditorTerrainFeaturePoint[];
+}
+
+export interface EditorTerrainJumpFeature {
+  id: string;
+  kind: "jump";
+  name: string;
+  enabled: boolean;
+  normal: [number, number, number];
+  tangent: [number, number, number];
+  width: number;
+  length: number;
+  height: number;
+  edgeFalloff: number;
+  smoothing: number;
+}
+
+export type EditorTerrainFeature = EditorTerrainSlopeFeature | EditorTerrainJumpFeature;
+export type TerrainFeatureEditMode = "add" | "move" | "delete";
+
+export interface TerrainFeatureToolState {
+  mode: TerrainFeatureEditMode | null;
+  feature: EditorTerrainFeature;
+  selectedPointId: string | null;
+}
+
 export interface EditorPlanet {
   id: string;
   center: { x: number; y: number; z: number };
@@ -126,6 +172,7 @@ export interface EditorPlanet {
     rocketEnabled: boolean;
   };
   sculpt: EditorSculptState;
+  terrainFeatures: EditorTerrainFeature[];
   hasWater: boolean;
 }
 
@@ -249,6 +296,7 @@ export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): 
       vertexCount: 0,
       samples: [],
     },
+    terrainFeatures: [],
     hasWater: true,
   };
 }

@@ -5,7 +5,7 @@ import type {
 } from "@splat/content/modes/gameModes.ts";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import type { RuntimeMapPlanet } from "@splat/content/map/runtimeMapData.ts";
-import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { createTerrainConfig, getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { NO_TEAM_ID, PlayerMovementState, type SimPlayerState, type SimVec3 } from "./simState.ts";
 
 export interface SpawnSelection {
@@ -73,7 +73,7 @@ function getSurfacePosition(
   planetDefs: RuntimeMapPlanet[],
 ): SimVec3 {
   const planet = planetDefs.find((entry) => entry.id === planetId) ?? planetDefs[0]!;
-  const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+  const terrainCfg = createTerrainConfig(planet);
   const radius =
     getTerrainRadius(normal.x, normal.y, normal.z, terrainCfg) +
     GAME_CONFIG.movement.standingHeight;

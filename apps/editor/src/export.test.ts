@@ -85,4 +85,105 @@ describe("editorStateToRuntimeMap rail export", () => {
     expect(map.rails).toEqual([]);
     expect(validateRuntimeMapData(map).valid).toBe(true);
   });
+
+  test("exports slope terrain features", () => {
+    const config = defaultEditorConfig();
+    config.planets[0]!.terrainFeatures = [
+      {
+        id: "slope-1",
+        kind: "slope",
+        name: "Main Slope",
+        enabled: true,
+        width: 32,
+        bank: 6,
+        edgeFalloff: 12,
+        smoothing: 0.85,
+        transitionLength: 18,
+        points: [
+          {
+            id: "start",
+            normal: [0, 1, 0],
+            heightOffset: 6,
+            width: 24,
+            bank: 3,
+            edgeFalloff: 8,
+            smoothing: 0.7,
+          },
+          { id: "end", normal: [0.6, 0.6, 0.529], heightOffset: -12, width: 40, bank: 10 },
+        ],
+      },
+      {
+        id: "jump-1",
+        kind: "jump",
+        name: "Main Jump",
+        enabled: true,
+        normal: [0, 1, 0],
+        tangent: [1, 0, 0],
+        width: 24,
+        length: 34,
+        height: 10,
+        edgeFalloff: 8,
+        smoothing: 1,
+      },
+    ];
+
+    const map = editorStateToRuntimeMap(
+      config,
+      [],
+      { planetId: "planet-0", normal: [0, 1, 0] },
+      "Slope Test Map",
+    );
+
+    expect(map.planets[0]!.terrainFeatures).toEqual([
+      {
+        id: "slope-1",
+        kind: "slope",
+        enabled: true,
+        width: 32,
+        bank: 6,
+        edgeFalloff: 12,
+        smoothing: 0.85,
+        transitionLength: 18,
+        points: [
+          {
+            nx: 0,
+            ny: 1,
+            nz: 0,
+            heightOffset: 6,
+            width: 24,
+            bank: 3,
+            edgeFalloff: 8,
+            smoothing: 0.7,
+          },
+          {
+            nx: 0.6,
+            ny: 0.6,
+            nz: 0.529,
+            heightOffset: -12,
+            width: 40,
+            bank: 10,
+            edgeFalloff: undefined,
+            smoothing: undefined,
+          },
+        ],
+      },
+      {
+        id: "jump-1",
+        kind: "jump",
+        enabled: true,
+        nx: 0,
+        ny: 1,
+        nz: 0,
+        tx: 1,
+        ty: 0,
+        tz: 0,
+        width: 24,
+        length: 34,
+        height: 10,
+        edgeFalloff: 8,
+        smoothing: 1,
+      },
+    ]);
+    expect(validateRuntimeMapData(map).valid).toBe(true);
+  });
 });

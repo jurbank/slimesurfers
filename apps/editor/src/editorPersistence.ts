@@ -9,6 +9,7 @@ import {
   type EditorConfig,
   type EditorPlanet,
   type EditorSculptState,
+  type EditorTerrainFeature,
   type PreviewSpawnState,
 } from "./types.ts";
 
@@ -209,9 +210,108 @@ function normalizeEditorConfig(config: EditorConfig): EditorConfig {
           planet.sculpt,
           planet.terrain?.icosahedronDetail ?? base.sculpt.detail,
         ),
+        terrainFeatures: normalizeTerrainFeatures(planet.terrainFeatures),
       };
     }),
   };
+}
+
+function normalizeTerrainFeatures(
+  features: EditorTerrainFeature[] | undefined,
+): EditorTerrainFeature[] {
+  if (!Array.isArray(features)) return [];
+  return features
+    .flatMap((feature, index): EditorTerrainFeature[] => {
+      if (feature?.kind === "jump") {
+        const normal = Array.isArray(feature.normal) ? feature.normal : [0, 1, 0];
+        const tangent = Array.isArray(feature.tangent) ? feature.tangent : [1, 0, 0];
+        return [
+          {
+            id:
+              typeof feature.id === "string" && feature.id.trim()
+                ? feature.id
+                : `jump-${index + 1}`,
+            kind: "jump",
+            name:
+              typeof feature.name === "string" && feature.name.trim()
+                ? feature.name
+                : `Jump ${index + 1}`,
+            enabled: typeof feature.enabled === "boolean" ? feature.enabled : true,
+            normal: [
+              Number.isFinite(normal[0]) ? normal[0] : 0,
+              Number.isFinite(normal[1]) ? normal[1] : 1,
+              Number.isFinite(normal[2]) ? normal[2] : 0,
+            ] as [number, number, number],
+            tangent: [
+              Number.isFinite(tangent[0]) ? tangent[0] : 1,
+              Number.isFinite(tangent[1]) ? tangent[1] : 0,
+              Number.isFinite(tangent[2]) ? tangent[2] : 0,
+            ] as [number, number, number],
+            width: Number.isFinite(feature.width) && feature.width > 0 ? feature.width : 24,
+            length: Number.isFinite(feature.length) && feature.length > 0 ? feature.length : 34,
+            height: Number.isFinite(feature.height) ? feature.height : 10,
+            edgeFalloff:
+              Number.isFinite(feature.edgeFalloff) && feature.edgeFalloff >= 0
+                ? feature.edgeFalloff
+                : 8,
+            smoothing: Number.isFinite(feature.smoothing)
+              ? Math.max(0, Math.min(1, feature.smoothing))
+              : 1,
+          },
+        ];
+      }
+
+      if (feature?.kind !== "slope" || !Array.isArray(feature.points)) return [];
+      return [
+        {
+          id:
+            typeof feature.id === "string" && feature.id.trim() ? feature.id : `slope-${index + 1}`,
+          kind: "slope",
+          name:
+            typeof feature.name === "string" && feature.name.trim()
+              ? feature.name
+              : `Slope ${index + 1}`,
+          enabled: typeof feature.enabled === "boolean" ? feature.enabled : true,
+          width: Number.isFinite(feature.width) && feature.width > 0 ? feature.width : 26,
+          bank: Number.isFinite(feature.bank) ? feature.bank : 0,
+          edgeFalloff:
+            Number.isFinite(feature.edgeFalloff) && feature.edgeFalloff >= 0
+              ? feature.edgeFalloff
+              : 8,
+          smoothing: Number.isFinite(feature.smoothing)
+            ? Math.max(0, Math.min(1, feature.smoothing))
+            : 0.9,
+          transitionLength:
+            Number.isFinite(feature.transitionLength) && feature.transitionLength >= 0
+              ? feature.transitionLength
+              : 0,
+          points: feature.points
+            .filter((point) => Array.isArray(point.normal) && point.normal.length === 3)
+            .map((point, pointIndex) => ({
+              id:
+                typeof point.id === "string" && point.id.trim()
+                  ? point.id
+                  : `slope-${index + 1}-point-${pointIndex + 1}`,
+              normal: [
+                Number.isFinite(point.normal[0]) ? point.normal[0] : 0,
+                Number.isFinite(point.normal[1]) ? point.normal[1] : 1,
+                Number.isFinite(point.normal[2]) ? point.normal[2] : 0,
+              ] as [number, number, number],
+              heightOffset: Number.isFinite(point.heightOffset) ? point.heightOffset : 0,
+              width: Number.isFinite(point.width) && point.width! > 0 ? point.width : undefined,
+              bank: Number.isFinite(point.bank) ? point.bank : undefined,
+              edgeFalloff:
+                Number.isFinite(point.edgeFalloff) && point.edgeFalloff! >= 0
+                  ? point.edgeFalloff
+                  : undefined,
+              smoothing: Number.isFinite(point.smoothing)
+                ? Math.max(0, Math.min(1, point.smoothing!))
+                : undefined,
+            })),
+        },
+      ];
+    })
+    .filter((feature) => feature.kind !== "slope" || feature.points.length >= 2);
 }
 
 function normalizeSculptState(

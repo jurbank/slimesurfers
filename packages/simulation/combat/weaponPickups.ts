@@ -12,11 +12,9 @@ import {
   type SimWeaponPickupState,
 } from "../match/simState.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import type { TerrainConfig } from "../terrain/planetTerrain.ts";
 
-interface PickupConfig {
-  planet: {
-    radius: number;
-  };
+interface PickupConfig extends TerrainConfig {
   pickups: {
     collectRadius: number;
     hoverHeight: number;
@@ -26,18 +24,6 @@ interface PickupConfig {
   };
   slime: {
     maxLevel: number;
-  };
-  terrain: {
-    seed: number;
-    baseAmplitude: number;
-    frequency: number;
-    octaves: number;
-    lacunarity: number;
-    persistence: number;
-    waterLevel: number;
-    snowLevel: number;
-    sandBand: number;
-    rockLevel: number;
   };
 }
 

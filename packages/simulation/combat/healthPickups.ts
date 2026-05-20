@@ -6,24 +6,12 @@ import {
   type SimHealthPickupState,
 } from "../match/simState.ts";
 import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import type { TerrainConfig } from "../terrain/planetTerrain.ts";
 
-interface HealthPickupConfig {
-  planet: { radius: number };
+interface HealthPickupConfig extends TerrainConfig {
   pickups: { collectRadius: number; hoverHeight: number };
   movement: { collisionRadius: number };
   player: { maxHealth: number };
-  terrain: {
-    seed: number;
-    baseAmplitude: number;
-    frequency: number;
-    octaves: number;
-    lacunarity: number;
-    persistence: number;
-    waterLevel: number;
-    snowLevel: number;
-    sandBand: number;
-    rockLevel: number;
-  };
 }
 
 const HEALTH_PICKUP_RESPAWN_SECONDS = 20;

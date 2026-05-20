@@ -11,6 +11,7 @@ import {
   type StepConfig,
 } from "@splat/simulation/movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail } from "@splat/simulation/movement/railSpline.ts";
+import { createTerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
 
 const MAX_PENDING_INPUTS = 60;
@@ -170,22 +171,19 @@ export class ClientRuntimeState {
     }));
     this.computedRails = msg.rails.map((def) => {
       const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0]!;
-      const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
-      return buildComputedRail(def, planet.center, terrainCfg);
+      return buildComputedRail(def, planet.center, createTerrainConfig(planet));
     });
     this.stepCfgs.clear();
     for (const planet of msg.planets) {
       this.stepCfgs.set(planet.id, {
-        planet: { radius: planet.radius },
-        terrain: planet.terrain,
+        ...createTerrainConfig(planet),
         movement: GAME_CONFIG.movement,
         rail: GAME_CONFIG.rail,
       });
     }
     const p0 = msg.planets[0]!;
     this.stepCfg = {
-      planet: { radius: p0.radius },
-      terrain: p0.terrain,
+      ...createTerrainConfig(p0),
       movement: GAME_CONFIG.movement,
       rail: GAME_CONFIG.rail,
     };

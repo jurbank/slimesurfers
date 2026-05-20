@@ -110,6 +110,106 @@ describe("validateRuntimeMapData", () => {
     expect(result.errors.some((e) => e.field === "rails[0].controlPoints[0]")).toBe(true);
   });
 
+  test("accepts slope terrain features", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [
+        {
+          ...DEV_MAP.planets[0]!,
+          terrainFeatures: [
+            {
+              id: "slope-1",
+              kind: "slope",
+              enabled: true,
+              width: 30,
+              bank: 0,
+              edgeFalloff: 10,
+              smoothing: 0.9,
+              transitionLength: 12,
+              points: [
+                { nx: 0, ny: 1, nz: 0, heightOffset: 8, width: 24, bank: 4 },
+                {
+                  nx: 0.6,
+                  ny: 0.6,
+                  nz: 0.529,
+                  heightOffset: -10,
+                  edgeFalloff: 14,
+                  smoothing: 0.75,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
+  test("accepts jump terrain features", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [
+        {
+          ...DEV_MAP.planets[0]!,
+          terrainFeatures: [
+            {
+              id: "jump-1",
+              kind: "jump",
+              enabled: true,
+              nx: 0,
+              ny: 1,
+              nz: 0,
+              tx: 1,
+              ty: 0,
+              tz: 0,
+              width: 24,
+              length: 34,
+              height: 10,
+              edgeFalloff: 8,
+              smoothing: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects invalid slope terrain features", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [
+        {
+          ...DEV_MAP.planets[0]!,
+          terrainFeatures: [
+            {
+              id: "bad-slope",
+              kind: "slope",
+              enabled: true,
+              width: 0,
+              bank: 0,
+              edgeFalloff: 5,
+              smoothing: 1,
+              transitionLength: -1,
+              points: [{ nx: 2, ny: 0, nz: 0, heightOffset: 0 }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "planets[0].terrainFeatures[0].width")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "planets[0].terrainFeatures[0].transitionLength"),
+    ).toBe(true);
+    expect(result.errors.some((e) => e.field === "planets[0].terrainFeatures[0].points")).toBe(
+      true,
+    );
+  });
+
   test("rejects team-zones spawn anchor referencing unknown planet", () => {
     const result = validateRuntimeMapData({
       ...DEV_MAP,

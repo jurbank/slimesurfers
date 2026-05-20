@@ -6,6 +6,7 @@ import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosp
 import { createWaterMaterial } from "@splat/client-runtime/materials/waterMaterial.ts";
 import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import {
+  createTerrainConfig,
   getTerrainHeight,
   getTerrainNormal,
   getTerrainRadius,
@@ -49,7 +50,7 @@ export class PlanetRenderer {
     this._mapPlanets = msg.planets;
     this.mapCel = msg.cel;
     for (const p of msg.planets) {
-      this.planetTerrainCfgs.set(p.id, { planet: { radius: p.radius }, terrain: p.terrain });
+      this.planetTerrainCfgs.set(p.id, createTerrainConfig(p));
     }
 
     if (this.planetMeshes.length === 0) {

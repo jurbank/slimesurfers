@@ -14,6 +14,8 @@ import { BrushTool } from "../tools/brush/BrushTool.ts";
 import { PropSlimeTool } from "../tools/props/PropSlimeTool.ts";
 import { TerrainStampTool } from "../tools/terrain/TerrainStampTool.ts";
 import type { TerrainStampState } from "../tools/terrain/TerrainStampTypes.ts";
+import { JumpFeatureTool } from "../tools/terrain/JumpFeatureTool.ts";
+import { SlopeFeatureTool } from "../tools/terrain/SlopeFeatureTool.ts";
 import { RailTool } from "../tools/rails/RailTool.ts";
 import { RailPreviewVisuals } from "../tools/rails/RailPreviewVisuals.ts";
 import {
@@ -28,12 +30,15 @@ import type { RailState, RailToolState } from "../tools/rails/RailTypes.ts";
 import type {
   BrushState,
   EditorConfig,
+  EditorTerrainFeature,
   EditorPlanet,
   EditorSculptState,
+  TerrainFeatureToolState,
   PerformanceStats,
   PreviewSpawnState,
   PropBrushState,
 } from "../types.ts";
+import { editorTerrainFeaturesToRuntime } from "../terrainFeatures.ts";
 import { PlayerPreviewController } from "./PlayerPreviewController.ts";
 import {
   createPlanetAtmosphereShells,
@@ -89,6 +94,8 @@ export class EditorScene {
   private currentConfig: EditorConfig;
   private readonly brushTool: BrushTool;
   private readonly terrainStampTool: TerrainStampTool;
+  private readonly jumpFeatureTool: JumpFeatureTool;
+  private readonly slopeFeatureTool: SlopeFeatureTool;
   private readonly propSlimeTool: PropSlimeTool;
   private readonly railTool: RailTool;
   private readonly railPreviewVisuals: RailPreviewVisuals;
@@ -116,6 +123,7 @@ export class EditorScene {
   private lastFrameTime = 0;
   private hasBrush = false;
   private hasTerrainStamp = false;
+  private hasTerrainFeatureMode = false;
   private hasPropBrush = false;
   private hasRailMode = false;
   private selectionPointerStart: { x: number; y: number } | null = null;
@@ -129,6 +137,8 @@ export class EditorScene {
     previewSpawn: PreviewSpawnState,
     onRailChange: (rail: RailState) => void,
     onRailPointSelectionChange: (pointId: string | null) => void,
+    onTerrainFeatureChange: (feature: EditorTerrainFeature) => void,
+    onTerrainFeaturePointSelectionChange: (pointId: string | null) => void,
     private readonly onSculptChange: (planetId: string, sculpt: EditorSculptState) => void,
     private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
@@ -165,6 +175,8 @@ export class EditorScene {
     // Phase 1: init sculpt data and tool instances before planet build
     this.brushTool = new BrushTool(config);
     this.terrainStampTool = new TerrainStampTool();
+    this.jumpFeatureTool = new JumpFeatureTool();
+    this.slopeFeatureTool = new SlopeFeatureTool();
     this.propSlimeTool = new PropSlimeTool();
     this.railTool = new RailTool();
     this.baseTerrainProvider = {
@@ -193,6 +205,7 @@ export class EditorScene {
           getTerrainRadius(nx, ny, nz, {
             planet: { radius: planet.radius },
             terrain: planet.terrain,
+            terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
           }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
         );
       },
@@ -238,6 +251,29 @@ export class EditorScene {
         this.rebuildPlanetMeshes();
       },
     });
+    this.slopeFeatureTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMesh: activeRender.terrainMesh,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
+      onFeatureChange: onTerrainFeatureChange,
+      onPointSelectionChange: onTerrainFeaturePointSelectionChange,
+      onGizmoDragChange: (dragging) => {
+        this.controls.enabled = !dragging;
+      },
+    });
+    this.jumpFeatureTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      planetMesh: activeRender.terrainMesh,
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
+      onFeatureChange: onTerrainFeatureChange,
+      onGizmoDragChange: (dragging) => {
+        this.controls.enabled = !dragging;
+      },
+    });
     this.propSlimeTool.connect({
       canvas,
       camera: this.camera,
@@ -277,6 +313,18 @@ export class EditorScene {
     this.terrainStampTool.setStampState(state);
   }
 
+  setTerrainFeatureToolState(state: TerrainFeatureToolState | null): void {
+    if (this.isPreviewActive) return;
+    this.hasTerrainFeatureMode = state?.mode != null;
+    if (state?.feature.kind === "jump") {
+      this.slopeFeatureTool.setToolState(null);
+      this.jumpFeatureTool.setToolState(state);
+    } else {
+      this.jumpFeatureTool.setToolState(null);
+      this.slopeFeatureTool.setToolState(state);
+    }
+  }
+
   setPropBrushState(state: PropBrushState | null): void {
     if (this.isPreviewActive && state) return;
     this.hasPropBrush = state !== null;
@@ -294,6 +342,8 @@ export class EditorScene {
     if (this.spawnPlacementActive) {
       this.brushTool.setBrushState(null);
       this.terrainStampTool.setStampState(null);
+      this.slopeFeatureTool.setToolState(null);
+      this.jumpFeatureTool.setToolState(null);
       this.propSlimeTool.setBrushState(null);
       this.railTool.setRailToolState(null);
       this.canvas.style.cursor = "crosshair";
@@ -322,6 +372,8 @@ export class EditorScene {
     this.setSpawnPlacementActive(false);
     this.brushTool.setBrushState(null);
     this.terrainStampTool.setStampState(null);
+    this.slopeFeatureTool.setToolState(null);
+    this.jumpFeatureTool.setToolState(null);
     this.propSlimeTool.setBrushState(null);
     if (active) this.railTool.setRailToolState(null);
     this.railPreviewVisuals.setActive(active);
@@ -335,6 +387,8 @@ export class EditorScene {
     if (render) {
       this.brushTool.setPlanetMeshes([render.terrainMesh, render.outlineMesh]);
       this.terrainStampTool.setPlanetMesh(render.terrainMesh);
+      this.slopeFeatureTool.setPlanetMesh(render.terrainMesh);
+      this.jumpFeatureTool.setPlanetMesh(render.terrainMesh);
       this.propSlimeTool.setPlanetMesh(render.terrainMesh);
       this.railTool.setPlanetMesh(render.terrainMesh);
       this.brushTool.resetSculptBase(this.getPlanetById(id));
@@ -365,7 +419,11 @@ export class EditorScene {
     if (!activeRender?.waterMesh) return;
     this.rebuildRailCarveSamples();
     const planet = this.getPlanetById(this.activePlanetId);
-    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+    const terrainCfg = {
+      planet: { radius: planet.radius },
+      terrain: planet.terrain,
+      terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
+    };
     const waterRadius = planet.radius + planet.terrain.waterLevel;
     const newGeo = buildWaterGeometry(waterRadius, terrainCfg);
     activeRender.waterMesh.geometry.dispose();
@@ -459,6 +517,8 @@ export class EditorScene {
     this.controls.dispose();
     this.brushTool.dispose();
     this.terrainStampTool.dispose();
+    this.jumpFeatureTool.dispose();
+    this.slopeFeatureTool.dispose();
     this.propSlimeTool.dispose();
     this.railTool.dispose();
     this.railPreviewVisuals.dispose();
@@ -491,7 +551,11 @@ export class EditorScene {
     group.position.set(planet.center.x, planet.center.y, planet.center.z);
 
     const waterRadius = planet.radius + planet.terrain.waterLevel;
-    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+    const terrainCfg = {
+      planet: { radius: planet.radius },
+      terrain: planet.terrain,
+      terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
+    };
 
     const displacements =
       planet.id === this.activePlanetId ? this.brushTool.getDisplacements() : new Float32Array(0);
@@ -669,7 +733,11 @@ export class EditorScene {
     if (!activeRender) return;
     this.rebuildRailCarveSamples();
     const planet = this.getPlanetById(this.activePlanetId);
-    const cfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+    const cfg = {
+      planet: { radius: planet.radius },
+      terrain: planet.terrain,
+      terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
+    };
     const newGeo = buildPlanetGeometry(
       cfg,
       planet.terrain.icosahedronDetail,
@@ -681,6 +749,8 @@ export class EditorScene {
     oldGeo.dispose();
     this.railPreviewVisuals.setConfig(this.currentConfig);
     this.railTool.syncSurface();
+    this.slopeFeatureTool.syncSurface();
+    this.jumpFeatureTool.syncSurface();
     this.emitPerformanceStats(true);
   }
 
@@ -691,6 +761,7 @@ export class EditorScene {
         getTerrainRadius(nx, ny, nz, {
           planet: { radius: planet.radius },
           terrain: planet.terrain,
+          terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
         }) + this.brushTool.getDisplacementAtNormal(nx, ny, nz)
       );
     };
@@ -745,7 +816,11 @@ export class EditorScene {
       normal.x,
       normal.y,
       normal.z,
-      { planet: { radius: planet.radius }, terrain: planet.terrain },
+      {
+        planet: { radius: planet.radius },
+        terrain: planet.terrain,
+        terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
+      },
       planet.id,
     );
     const center = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
@@ -854,7 +929,15 @@ export class EditorScene {
 
     if (dx * dx + dy * dy > 25) return; // orbit drag, not a click
     if (!this.onPlanetSelected || this.isPreviewActive || this.spawnPlacementActive) return;
-    if (this.hasBrush || this.hasTerrainStamp || this.hasPropBrush || this.hasRailMode) return;
+    if (
+      this.hasBrush ||
+      this.hasTerrainStamp ||
+      this.hasTerrainFeatureMode ||
+      this.hasPropBrush ||
+      this.hasRailMode
+    ) {
+      return;
+    }
 
     const rect = this.canvas.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;

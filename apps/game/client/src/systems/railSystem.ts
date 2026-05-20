@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { buildComputedRail, sampleRailAt } from "@splat/simulation/movement/railSpline.ts";
-import { getTerrainRadius, type TerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
+import {
+  createTerrainConfig,
+  getTerrainRadius,
+  type TerrainConfig,
+} from "@splat/simulation/terrain/planetTerrain.ts";
 import { railVertexShader, railFragmentShader } from "../shaders/railShader.ts";
 import type { GameState } from "@splat/protocol/schemas/gameState.ts";
 import type { MapDataMessage } from "@splat/protocol/network/serverMessages.ts";
@@ -30,8 +34,7 @@ export class RailSystem {
     this.dispose(this.scene);
     for (const def of msg.rails) {
       const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0]!;
-      const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
-      this.buildRailMeshes(def, planet.center, terrainCfg);
+      this.buildRailMeshes(def, planet.center, createTerrainConfig(planet));
     }
   }
 

@@ -2,7 +2,11 @@ import * as THREE from "three";
 import { getWeaponDefinition, WeaponId } from "@splat/content/combat/weaponDefs.ts";
 import { GAME_CONFIG, getPlayerTargetRadius } from "@splat/content/config/gameConfig.ts";
 import { InputKey } from "@splat/protocol/network/clientMessages.ts";
-import { getTerrainRadius, type TerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
+import {
+  createTerrainConfig,
+  getTerrainRadius,
+  type TerrainConfig,
+} from "@splat/simulation/terrain/planetTerrain.ts";
 import type { MapDataMessage } from "@splat/protocol/network/serverMessages.ts";
 import type { RemotePlayer } from "../entities/player/remotePlayer.ts";
 import type { CameraSystem } from "./cameraSystem.ts";
@@ -63,7 +67,7 @@ export class WeaponAimSystem {
   setMapData(msg: MapDataMessage): void {
     this.planetEntries = msg.planets.map((p) => ({
       center: new THREE.Vector3(p.center.x, p.center.y, p.center.z),
-      terrainCfg: { planet: { radius: p.radius }, terrain: p.terrain },
+      terrainCfg: createTerrainConfig(p),
     }));
   }
 

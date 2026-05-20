@@ -12,6 +12,7 @@ import {
 import type { TerrainSurfaceProvider } from "@splat/simulation/terrain/planetTerrain.ts";
 import type { SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
 import type { EditorConfig, PreviewSpawnState } from "../types.ts";
+import { editorTerrainFeaturesToRuntime } from "../terrainFeatures.ts";
 
 let PLANETS: PlanetData[] = [];
 
@@ -53,6 +54,7 @@ function createStepConfig(config: EditorConfig, spawn: PreviewSpawnState): StepC
     movement: { ...GAME_CONFIG.movement },
     rail: { ...GAME_CONFIG.rail },
     terrain: { ...planet.terrain },
+    terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
   };
 }
 

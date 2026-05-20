@@ -65,8 +65,7 @@ export class PropSystem {
     x: number;
     y: number;
     z: number;
-    radius: number;
-    terrain: TerrainConfig["terrain"];
+    terrainCfg: TerrainConfig;
     props: {
       treeDensity: number;
       cactusDensity: number;
@@ -82,7 +81,7 @@ export class PropSystem {
     this.planetProps.push(group);
 
     const planetSeed = seedFromString(planet.id) + planet.props.seed;
-    const terrainCfg = { planet: { radius: planet.radius }, terrain: planet.terrain };
+    const terrainCfg = planet.terrainCfg;
 
     if (planet.props.treeDensity > 0) {
       this.scatterTreeGroves(group, planetSeed, terrainCfg, planet.props.treeDensity, {

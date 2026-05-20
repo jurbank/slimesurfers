@@ -12,6 +12,7 @@ import { createWeaponPickups } from "../combat/weaponPickups.ts";
 import { createHealthPickups } from "../combat/healthPickups.ts";
 import { type PlanetData, type StepConfig } from "../movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail } from "../movement/railSpline.ts";
+import { createTerrainConfig } from "../terrain/planetTerrain.ts";
 import { appendSlimeStamp, createStampBuckets } from "../slime/slimeDetection.ts";
 import { createTerritoryCells } from "../slime/territoryGrid.ts";
 import { type SimMatchState, type SimPlanetSlimeState } from "./simState.ts";
@@ -26,17 +27,16 @@ export function buildPlanets(map: RuntimeMapData): PlanetData[] {
 
 export function buildStepConfig(map: RuntimeMapData, planet = map.planets[0]!): StepConfig {
   return {
-    planet: { radius: planet.radius },
-    terrain: planet.terrain,
+    ...createTerrainConfig(planet),
     movement: GAME_CONFIG.movement,
     rail: GAME_CONFIG.rail,
   };
 }
 
 export function buildRails(map: RuntimeMapData): ComputedRail[] {
-  const cfg = buildStepConfig(map);
   return map.rails.map((def) => {
     const planet = map.planets.find((p) => p.id === def.planetId) ?? map.planets[0]!;
+    const cfg = buildStepConfig(map, planet);
     return buildComputedRail(def, planet.center, cfg);
   });
 }
@@ -119,7 +119,7 @@ export function createSimMatchState(
   rails: ComputedRail[],
   stepCfg: StepConfig,
 ): SimMatchState {
-  const pickupCfg = { ...GAME_CONFIG, planet: stepCfg.planet, terrain: stepCfg.terrain };
+  const pickupCfg = { ...GAME_CONFIG, ...stepCfg };
   const simState: SimMatchState = {
     players: new Map(),
     planetDefs,

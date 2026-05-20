@@ -2,6 +2,64 @@
 
 Agent-maintained notes for changes that touch `apps/editor`.
 
+## 2026-05-20
+
+- Improved jump preview handles in `src/tools/terrain/JumpFeatureTool.ts`.
+- User-visible behavior: jump center and direction handles are larger and easier to grab, with expanded invisible pick volumes and pointer capture during drag so jumps can be moved and aimed reliably.
+- Validation: `vp fmt apps/editor/src/tools/terrain/JumpFeatureTool.ts`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts packages/simulation/terrain/terrainFeatures.test.ts packages/content/map/runtimeMapData.test.ts`.
+
+- Added direct preview editing for jump terrain features in `src/tools/terrain/JumpFeatureTool.ts`, wired through `src/preview/EditorScene.ts`, `src/panels/TerrainPanel.tsx`, and terrain feature tool state typing.
+- User-visible behavior: selecting a jump now shows its footprint and direction arrow in the 3D preview; drag the center handle to place it on the terrain and drag the arrow handle to set ramp direction.
+- Validation: `vp fmt apps/editor/src/tools/terrain/JumpFeatureTool.ts apps/editor/src/tools/terrain/SlopeFeatureTool.ts apps/editor/src/preview/EditorScene.ts apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/types.ts`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test`.
+
+## 2026-05-19
+
+- Added jump/kicker terrain features across editor state, Terrain panel authoring, export, runtime map schema, protocol shape, and terrain evaluation.
+- User-visible behavior: Terrain Features now supports Add Jump; jumps can be seeded from the selected slope point and expose width, edge, length, lip height, and smoothing controls for ramp-like park features.
+- Validation: `vp fmt packages/content/map/runtimeMapData.ts packages/content/map/runtimeMapData.test.ts packages/protocol/network/serverMessages.ts apps/editor/src/types.ts apps/editor/src/terrainFeatures.ts apps/editor/src/editorPersistence.ts apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/tools/terrain/SlopeFeatureTool.ts apps/editor/src/export.test.ts packages/simulation/terrain/planetTerrain.ts packages/simulation/terrain/terrainFeatures.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp check --no-fmt`; `vp test`; `vp exec tsx -e "import { readFileSync } from 'node:fs'; import { validateRuntimeMapData } from './packages/content/map/runtimeMapData.ts'; const map = JSON.parse(readFileSync('apps/game/server/my-map.json', 'utf8')); const result = validateRuntimeMapData(map); console.log(JSON.stringify(result, null, 2)); if (!result.valid) process.exit(1);"`
+
+- Added slope transition length across editor terrain feature state, export, save normalization, runtime map schema, and terrain evaluation.
+- User-visible behavior: slope features now have a Transition slider that fades the feature in at the start and out at the end, reducing abrupt embedded-slope seams on spherical terrain.
+- Validation: `vp fmt apps/editor/src/export.test.ts packages/content/map/runtimeMapData.test.ts packages/simulation/terrain/terrainFeatures.test.ts apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/terrainFeatures.ts apps/editor/src/editorPersistence.ts packages/content/map/runtimeMapData.ts packages/protocol/network/serverMessages.ts packages/simulation/terrain/planetTerrain.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp check --no-fmt`; `vp exec tsx -e "import { readFileSync } from 'node:fs'; import { validateRuntimeMapData } from './packages/content/map/runtimeMapData.ts'; const map = JSON.parse(readFileSync('apps/game/server/my-map.json', 'utf8')); const result = validateRuntimeMapData(map); console.log(JSON.stringify(result, null, 2)); if (!result.valid) process.exit(1);"`
+
+## 2026-05-18
+
+- Changed point override UX in `src/panels/TerrainPanel.tsx` and clamped interpolated slope shape values in `packages/simulation/terrain/planetTerrain.ts`.
+- User-visible behavior: slope point rows now show height plus width/edge/bank/smooth override indicators, selected point overrides can be reset to inherit slope defaults, and runtime slope interpolation clamps width, edge, and smoothing after curve interpolation.
+- Validation: `vp fmt packages/simulation/terrain/planetTerrain.ts apps/editor/src/panels/TerrainPanel.tsx`; `vp check --no-fmt`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`.
+
+- Added per-point slope shape overrides across runtime map data, editor export, save normalization, terrain evaluation, and Terrain panel controls.
+- User-visible behavior: selected slope points can now override width, edge blend, bank, and smoothing independently from slope defaults, enabling narrowing/widening runs and changing bank/smoothing through a slope.
+- Validation: `vp fmt packages/content/map/runtimeMapData.ts packages/content/map/runtimeMapData.test.ts packages/protocol/network/serverMessages.ts apps/editor/src/types.ts apps/editor/src/terrainFeatures.ts apps/editor/src/editorPersistence.ts apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/export.test.ts packages/simulation/terrain/planetTerrain.ts packages/simulation/terrain/terrainFeatures.test.ts`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`.
+
+- Changed slope terrain evaluation in `packages/simulation/terrain/planetTerrain.ts`.
+- User-visible behavior: multi-point slopes now evaluate against a smoothed curved centerline, reducing hard angular transitions where authored slope segments meet.
+- Validation: `vp fmt packages/simulation/terrain/planetTerrain.ts`; `vp check --no-fmt`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test apps/editor/src/export.test.ts`.
+
+- Added slope banking in `packages/content/map/runtimeMapData.ts`, `packages/simulation/terrain/planetTerrain.ts`, and editor Terrain Feature controls.
+- User-visible behavior: slope features now have a Bank slider that tilts the generated terrain corridor across its width, useful for snowboard/skate-style turns and berm-like runs.
+- Validation: `vp fmt packages/content/map/runtimeMapData.ts packages/content/map/runtimeMapData.test.ts packages/protocol/network/serverMessages.ts apps/editor/src/types.ts apps/editor/src/terrainFeatures.ts apps/editor/src/editorPersistence.ts apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/export.test.ts packages/simulation/terrain/planetTerrain.ts packages/simulation/terrain/terrainFeatures.test.ts`; `vp check --no-fmt`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test apps/editor/src/export.test.ts`.
+
+- Changed slope point controls in `src/panels/TerrainPanel.tsx`.
+- User-visible behavior: selected slope points now show their height, can insert a new interpolated point after the selection, and can delete the selected point while preserving the two-point minimum.
+- Validation: `vp fmt apps/editor/src/panels/TerrainPanel.tsx`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`.
+
+- Changed `src/tools/terrain/SlopeFeatureTool.ts` slope gizmo behavior.
+- User-visible behavior: dragging the selected slope point's local vertical/radial gizmo axis now edits that point's height offset directly; other movement axes continue repositioning the point along the spherical terrain.
+- Validation: `vp fmt apps/editor/src/tools/terrain/SlopeFeatureTool.ts`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`.
+
+- Added slope path authoring in `src/tools/terrain/SlopeFeatureTool.ts`, with Terrain panel edit modes and point selection wiring through `src/App.tsx`, `src/preview/PlanetPreview.tsx`, and `src/preview/EditorScene.ts`.
+- User-visible behavior: slope features can now be edited with Add, Move, and Delete modes on the planet surface, with visible center/edge guides and selectable point handles.
+- Validation: `vp fmt apps/editor/src/types.ts apps/editor/src/tools/terrain/SlopeFeatureTool.ts apps/editor/src/preview/EditorScene.ts apps/editor/src/preview/PlanetPreview.tsx apps/editor/src/App.tsx apps/editor/src/panels/TerrainPanel.tsx`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`.
+
+- Added runtime-backed slope terrain features across editor state, terrain controls, map export, and editor preview terrain.
+- User-visible behavior: Terrain panel now has a Terrain Features section where authors can add an embedded slope, tune its width, edge blend, smoothing, and start/end heights, then preview and export it as terrain data.
+- Validation: `vp fmt packages/content/map/runtimeMapData.ts packages/content/map/runtimeMapData.test.ts packages/simulation/terrain/planetTerrain.ts packages/simulation/terrain/terrainFeatures.test.ts packages/simulation/movement/simulatedMovement.ts packages/simulation/match/matchStateFactory.ts packages/simulation/match/matchSimulation.ts packages/simulation/combat/projectiles.ts packages/simulation/combat/healthPickups.ts packages/simulation/combat/weaponPickups.ts packages/simulation/ai/botController.ts packages/simulation/match/spawnSelection.ts packages/protocol/network/serverMessages.ts apps/game/server/src/rooms/matchRoom.ts apps/game/client/src/scenes/planetRenderer.ts apps/game/client/src/network/runtimeState.ts apps/game/client/src/systems/weaponAimSystem.ts apps/game/client/src/systems/railSystem.ts apps/game/client/src/systems/propSystem.ts apps/editor/src/types.ts apps/editor/src/editorPersistence.ts apps/editor/src/export.ts apps/editor/src/export.test.ts apps/editor/src/App.tsx apps/editor/src/panels/TerrainPanel.tsx apps/editor/src/preview/EditorScene.ts apps/editor/src/preview/PlayerPreviewController.ts apps/editor/src/rendering/planetGeometry.ts apps/editor/src/tools/rails/railCarving.test.ts apps/editor/EDITOR_CHANGELOG.md apps/game/server/my-map.json`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp test packages/simulation/terrain/terrainFeatures.test.ts`; `vp test apps/editor/src/export.test.ts`; `vp test apps/editor/src/tools/rails/railCarving.test.ts`; `vp check --no-fmt`; `vp exec tsx -e "import { readFileSync } from 'node:fs'; import { validateRuntimeMapData } from './packages/content/map/runtimeMapData.ts'; const map = JSON.parse(readFileSync('apps/game/server/my-map.json', 'utf8')); const result = validateRuntimeMapData(map); console.log(JSON.stringify(result, null, 2)); if (!result.valid) process.exit(1);"`
+
+- Added `EDITOR_ROADMAP.md` with a phased implementation plan for terrain-integrated ski slope and ski park authoring.
+- User-visible behavior: no app behavior change; this is planning documentation for future editor terrain feature work.
+- Validation: not run; documentation-only change.
+
 ## 2026-05-11
 
 - Removed the remaining pre-rail save compatibility fields from `src/App.tsx`, removed the legacy export type from `src/tools/rails/RailTypes.ts`, and updated the stale rail floor comment in `src/preview/EditorScene.ts`.

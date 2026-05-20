@@ -10,6 +10,7 @@ export function buildPlanetGeometry(
   cfg: TerrainConfig,
   icosahedronDetail: number,
   sculptDisplacements?: Float32Array | null,
+  radiusSampler?: (nx: number, ny: number, nz: number, vertexIndex: number) => number,
 ): THREE.BufferGeometry {
   const detail = icosahedronDetail;
   const indexed = new THREE.IcosahedronGeometry(cfg.planet.radius, detail);
@@ -33,6 +34,7 @@ export function buildPlanetGeometry(
     const nz = z / len;
 
     const radius =
+      radiusSampler?.(nx, ny, nz, i) ??
       getTerrainRadius(nx, ny, nz, cfg) + (sculptDisplacements ? (sculptDisplacements[i] ?? 0) : 0);
     posAttr.setXYZ(i, nx * radius, ny * radius, nz * radius);
 

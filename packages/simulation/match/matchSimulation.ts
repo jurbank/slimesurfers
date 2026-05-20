@@ -153,7 +153,7 @@ export class MatchSimulation {
 
   private getGameplayConfig(planetId: string): CombatConfig {
     const stepCfg = this.getStepConfig(planetId);
-    return { ...GAME_CONFIG, planet: stepCfg.planet, terrain: stepCfg.terrain };
+    return { ...GAME_CONFIG, ...stepCfg };
   }
 
   takenColorIndices(): number[] {

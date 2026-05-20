@@ -421,8 +421,7 @@ export class MatchScene {
           x: p.center.x,
           y: p.center.y,
           z: p.center.z,
-          radius: p.radius,
-          terrain: p.terrain,
+          terrainCfg: this.planetRenderer.getTerrainCfg(p.id),
           props: p.props,
         });
       }

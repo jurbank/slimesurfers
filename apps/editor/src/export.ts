@@ -1,6 +1,7 @@
 import type { RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import type { EditorConfig, PreviewSpawnState } from "./types.ts";
 import type { RailState } from "./tools/rails/RailTypes.ts";
+import { editorTerrainFeaturesToRuntime } from "./terrainFeatures.ts";
 
 function dot(a: [number, number, number], b: [number, number, number]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -61,6 +62,7 @@ export function editorStateToRuntimeMap(
       lighting: p.lighting,
       props: p.props,
       hasWater: p.hasWater,
+      terrainFeatures: editorTerrainFeaturesToRuntime(p.terrainFeatures),
     })),
     cel: {
       bands: config.shaders.cel.bands,

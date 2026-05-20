@@ -246,6 +246,44 @@ export interface MapDataMessage {
     };
     props: { treeDensity: number; cactusDensity: number; seed: number; rocketEnabled: boolean };
     hasWater: boolean;
+    terrainFeatures: Array<
+      | {
+          id: string;
+          kind: "slope";
+          enabled: boolean;
+          width: number;
+          bank: number;
+          edgeFalloff: number;
+          smoothing: number;
+          transitionLength: number;
+          points: Array<{
+            nx: number;
+            ny: number;
+            nz: number;
+            heightOffset: number;
+            width?: number;
+            bank?: number;
+            edgeFalloff?: number;
+            smoothing?: number;
+          }>;
+        }
+      | {
+          id: string;
+          kind: "jump";
+          enabled: boolean;
+          nx: number;
+          ny: number;
+          nz: number;
+          tx: number;
+          ty: number;
+          tz: number;
+          width: number;
+          length: number;
+          height: number;
+          edgeFalloff: number;
+          smoothing: number;
+        }
+    >;
   }>;
   rails: Array<{
     id: number;

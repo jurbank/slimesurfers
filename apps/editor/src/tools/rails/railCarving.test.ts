@@ -75,6 +75,7 @@ const TEST_CONFIG: EditorConfig = {
       },
       props: { treeDensity: 0, cactusDensity: 0, seed: 0, rocketEnabled: false },
       sculpt: { detail: 8, vertexCount: 0, samples: [] },
+      terrainFeatures: [],
       hasWater: false,
     },
   ],

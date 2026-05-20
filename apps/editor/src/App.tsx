@@ -22,9 +22,11 @@ import {
   type EditorConfig,
   type EditorPlanet,
   type EditorSculptState,
+  type EditorTerrainFeature,
   type PerformanceStats,
   type PreviewSpawnState,
   type PropBrushState,
+  type TerrainFeatureToolState,
 } from "./types.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
 import {
@@ -47,6 +49,9 @@ export function App() {
   const [mapName, setMapName] = useState(initialState.mapName);
   const [spawnPlacementActive, setSpawnPlacementActive] = useState(false);
   const [selectedRailPointId, setSelectedRailPointId] = useState<string | null>(null);
+  const [selectedTerrainFeaturePointId, setSelectedTerrainFeaturePointId] = useState<string | null>(
+    null,
+  );
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
   const [previewActive, setPreviewActive] = useState(false);
@@ -63,6 +68,7 @@ export function App() {
   const activeRailIdRef = useRef(activeRailId);
   const previewSpawnRef = useRef<PreviewSpawnState>(previewSpawn);
   const selectedRailPointIdRef = useRef<string | null>(selectedRailPointId);
+  const selectedTerrainFeaturePointIdRef = useRef<string | null>(selectedTerrainFeaturePointId);
   const previewActiveRef = useRef(false);
   const activePlanetIdRef = useRef(activePlanetId);
   const sceneRef = useRef<EditorScene | null>(null);
@@ -91,6 +97,10 @@ export function App() {
     sceneRef.current?.setTerrainStampState(state);
   }, []);
 
+  const handleTerrainFeatureToolChange = useCallback((state: TerrainFeatureToolState | null) => {
+    sceneRef.current?.setTerrainFeatureToolState(state);
+  }, []);
+
   const handlePropBrushChange = useCallback((state: PropBrushState | null) => {
     sceneRef.current?.setPropBrushState(state);
   }, []);
@@ -110,6 +120,32 @@ export function App() {
   const handleRailPointSelectionChange = useCallback((pointId: string | null) => {
     selectedRailPointIdRef.current = pointId;
     setSelectedRailPointId(pointId);
+  }, []);
+
+  const handleTerrainFeaturePointSelectionChange = useCallback((pointId: string | null) => {
+    selectedTerrainFeaturePointIdRef.current = pointId;
+    setSelectedTerrainFeaturePointId(pointId);
+  }, []);
+
+  const handleTerrainFeatureChange = useCallback((nextFeature: EditorTerrainFeature) => {
+    setSaveStatus("idle");
+    const activeId = activePlanetIdRef.current;
+    const next = {
+      ...configRef.current,
+      planets: configRef.current.planets.map((planet) =>
+        planet.id === activeId
+          ? {
+              ...planet,
+              terrainFeatures: planet.terrainFeatures.map((feature) =>
+                feature.id === nextFeature.id ? nextFeature : feature,
+              ),
+            }
+          : planet,
+      ),
+    };
+    configRef.current = next;
+    setConfig(next);
+    sceneRef.current?.rebuildPlanet(next);
   }, []);
 
   const handleSculptChange = useCallback((planetId: string, sculpt: EditorSculptState) => {
@@ -191,6 +227,7 @@ export function App() {
     if (nextLayer.kind !== "planet" || nextLayer.panel !== "terrain") {
       sceneRef.current?.setBrushState(null);
       sceneRef.current?.setTerrainStampState(null);
+      sceneRef.current?.setTerrainFeatureToolState(null);
     }
     if (nextLayer.kind !== "planet" || nextLayer.panel !== "props") {
       sceneRef.current?.setPropBrushState(null);
@@ -371,6 +408,19 @@ export function App() {
     sceneRef.current?.updateUniforms(next);
   }
 
+  function handleTerrainFeaturesChange(terrainFeatures: EditorTerrainFeature[]) {
+    setSaveStatus("idle");
+    const activeId = activePlanetIdRef.current;
+    const planets = configRef.current.planets.map((p) =>
+      p.id === activeId ? { ...p, terrainFeatures } : p,
+    );
+    const next = { ...configRef.current, planets };
+    configRef.current = next;
+    setConfig(next);
+    sceneRef.current?.updateUniforms(next);
+    sceneRef.current?.rebuildPlanet(next);
+  }
+
   function handlePlanetChange(planet: EditorPlanet) {
     setSaveStatus("idle");
     const activeId = activePlanetIdRef.current;
@@ -435,6 +485,8 @@ export function App() {
           onScene={handleScene}
           onRailChange={handleRailChange}
           onRailPointSelectionChange={handleRailPointSelectionChange}
+          onTerrainFeatureChange={handleTerrainFeatureChange}
+          onTerrainFeaturePointSelectionChange={handleTerrainFeaturePointSelectionChange}
           onSculptChange={handleSculptChange}
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
@@ -594,6 +646,10 @@ export function App() {
               }
               onTerrainChange={handleTerrainChange}
               onColorsChange={handleColorsChange}
+              onTerrainFeaturesChange={handleTerrainFeaturesChange}
+              selectedFeaturePointId={selectedTerrainFeaturePointId}
+              onTerrainFeatureToolChange={handleTerrainFeatureToolChange}
+              onTerrainFeaturePointSelectionChange={handleTerrainFeaturePointSelectionChange}
               onBrushChange={handleBrushChange}
               onTerrainStampChange={handleTerrainStampChange}
             />

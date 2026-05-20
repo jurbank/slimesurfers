@@ -31,8 +31,9 @@ import {
   type SimVec3,
 } from "../match/simState.ts";
 import type { SpawnSelection } from "../match/spawnSelection.ts";
+import type { TerrainConfig } from "../terrain/planetTerrain.ts";
 
-export interface CombatConfig {
+export interface CombatConfig extends TerrainConfig {
   player: {
     targetRadiusMultiplier: number;
     projectileMuzzleHeight: number;
@@ -58,21 +59,6 @@ export interface CombatConfig {
   respawn: {
     durationSeconds: number;
     dropInHeight: number;
-  };
-  planet: {
-    radius: number;
-  };
-  terrain: {
-    seed: number;
-    baseAmplitude: number;
-    frequency: number;
-    octaves: number;
-    lacunarity: number;
-    persistence: number;
-    waterLevel: number;
-    snowLevel: number;
-    sandBand: number;
-    rockLevel: number;
   };
 }
 

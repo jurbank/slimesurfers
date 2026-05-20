@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type {
   EditorConfig,
   EditorSculptState,
+  EditorTerrainFeature,
   PerformanceStats,
   PreviewSpawnState,
 } from "../types.ts";
@@ -15,6 +16,8 @@ interface PlanetPreviewProps {
   onScene: (scene: EditorScene) => void;
   onRailChange: (rail: RailState) => void;
   onRailPointSelectionChange: (pointId: string | null) => void;
+  onTerrainFeatureChange: (feature: EditorTerrainFeature) => void;
+  onTerrainFeaturePointSelectionChange: (pointId: string | null) => void;
   onSculptChange: (planetId: string, sculpt: EditorSculptState) => void;
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
@@ -28,6 +31,8 @@ export function PlanetPreview({
   onScene,
   onRailChange,
   onRailPointSelectionChange,
+  onTerrainFeatureChange,
+  onTerrainFeaturePointSelectionChange,
   onSculptChange,
   onPreviewSpawnChange,
   onPerformanceStats,
@@ -51,6 +56,8 @@ export function PlanetPreview({
       initialPreviewSpawn,
       onRailChange,
       onRailPointSelectionChange,
+      onTerrainFeatureChange,
+      onTerrainFeaturePointSelectionChange,
       onSculptChange,
       onPreviewSpawnChange,
       onPerformanceStats,

@@ -119,6 +119,7 @@ function migrateMapData(data: unknown): unknown {
         lighting: m.lighting ?? {},
         props: m.props ?? {},
         hasWater: typeof m.hasWater === "boolean" ? m.hasWater : true,
+        terrainFeatures: Array.isArray(m.terrainFeatures) ? m.terrainFeatures : [],
       },
     ];
   } else {
@@ -131,6 +132,9 @@ function migrateMapData(data: unknown): unknown {
         if (typeof t.icosahedronDetail !== "number") {
           t.icosahedronDetail = DEFAULT_RUNTIME_PLANET_TERRAIN.icosahedronDetail;
         }
+      }
+      if (!Array.isArray(p.terrainFeatures)) {
+        p.terrainFeatures = [];
       }
     }
   }

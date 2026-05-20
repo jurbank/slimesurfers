@@ -28,6 +28,7 @@ import { getSlimeAtPoint } from "../slime/slimeDetection.ts";
 import {
   getTerrainHeight,
   getTerrainRadius,
+  type TerrainConfig,
   type TerrainSurfaceProvider,
 } from "../terrain/planetTerrain.ts";
 import { type ComputedRail } from "./railSpline.ts";
@@ -64,10 +65,7 @@ export interface PlayerPhysics {
  * Config slice accepted by stepPlayer.
  * GAME_CONFIG structurally satisfies this, as does any custom test config.
  */
-export interface StepConfig {
-  planet: {
-    radius: number;
-  };
+export interface StepConfig extends TerrainConfig {
   movement: {
     gravityAcceleration: number;
     surfaceSnapDistance: number;
@@ -99,18 +97,6 @@ export interface StepConfig {
     maxGrindSpeed: number;
     carveAccelerationPerSecond: number;
     visualRadius: number;
-  };
-  terrain: {
-    seed: number;
-    baseAmplitude: number;
-    frequency: number;
-    octaves: number;
-    lacunarity: number;
-    persistence: number;
-    waterLevel: number;
-    snowLevel: number;
-    sandBand: number;
-    rockLevel: number;
   };
 }
 

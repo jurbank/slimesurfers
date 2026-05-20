@@ -52,6 +52,48 @@ export interface RuntimeMapProps {
   rocketEnabled: boolean;
 }
 
+export interface RuntimeTerrainFeaturePoint {
+  nx: number;
+  ny: number;
+  nz: number;
+  heightOffset: number;
+  width?: number;
+  bank?: number;
+  edgeFalloff?: number;
+  smoothing?: number;
+}
+
+export interface RuntimeTerrainSlopeFeature {
+  id: string;
+  kind: "slope";
+  enabled: boolean;
+  width: number;
+  bank: number;
+  edgeFalloff: number;
+  smoothing: number;
+  transitionLength: number;
+  points: RuntimeTerrainFeaturePoint[];
+}
+
+export interface RuntimeTerrainJumpFeature {
+  id: string;
+  kind: "jump";
+  enabled: boolean;
+  nx: number;
+  ny: number;
+  nz: number;
+  tx: number;
+  ty: number;
+  tz: number;
+  width: number;
+  length: number;
+  height: number;
+  edgeFalloff: number;
+  smoothing: number;
+}
+
+export type RuntimeTerrainFeature = RuntimeTerrainSlopeFeature | RuntimeTerrainJumpFeature;
+
 export interface RuntimeMapCel {
   bands: number;
   softness: number;
@@ -69,6 +111,7 @@ export interface RuntimeMapPlanet {
   lighting: RuntimeMapLighting;
   props: RuntimeMapProps;
   hasWater: boolean;
+  terrainFeatures: RuntimeTerrainFeature[];
 }
 
 export interface RuntimeMapData {
@@ -117,6 +160,11 @@ function validateFiniteNumber(
     return false;
   }
   return true;
+}
+
+function validatePositiveNumber(value: unknown, field: string, errors: ValidationError[]): void {
+  if (!validateFiniteNumber(value, field, errors)) return;
+  if (value <= 0) errors.push({ field, message: "must be greater than 0" });
 }
 
 function validateTerrain(t: unknown, prefix: string, errors: ValidationError[]): void {
@@ -201,6 +249,185 @@ function validateProps(p: unknown, prefix: string, errors: ValidationError[]): v
   }
 }
 
+function validateUnitNormal(
+  value: Record<string, unknown>,
+  field: string,
+  errors: ValidationError[],
+): void {
+  const nx = value.nx;
+  const ny = value.ny;
+  const nz = value.nz;
+  if (
+    typeof nx !== "number" ||
+    typeof ny !== "number" ||
+    typeof nz !== "number" ||
+    !Number.isFinite(nx) ||
+    !Number.isFinite(ny) ||
+    !Number.isFinite(nz)
+  ) {
+    errors.push({ field, message: "nx/ny/nz must be finite numbers" });
+    return;
+  }
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  if (Math.abs(len - 1) > 0.01) {
+    errors.push({
+      field,
+      message: `normal length ${len.toFixed(4)} deviates from 1 by more than 0.01`,
+    });
+  }
+}
+
+function validateUnitTangent(
+  value: Record<string, unknown>,
+  field: string,
+  errors: ValidationError[],
+): void {
+  const tx = value.tx;
+  const ty = value.ty;
+  const tz = value.tz;
+  const nx = value.nx;
+  const ny = value.ny;
+  const nz = value.nz;
+  if (
+    typeof tx !== "number" ||
+    typeof ty !== "number" ||
+    typeof tz !== "number" ||
+    !Number.isFinite(tx) ||
+    !Number.isFinite(ty) ||
+    !Number.isFinite(tz)
+  ) {
+    errors.push({ field, message: "tx/ty/tz must be finite numbers" });
+    return;
+  }
+  const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+  if (Math.abs(len - 1) > 0.01) {
+    errors.push({
+      field,
+      message: `tangent length ${len.toFixed(4)} deviates from 1 by more than 0.01`,
+    });
+  }
+  if (
+    typeof nx === "number" &&
+    typeof ny === "number" &&
+    typeof nz === "number" &&
+    Number.isFinite(nx) &&
+    Number.isFinite(ny) &&
+    Number.isFinite(nz) &&
+    Math.abs(nx * tx + ny * ty + nz * tz) > 0.02
+  ) {
+    errors.push({ field, message: "tangent must be perpendicular to normal" });
+  }
+}
+
+function validateTerrainFeatures(
+  features: unknown,
+  prefix: string,
+  errors: ValidationError[],
+): void {
+  if (!Array.isArray(features)) {
+    errors.push({ field: prefix, message: "must be an array" });
+    return;
+  }
+
+  const ids = new Set<string>();
+  for (let i = 0; i < features.length; i++) {
+    const feature = features[i] as Record<string, unknown>;
+    const field = `${prefix}[${i}]`;
+    if (typeof feature !== "object" || feature === null) {
+      errors.push({ field, message: "must be an object" });
+      continue;
+    }
+    if (typeof feature.id !== "string" || feature.id.trim() === "") {
+      errors.push({ field: `${field}.id`, message: "must be a non-empty string" });
+    } else if (ids.has(feature.id)) {
+      errors.push({ field: `${field}.id`, message: `duplicate feature id "${feature.id}"` });
+    } else {
+      ids.add(feature.id);
+    }
+    if (feature.kind !== "slope" && feature.kind !== "jump") {
+      errors.push({
+        field: `${field}.kind`,
+        message: `unknown terrain feature kind "${String(feature.kind)}"`,
+      });
+    }
+    if (typeof feature.enabled !== "boolean") {
+      errors.push({ field: `${field}.enabled`, message: "must be a boolean" });
+    }
+    validatePositiveNumber(feature.width, `${field}.width`, errors);
+    if (
+      !validateFiniteNumber(feature.edgeFalloff, `${field}.edgeFalloff`, errors) ||
+      (typeof feature.edgeFalloff === "number" && feature.edgeFalloff < 0)
+    ) {
+      if (typeof feature.edgeFalloff === "number") {
+        errors.push({ field: `${field}.edgeFalloff`, message: "must be 0 or greater" });
+      }
+    }
+    validateFiniteNumber(feature.smoothing, `${field}.smoothing`, errors);
+
+    if (feature.kind === "jump") {
+      validateUnitNormal(feature, field, errors);
+      validateUnitTangent(feature, field, errors);
+      validatePositiveNumber(feature.length, `${field}.length`, errors);
+      validateFiniteNumber(feature.height, `${field}.height`, errors);
+      continue;
+    }
+
+    validateFiniteNumber(feature.bank, `${field}.bank`, errors);
+    if (
+      !validateFiniteNumber(feature.transitionLength, `${field}.transitionLength`, errors) ||
+      (typeof feature.transitionLength === "number" && feature.transitionLength < 0)
+    ) {
+      if (typeof feature.transitionLength === "number") {
+        errors.push({ field: `${field}.transitionLength`, message: "must be 0 or greater" });
+      }
+    }
+
+    if (!Array.isArray(feature.points) || feature.points.length < 2) {
+      errors.push({ field: `${field}.points`, message: "must have at least 2 points" });
+    } else {
+      for (let j = 0; j < feature.points.length; j++) {
+        const point = feature.points[j] as Record<string, unknown>;
+        const pointField = `${field}.points[${j}]`;
+        if (typeof point !== "object" || point === null) {
+          errors.push({ field: pointField, message: "must be an object" });
+          continue;
+        }
+        validateUnitNormal(point, pointField, errors);
+        validateFiniteNumber(point.heightOffset, `${pointField}.heightOffset`, errors);
+        if (point.width !== undefined) {
+          if (
+            !validateFiniteNumber(point.width, `${pointField}.width`, errors) ||
+            (typeof point.width === "number" && point.width <= 0)
+          ) {
+            if (typeof point.width === "number") {
+              errors.push({ field: `${pointField}.width`, message: "must be greater than 0" });
+            }
+          }
+        }
+        if (point.edgeFalloff !== undefined) {
+          if (
+            !validateFiniteNumber(point.edgeFalloff, `${pointField}.edgeFalloff`, errors) ||
+            (typeof point.edgeFalloff === "number" && point.edgeFalloff < 0)
+          ) {
+            if (typeof point.edgeFalloff === "number") {
+              errors.push({
+                field: `${pointField}.edgeFalloff`,
+                message: "must be 0 or greater",
+              });
+            }
+          }
+        }
+        if (point.bank !== undefined) {
+          validateFiniteNumber(point.bank, `${pointField}.bank`, errors);
+        }
+        if (point.smoothing !== undefined) {
+          validateFiniteNumber(point.smoothing, `${pointField}.smoothing`, errors);
+        }
+      }
+    }
+  }
+}
+
 function validateCel(c: unknown, prefix: string, errors: ValidationError[]): void {
   if (typeof c !== "object" || c === null) {
     errors.push({ field: prefix, message: "must be an object" });
@@ -271,6 +498,7 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
       validateAtmosphere(p.atmosphere, `planets[${i}].atmosphere`, errors);
       validateLighting(p.lighting, `planets[${i}].lighting`, errors);
       validateProps(p.props, `planets[${i}].props`, errors);
+      validateTerrainFeatures(p.terrainFeatures, `planets[${i}].terrainFeatures`, errors);
     }
   }
 
@@ -309,13 +537,7 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
               message: "nx/ny/nz must be finite numbers",
             });
           } else {
-            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-            if (Math.abs(len - 1) > 0.01) {
-              errors.push({
-                field: `rails[${i}].controlPoints[${j}]`,
-                message: `normal length ${len.toFixed(4)} deviates from 1 by more than 0.01`,
-              });
-            }
+            validateUnitNormal(cp, `rails[${i}].controlPoints[${j}]`, errors);
           }
         }
       }
@@ -470,6 +692,7 @@ export const DEV_MAP: RuntimeMapData = {
       lighting: DEFAULT_RUNTIME_PLANET_LIGHTING,
       props: DEFAULT_RUNTIME_PLANET_PROPS,
       hasWater: true,
+      terrainFeatures: [],
     },
   ],
   cel: DEFAULT_RUNTIME_CEL,
