@@ -39,6 +39,7 @@ import {
 import { getLayerTitle, LayerNavigator, type LayerSelection } from "./LayerNavigator.tsx";
 
 const REBUILD_DELAY_MS = 160;
+type PublishStatus = "idle" | "publishing" | "published" | "invalid" | "error";
 
 export function App() {
   const initialState = useRef<InitialEditorState>(createInitialEditorState()).current;
@@ -54,6 +55,7 @@ export function App() {
   );
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
+  const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [previewActive, setPreviewActive] = useState(false);
   const [activePlanetId, setActivePlanetId] = useState(
     () => initialState.config.planets[0]?.id ?? "planet-0",
@@ -73,6 +75,11 @@ export function App() {
   const activePlanetIdRef = useRef(activePlanetId);
   const sceneRef = useRef<EditorScene | null>(null);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const markDirty = useCallback(() => {
+    setSaveStatus("idle");
+    setPublishStatus("idle");
+  }, []);
 
   const cancelScheduledRebuild = useCallback(() => {
     if (!rebuildTimerRef.current) return;
@@ -126,13 +133,16 @@ export function App() {
     sceneRef.current?.setPropBrushState(state);
   }, []);
 
-  const handleRailChange = useCallback((nextRail: RailState) => {
-    setSaveStatus("idle");
-    const nextRails = railsRef.current.map((rail) => (rail.id === nextRail.id ? nextRail : rail));
-    railsRef.current = nextRails;
-    sceneRef.current?.setRails(nextRails);
-    setRails(nextRails);
-  }, []);
+  const handleRailChange = useCallback(
+    (nextRail: RailState) => {
+      markDirty();
+      const nextRails = railsRef.current.map((rail) => (rail.id === nextRail.id ? nextRail : rail));
+      railsRef.current = nextRails;
+      sceneRef.current?.setRails(nextRails);
+      setRails(nextRails);
+    },
+    [markDirty],
+  );
 
   const handleRailToolChange = useCallback((state: RailToolState) => {
     sceneRef.current?.setRailToolState(state);
@@ -150,7 +160,7 @@ export function App() {
 
   const handleTerrainFeatureChange = useCallback(
     (nextFeature: EditorTerrainFeature) => {
-      setSaveStatus("idle");
+      markDirty();
       const activeId = activePlanetIdRef.current;
       const next = {
         ...configRef.current,
@@ -170,27 +180,33 @@ export function App() {
       sceneRef.current?.updateUniforms(next);
       scheduleRebuild();
     },
-    [scheduleRebuild],
+    [markDirty, scheduleRebuild],
   );
 
-  const handleSculptChange = useCallback((planetId: string, sculpt: EditorSculptState) => {
-    setSaveStatus("idle");
-    const next = {
-      ...configRef.current,
-      planets: configRef.current.planets.map((planet) =>
-        planet.id === planetId ? { ...planet, sculpt } : planet,
-      ),
-    };
-    configRef.current = next;
-    setConfig(next);
-    sceneRef.current?.updateUniforms(next);
-  }, []);
+  const handleSculptChange = useCallback(
+    (planetId: string, sculpt: EditorSculptState) => {
+      markDirty();
+      const next = {
+        ...configRef.current,
+        planets: configRef.current.planets.map((planet) =>
+          planet.id === planetId ? { ...planet, sculpt } : planet,
+        ),
+      };
+      configRef.current = next;
+      setConfig(next);
+      sceneRef.current?.updateUniforms(next);
+    },
+    [markDirty],
+  );
 
-  const handlePreviewSpawnChange = useCallback((spawn: PreviewSpawnState) => {
-    setSaveStatus("idle");
-    previewSpawnRef.current = spawn;
-    setPreviewSpawn(spawn);
-  }, []);
+  const handlePreviewSpawnChange = useCallback(
+    (spawn: PreviewSpawnState) => {
+      markDirty();
+      previewSpawnRef.current = spawn;
+      setPreviewSpawn(spawn);
+    },
+    [markDirty],
+  );
 
   const handleSpawnPlacementActiveChange = useCallback((active: boolean) => {
     setSpawnPlacementActive(active);
@@ -223,30 +239,33 @@ export function App() {
     togglePreview();
   }, [togglePreview]);
 
-  const ensureActiveRailForPlanet = useCallback((planetId: string) => {
-    let nextRails = railsRef.current;
-    let activeRail = nextRails.find((rail) => rail.planetId === planetId);
-    if (!activeRail) {
-      activeRail = createDefaultRailState(undefined, planetId);
-      nextRails = [...nextRails, activeRail];
-      railsRef.current = nextRails;
-      setRails(nextRails);
-      sceneRef.current?.setRails(nextRails);
-      setSaveStatus("idle");
-    }
+  const ensureActiveRailForPlanet = useCallback(
+    (planetId: string) => {
+      let nextRails = railsRef.current;
+      let activeRail = nextRails.find((rail) => rail.planetId === planetId);
+      if (!activeRail) {
+        activeRail = createDefaultRailState(undefined, planetId);
+        nextRails = [...nextRails, activeRail];
+        railsRef.current = nextRails;
+        setRails(nextRails);
+        sceneRef.current?.setRails(nextRails);
+        markDirty();
+      }
 
-    if (activeRailIdRef.current !== activeRail.id) {
-      activeRailIdRef.current = activeRail.id;
-      selectedRailPointIdRef.current = null;
-      setActiveRailId(activeRail.id);
-      setSelectedRailPointId(null);
-      sceneRef.current?.setRailToolState({
-        mode: null,
-        rail: activeRail,
-        selectedPointId: null,
-      });
-    }
-  }, []);
+      if (activeRailIdRef.current !== activeRail.id) {
+        activeRailIdRef.current = activeRail.id;
+        selectedRailPointIdRef.current = null;
+        setActiveRailId(activeRail.id);
+        setSelectedRailPointId(null);
+        sceneRef.current?.setRailToolState({
+          mode: null,
+          rail: activeRail,
+          selectedPointId: null,
+        });
+      }
+    },
+    [markDirty],
+  );
 
   const clearTransientTools = useCallback((nextLayer: LayerSelection) => {
     if (nextLayer.kind !== "planet" || nextLayer.panel !== "terrain") {
@@ -273,25 +292,28 @@ export function App() {
     }
   }, []);
 
-  const setActiveRail = useCallback((railId: string) => {
-    setSaveStatus("idle");
-    activeRailIdRef.current = railId;
-    selectedRailPointIdRef.current = null;
-    setActiveRailId(railId);
-    setSelectedRailPointId(null);
-    const activeRail = railsRef.current.find((rail) => rail.id === railId);
-    if (activeRail) {
-      sceneRef.current?.setRailToolState({
-        mode: null,
-        rail: activeRail,
-        selectedPointId: null,
-      });
-    }
-  }, []);
+  const setActiveRail = useCallback(
+    (railId: string) => {
+      markDirty();
+      activeRailIdRef.current = railId;
+      selectedRailPointIdRef.current = null;
+      setActiveRailId(railId);
+      setSelectedRailPointId(null);
+      const activeRail = railsRef.current.find((rail) => rail.id === railId);
+      if (activeRail) {
+        sceneRef.current?.setRailToolState({
+          mode: null,
+          rail: activeRail,
+          selectedPointId: null,
+        });
+      }
+    },
+    [markDirty],
+  );
 
   const handleRailsChange = useCallback(
     (nextRails: RailState[], nextActiveRailId: string, nextSelectedPointId: string | null) => {
-      setSaveStatus("idle");
+      markDirty();
       railsRef.current = nextRails;
       activeRailIdRef.current = nextActiveRailId;
       selectedRailPointIdRef.current = nextSelectedPointId;
@@ -300,7 +322,7 @@ export function App() {
       setActiveRailId(nextActiveRailId);
       setSelectedRailPointId(nextSelectedPointId);
     },
-    [],
+    [markDirty],
   );
 
   const handleActivePlanetChange = useCallback(
@@ -335,7 +357,7 @@ export function App() {
   );
 
   const addPlanet = useCallback(() => {
-    setSaveStatus("idle");
+    markDirty();
     const planets = configRef.current.planets;
     const id = nextPlanetId(planets);
     const centerOffset = 400 * planets.length;
@@ -346,10 +368,10 @@ export function App() {
     sceneRef.current?.updateUniforms(nextConfig);
     handleActivePlanetChange(id);
     setSelectedLayer({ kind: "planet", planetId: id, panel: "planet" });
-  }, [handleActivePlanetChange]);
+  }, [handleActivePlanetChange, markDirty]);
 
   function handlePlanetsChange(planets: EditorPlanet[]) {
-    setSaveStatus("idle");
+    markDirty();
     const prev = configRef.current;
     const next = { ...prev, planets };
     configRef.current = next;
@@ -382,8 +404,53 @@ export function App() {
     }
   }
 
+  function handleResetActivePlanet() {
+    const activeId = activePlanetIdRef.current;
+    const currentPlanet = configRef.current.planets.find((planet) => planet.id === activeId);
+    if (!currentPlanet) return;
+    const confirmed = window.confirm(
+      `Reset ${activeId} to default terrain, colors, atmosphere, lighting, props, and clear its rails?`,
+    );
+    if (!confirmed) return;
+
+    markDirty();
+    const resetPlanet = {
+      ...defaultEditorPlanet(activeId, currentPlanet.center),
+      id: activeId,
+    };
+    const nextConfig = {
+      ...configRef.current,
+      planets: configRef.current.planets.map((planet) =>
+        planet.id === activeId ? resetPlanet : planet,
+      ),
+    };
+    const resetRail = createDefaultRailState(undefined, activeId);
+    const nextRails = [...railsRef.current.filter((rail) => rail.planetId !== activeId), resetRail];
+
+    configRef.current = nextConfig;
+    railsRef.current = nextRails;
+    activeRailIdRef.current = resetRail.id;
+    selectedRailPointIdRef.current = null;
+    selectedTerrainFeaturePointIdRef.current = null;
+    setConfig(nextConfig);
+    setRails(nextRails);
+    setActiveRailId(resetRail.id);
+    setSelectedRailPointId(null);
+    setSelectedTerrainFeaturePointId(null);
+    sceneRef.current?.setRails(nextRails);
+    sceneRef.current?.setActivePlanet(activeId, resetPlanet.center);
+    sceneRef.current?.setRailToolState({
+      mode: null,
+      rail: resetRail,
+      selectedPointId: null,
+    });
+    sceneRef.current?.updateUniforms(nextConfig);
+    rebuildPlanetNow();
+    sceneRef.current?.rebuildWater(nextConfig);
+  }
+
   function handleTerrainChange(terrain: EditorPlanet["terrain"]) {
-    setSaveStatus("idle");
+    markDirty();
     const activeId = activePlanetIdRef.current;
     const prevPlanet =
       configRef.current.planets.find((p) => p.id === activeId) ?? configRef.current.planets[0]!;
@@ -418,7 +485,7 @@ export function App() {
   }
 
   function handleColorsChange(colors: EditorPlanet["colors"]) {
-    setSaveStatus("idle");
+    markDirty();
     const activeId = activePlanetIdRef.current;
     const planets = configRef.current.planets.map((p) =>
       p.id === activeId ? { ...p, colors } : p,
@@ -430,7 +497,7 @@ export function App() {
   }
 
   function handleTerrainFeaturesChange(terrainFeatures: EditorTerrainFeature[]) {
-    setSaveStatus("idle");
+    markDirty();
     const activeId = activePlanetIdRef.current;
     const planets = configRef.current.planets.map((p) =>
       p.id === activeId ? { ...p, terrainFeatures } : p,
@@ -443,7 +510,7 @@ export function App() {
   }
 
   function handlePlanetChange(planet: EditorPlanet) {
-    setSaveStatus("idle");
+    markDirty();
     const activeId = activePlanetIdRef.current;
     const planets = configRef.current.planets.map((p) => (p.id === activeId ? planet : p));
     const next = { ...configRef.current, planets };
@@ -453,14 +520,14 @@ export function App() {
   }
 
   function handleShadersChange(shaders: EditorConfig["shaders"]) {
-    setSaveStatus("idle");
+    markDirty();
     const next = { ...configRef.current, shaders };
     configRef.current = next;
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
   }
 
-  function handleSaveLocal() {
+  const handleSaveLocal = useCallback(() => {
     const saved = saveEditorState(
       configRef.current,
       railsRef.current,
@@ -469,7 +536,58 @@ export function App() {
       mapName,
     );
     setSaveStatus(saved ? "saved" : "error");
-  }
+  }, [mapName]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      handleSaveLocal();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSaveLocal]);
+
+  const handlePublishRuntimeMap = useCallback(async () => {
+    const map = editorStateToRuntimeMap(
+      configRef.current,
+      railsRef.current,
+      previewSpawnRef.current,
+      mapName || "Untitled Map",
+    );
+    const result = validateRuntimeMapData(map);
+    if (!result.valid) {
+      setPublishStatus("invalid");
+      alert(`Publish failed:\n${result.errors.map((e) => `${e.field}: ${e.message}`).join("\n")}`);
+      return;
+    }
+
+    setPublishStatus("publishing");
+    try {
+      const response = await fetch("/__editor/publish-runtime-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(map),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        errors?: { field: string; message: string }[];
+      } | null;
+      if (!response.ok) {
+        setPublishStatus(payload?.errors ? "invalid" : "error");
+        const details = payload?.errors?.map((e) => `${e.field}: ${e.message}`).join("\n");
+        alert(`Publish failed:\n${details || payload?.error || response.statusText}`);
+        return;
+      }
+      setPublishStatus("published");
+    } catch (error) {
+      setPublishStatus("error");
+      alert(
+        `Publish failed:\n${error instanceof Error ? error.message : "Could not reach editor dev server"}`,
+      );
+    }
+  }, [mapName]);
 
   function handleClearLocalSave() {
     const cleared = clearEditorState();
@@ -557,7 +675,7 @@ export function App() {
           </button>
           <button
             onClick={handleSaveLocal}
-            title="Save to this browser"
+            title="Save to this browser (Cmd/Ctrl+S)"
             className="min-w-24 px-3 py-2 flex items-center justify-center gap-1.5 bg-cyan-500/90 hover:bg-cyan-400 border border-cyan-400 rounded text-black font-semibold text-xs transition-colors"
           >
             <svg
@@ -657,6 +775,7 @@ export function App() {
               activePlanetId={selectedLayer.planetId}
               onPlanetsChange={handlePlanetsChange}
               onActivePlanetChange={handleActivePlanetChange}
+              onResetActivePlanet={handleResetActivePlanet}
               showPlanetList={false}
             />
           )}
@@ -726,17 +845,35 @@ export function App() {
         <div className="p-4 border-t border-zinc-700 space-y-2">
           <input
             value={mapName}
-            onChange={(e) => setMapName(e.target.value)}
+            onChange={(e) => {
+              markDirty();
+              setMapName(e.target.value);
+            }}
             placeholder="Map name"
             className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500"
           />
           <button
+            onClick={handlePublishRuntimeMap}
+            disabled={publishStatus === "publishing"}
+            className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
+          >
+            {publishStatus === "publishing"
+              ? "Publishing..."
+              : publishStatus === "published"
+                ? "Published"
+                : publishStatus === "invalid"
+                  ? "Invalid Map"
+                  : publishStatus === "error"
+                    ? "Publish Failed"
+                    : "Publish Map"}
+          </button>
+          <button
             onClick={() =>
               exportMap(configRef.current, railsRef.current, previewSpawnRef.current, mapName)
             }
-            className="w-full px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded text-sm transition-colors"
+            className="w-full px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-xs transition-colors"
           >
-            Export Map
+            Download Runtime Map
           </button>
           <button
             onClick={() =>

@@ -7,6 +7,7 @@ interface PlanetPanelProps {
   activePlanetId: string;
   onPlanetsChange: (planets: EditorPlanet[]) => void;
   onActivePlanetChange: (id: string) => void;
+  onResetActivePlanet: () => void;
   showPlanetList?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function PlanetPanel({
   activePlanetId,
   onPlanetsChange,
   onActivePlanetChange,
+  onResetActivePlanet,
   showPlanetList = true,
 }: PlanetPanelProps) {
   const planets = config.planets;
@@ -120,6 +122,12 @@ export function PlanetPanel({
             Remove planet
           </button>
         )}
+        <button
+          onClick={onResetActivePlanet}
+          className="mt-1 w-full px-2 py-1 bg-zinc-800 hover:bg-amber-900/50 border border-zinc-700 hover:border-amber-700 rounded text-xs text-zinc-400 hover:text-amber-200 transition-colors"
+        >
+          Reset planet
+        </button>
       </Section>
     </div>
   );

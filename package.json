@@ -6,8 +6,10 @@
   "scripts": {
     "ready": "vp check && vp test",
     "dev": "vp run @splat/game-client#dev",
+    "dev:editor": "vp run @splat/editor#dev",
     "dev:client": "vp run @splat/game-client#dev",
     "dev:server": "vp run @splat/game-server#dev",
+    "dev:server:map": "MAP_FILE=apps/game/server/my-map.json vp run @splat/game-server#dev",
     "prepare": "vp config",
     "dir:structure": "node ./generate-directory-structure.mjs"
   },

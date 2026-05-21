@@ -4,6 +4,14 @@ Agent-maintained notes for changes that touch `apps/editor`.
 
 ## 2026-05-20
 
+- Added active planet reset in `src/App.tsx` and `src/panels/PlanetPanel.tsx`.
+- User-visible behavior: the Planet panel can reset the selected planet to default terrain, colors, atmosphere, lighting, and props while preserving its id and center; rails attached to that planet are cleared and replaced with a fresh default rail.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/src/panels/PlanetPanel.tsx apps/editor/EDITOR_CHANGELOG.md`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`.
+
+- Changed editor save/publish workflow in `src/App.tsx` and `vite.config.ts`.
+- User-visible behavior: Cmd/Ctrl+S saves the editor state to browser local storage; Publish Map validates the current runtime map and writes it through the editor dev server to `apps/game/server/my-map.json`, while runtime map download remains available separately.
+- Validation: `vp fmt apps/editor/src/App.tsx apps/editor/vite.config.ts apps/editor/EDITOR_CHANGELOG.md package.json`; `vp test apps/editor/src/export.test.ts`; `vp test packages/content/map/runtimeMapData.test.ts`; `vp check --no-fmt`; editor dev server smoke test on `http://127.0.0.1:2571` with `curl -X POST /__editor/publish-runtime-map`.
+
 - Changed editor planet rebuild scheduling in `src/App.tsx`.
 - User-visible behavior: high-frequency terrain feature edits and terrain sliders no longer force a full high-detail planet mesh rebuild on every input event; the editor updates state immediately and debounces expensive geometry rebuilds to keep high-poly editing more responsive.
 - Validation: `vp fmt apps/editor/src/App.tsx`; `vp check --no-fmt`; `vp test apps/editor/src/export.test.ts`; `vp test`.
