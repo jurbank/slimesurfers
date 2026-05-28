@@ -45,6 +45,19 @@ export interface SimPlanetSlimeState {
   stampBuckets: SimSlimeStamp[][];
 }
 
+/**
+ * Per-blast-pad runtime ownership and charge state. Paint stamps landing inside the
+ * pad footprint accumulate coverage in the stamping player's color (friendly paint
+ * adds, enemy paint subtracts). A pad only fires when fully charged (coverage >= 1)
+ * and the trigger consumes the charge — pad returns to neutral until repainted.
+ */
+export interface SimBlastPadState {
+  ownerSlimeGroupId: number;
+  ownerColor: number;
+  /** Charge level in [0, 1]. The pad triggers only when this reaches 1. */
+  coverageProgress: number;
+}
+
 export interface SimRailSlimeState {
   railId: number;
   nodes: number[]; // Array of 0xRRGGBB colors
@@ -96,8 +109,19 @@ export const PlayerMovementState = {
   Airborne: 2,
   Dead: 3,
   Grinding: 4,
+  BlastLaunch: 5,
+  PlanetHopFlight: 6,
+  LandingApproach: 7,
 } as const;
 export type PlayerMovementState = (typeof PlayerMovementState)[keyof typeof PlayerMovementState];
+
+export function isPlanetHopMovementState(movementState: number): boolean {
+  return (
+    movementState === PlayerMovementState.BlastLaunch ||
+    movementState === PlayerMovementState.PlanetHopFlight ||
+    movementState === PlayerMovementState.LandingApproach
+  );
+}
 
 export const PlayerSurfState = {
   None: 0,
@@ -145,6 +169,11 @@ export interface SimPlayerState {
   lastGrindT: number; // arc-length parameter from the previous tick
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
+  planetHopSourcePlanetId: string;
+  planetHopTargetPlanetId: string;
+  planetHopLandingNormal: SimVec3;
+  planetHopElapsedMs: number;
+  splatCooldownMs: number;
   isOnFriendlySlime: boolean;
   inputSeq: number;
   airTrickCombo: number;
@@ -181,6 +210,7 @@ export interface SimMatchState {
   mapTerrain: TerrainConfig["terrain"];
   planets: Map<string, SimPlanetSlimeState>;
   railStates: Map<number, SimRailSlimeState>;
+  blastPadStates: Map<string, SimBlastPadState>;
   projectiles: Map<string, SimProjectileState>;
   pickups: Map<string, SimWeaponPickupState>;
   healthPickups: Map<string, SimHealthPickupState>;

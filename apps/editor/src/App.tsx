@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
+import { BlastPadsPanel } from "./panels/BlastPadsPanel.tsx";
 import { PerformancePanel } from "./panels/PerformancePanel.tsx";
 import { PlanetPanel } from "./panels/PlanetPanel.tsx";
 import { PropsPanel } from "./panels/PropsPanel.tsx";
@@ -14,11 +15,13 @@ import {
   type RailState,
   type RailToolState,
 } from "./tools/rails/RailTypes.ts";
+import type { BlastPadToolState } from "./tools/blastPads/BlastPadTypes.ts";
 import type { TerrainStampState } from "./tools/terrain/TerrainStampTypes.ts";
 import {
   defaultEditorPlanet,
   GEOMETRY_TERRAIN_KEYS,
   type BrushState,
+  type EditorBlastPad,
   type EditorConfig,
   type EditorPlanet,
   type EditorSculptState,
@@ -53,6 +56,8 @@ export function App() {
   const [selectedTerrainFeaturePointId, setSelectedTerrainFeaturePointId] = useState<string | null>(
     null,
   );
+  const [selectedBlastPadId, setSelectedBlastPadId] = useState<string | null>(null);
+  const [pickBlastPadTargetForId, setPickBlastPadTargetForId] = useState<string | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "cleared" | "error">("idle");
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
@@ -147,6 +152,37 @@ export function App() {
   const handleRailToolChange = useCallback((state: RailToolState) => {
     sceneRef.current?.setRailToolState(state);
   }, []);
+
+  const handleBlastPadsChange = useCallback(
+    (pads: EditorBlastPad[]) => {
+      markDirty();
+      const next = { ...configRef.current, blastPads: pads };
+      configRef.current = next;
+      setConfig(next);
+      sceneRef.current?.setBlastPads(pads);
+    },
+    [markDirty],
+  );
+
+  const handleBlastPadSelectionChange = useCallback((padId: string | null) => {
+    setSelectedBlastPadId(padId);
+    if (padId === null) setPickBlastPadTargetForId(null);
+  }, []);
+
+  const handleBlastPadToolChange = useCallback((state: BlastPadToolState) => {
+    sceneRef.current?.setBlastPadToolState(state);
+  }, []);
+
+  const handleBlastPadPickTargetForId = useCallback((padId: string | null) => {
+    setPickBlastPadTargetForId(padId);
+  }, []);
+
+  const handleBlastPadPickTargetComplete = useCallback(
+    (_padId: string, _targetPlanetId: string) => {
+      setPickBlastPadTargetForId(null);
+    },
+    [],
+  );
 
   const handleRailPointSelectionChange = useCallback((pointId: string | null) => {
     selectedRailPointIdRef.current = pointId;
@@ -290,6 +326,10 @@ export function App() {
         });
       }
     }
+    if (nextLayer.kind !== "planet" || nextLayer.panel !== "blastPads") {
+      sceneRef.current?.setBlastPadToolState(null);
+      setPickBlastPadTargetForId(null);
+    }
   }, []);
 
   const setActiveRail = useCallback(
@@ -389,6 +429,20 @@ export function App() {
       railsRef.current = nextRails;
       setRails(nextRails);
       sceneRef.current?.setRails(nextRails);
+    }
+    const nextBlastPads = (configRef.current.blastPads ?? []).filter(
+      (pad) =>
+        planetIds.has(pad.planetId) &&
+        planetIds.has(pad.targetPlanetId) &&
+        pad.planetId !== pad.targetPlanetId,
+    );
+    if (nextBlastPads.length !== (configRef.current.blastPads ?? []).length) {
+      next.blastPads = nextBlastPads;
+      configRef.current = next;
+      if (selectedBlastPadId && !nextBlastPads.some((p) => p.id === selectedBlastPadId)) {
+        setSelectedBlastPadId(null);
+        setPickBlastPadTargetForId(null);
+      }
     }
 
     setConfig(next);
@@ -630,6 +684,9 @@ export function App() {
           onPreviewSpawnChange={handlePreviewSpawnChange}
           onPerformanceStats={setPerformanceStats}
           onPlanetSelected={handlePreviewPlanetSelected}
+          onBlastPadsChange={handleBlastPadsChange}
+          onBlastPadSelectionChange={handleBlastPadSelectionChange}
+          onBlastPadPickTargetComplete={handleBlastPadPickTargetComplete}
         />
         <div className="absolute bottom-4 right-4 flex items-center gap-2">
           <button
@@ -829,6 +886,18 @@ export function App() {
               onRailChange={handleRailChange}
               onRailToolChange={handleRailToolChange}
               onPointSelectionChange={handleRailPointSelectionChange}
+            />
+          )}
+          {selectedLayer.kind === "planet" && selectedLayer.panel === "blastPads" && (
+            <BlastPadsPanel
+              config={config}
+              planetId={selectedLayer.planetId}
+              selectedPadId={selectedBlastPadId}
+              pickTargetForPadId={pickBlastPadTargetForId}
+              onPadsChange={handleBlastPadsChange}
+              onSelectionChange={handleBlastPadSelectionChange}
+              onToolChange={handleBlastPadToolChange}
+              onPickTargetForPadId={handleBlastPadPickTargetForId}
             />
           )}
           {selectedLayer.kind === "global" && selectedLayer.panel === "spawns" && (

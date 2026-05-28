@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type {
+  EditorBlastPad,
   EditorConfig,
   EditorSculptState,
   EditorTerrainFeature,
@@ -22,6 +23,9 @@ interface PlanetPreviewProps {
   onPreviewSpawnChange: (spawn: PreviewSpawnState) => void;
   onPerformanceStats: (stats: PerformanceStats) => void;
   onPlanetSelected: (id: string) => void;
+  onBlastPadsChange: (pads: EditorBlastPad[]) => void;
+  onBlastPadSelectionChange: (padId: string | null) => void;
+  onBlastPadPickTargetComplete: (padId: string, targetPlanetId: string) => void;
 }
 
 export function PlanetPreview({
@@ -37,6 +41,9 @@ export function PlanetPreview({
   onPreviewSpawnChange,
   onPerformanceStats,
   onPlanetSelected,
+  onBlastPadsChange,
+  onBlastPadSelectionChange,
+  onBlastPadPickTargetComplete,
 }: PlanetPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,6 +69,9 @@ export function PlanetPreview({
       onPreviewSpawnChange,
       onPerformanceStats,
       onPlanetSelected,
+      onBlastPadsChange,
+      onBlastPadSelectionChange,
+      onBlastPadPickTargetComplete,
     );
     onScene(scene);
 

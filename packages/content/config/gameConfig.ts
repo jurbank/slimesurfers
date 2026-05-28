@@ -111,6 +111,9 @@ export const GAME_CONFIG = {
     deathBurstStampCount: 9,
     deathBurstSpreadRadius: 1.4,
     deathBurstRadiusMultiplier: 3.4,
+    /** Charge added to a blast pad's coverage per well-centered stamp landing inside
+     *  the pad footprint. ~3 hits charge a pad fully; edge hits contribute less. */
+    blastPadChargePerStamp: 0.34,
     projectileStampRadiusMultiplier: 1,
     collisionAlphaThreshold: 0.2,
     maxVisualStampsPerPlanet: 1024,
@@ -211,6 +214,18 @@ export const GAME_CONFIG = {
     waterSkiAccelerationMultiplier: 1.5,
     waterSkiFriction: 0.9,
     waterSkiLateralDrag: 4.0,
+    planetHopLaunchDurationSeconds: 0.35,
+    planetHopSteeringDegrees: 45,
+    planetHopAssistAcceleration: 34,
+    planetHopMaxDurationSeconds: 6,
+    planetHopLandingCaptureDistance: 42,
+    planetHopLandingSpeedRetention: 0.68,
+    /** Radius (world units) around a planet-hop landing that splats nearby enemies. */
+    planetHopLandingKillRadius: 14,
+    /** Player is pinned at the landing point (no input movement, zero vel) for this long
+     *  after a planet-hop splat — lines up with the landing squash animation so the
+     *  player visibly compresses into the surface before popping back up. */
+    planetHopLandingSplatCooldownMs: 500,
   },
 
   // -- Terrain ---------------------------------------------------------------

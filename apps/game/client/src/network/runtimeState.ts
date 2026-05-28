@@ -1,9 +1,14 @@
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { DEFAULT_WEAPON_ID } from "@splat/content/combat/weaponDefs.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
+import type { RuntimeBlastPad } from "@splat/content/map/runtimeMapData.ts";
 import type { InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import type { WeaponId } from "@splat/protocol/network/weaponIds.ts";
-import type { MapDataMessage, PlayerSnapshot } from "@splat/protocol/network/serverMessages.ts";
+import type {
+  BlastPadStateSnapshot,
+  MapDataMessage,
+  PlayerSnapshot,
+} from "@splat/protocol/network/serverMessages.ts";
 import {
   stepPlayer,
   type PlanetData,
@@ -12,7 +17,8 @@ import {
 } from "@splat/simulation/movement/simulatedMovement.ts";
 import { buildComputedRail, type ComputedRail } from "@splat/simulation/movement/railSpline.ts";
 import { createTerrainConfig } from "@splat/simulation/terrain/planetTerrain.ts";
-import type { SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
+import type { SimBlastPadState, SimPlanetSlimeState } from "@splat/simulation/match/simState.ts";
+import { NO_SLIME_GROUP_ID } from "@splat/protocol/schemas/slimedState.ts";
 
 const MAX_PENDING_INPUTS = 60;
 
@@ -60,6 +66,11 @@ function cloneRuntimeState(state: RuntimePlayerState): RuntimePlayerState {
     lastGrindT: state.lastGrindT,
     grindSpeed: state.grindSpeed,
     grindCooldownMs: state.grindCooldownMs,
+    planetHopSourcePlanetId: state.planetHopSourcePlanetId ?? "",
+    planetHopTargetPlanetId: state.planetHopTargetPlanetId ?? "",
+    planetHopLandingNormal: cloneVec3(state.planetHopLandingNormal ?? { x: 0, y: 1, z: 0 }),
+    planetHopElapsedMs: state.planetHopElapsedMs ?? 0,
+    splatCooldownMs: state.splatCooldownMs ?? 0,
     isShooting: state.isShooting,
     equippedWeaponId: state.equippedWeaponId,
     disposableShotsRemaining: state.disposableShotsRemaining,
@@ -94,6 +105,11 @@ export function snapshotToRuntimeState(snapshot: PlayerSnapshot): RuntimePlayerS
     lastGrindT: snapshot.lastGrindT,
     grindSpeed: snapshot.grindSpeed,
     grindCooldownMs: snapshot.grindCooldownMs,
+    planetHopSourcePlanetId: snapshot.planetHopSourcePlanetId ?? "",
+    planetHopTargetPlanetId: snapshot.planetHopTargetPlanetId ?? "",
+    planetHopLandingNormal: cloneVec3(snapshot.planetHopLandingNormal ?? { x: 0, y: 1, z: 0 }),
+    planetHopElapsedMs: snapshot.planetHopElapsedMs ?? 0,
+    splatCooldownMs: snapshot.splatCooldownMs ?? 0,
     isShooting: snapshot.isShooting,
     equippedWeaponId: snapshot.equippedWeaponId ?? DEFAULT_WEAPON_ID,
     disposableShotsRemaining: snapshot.disposableShotsRemaining ?? 0,
@@ -141,6 +157,11 @@ function interpolateState(
     lastGrindT: lerp(older.lastGrindT, newer.lastGrindT, t),
     grindSpeed: lerp(older.grindSpeed, newer.grindSpeed, t),
     grindCooldownMs: newer.grindCooldownMs,
+    planetHopSourcePlanetId: newer.planetHopSourcePlanetId ?? "",
+    planetHopTargetPlanetId: newer.planetHopTargetPlanetId ?? "",
+    planetHopLandingNormal: cloneVec3(newer.planetHopLandingNormal ?? { x: 0, y: 1, z: 0 }),
+    planetHopElapsedMs: lerp(older.planetHopElapsedMs ?? 0, newer.planetHopElapsedMs ?? 0, t),
+    splatCooldownMs: newer.splatCooldownMs ?? 0,
     isShooting: newer.isShooting,
     equippedWeaponId: newer.equippedWeaponId,
     disposableShotsRemaining: newer.disposableShotsRemaining,
@@ -162,13 +183,26 @@ export class ClientRuntimeState {
   private readonly stepCfgs = new Map<string, StepConfig>();
   private planets: PlanetData[] = [];
   private computedRails: ComputedRail[] = [];
+  private blastPads: readonly RuntimeBlastPad[] = [];
+  private readonly blastPadStates = new Map<string, SimBlastPadState>();
 
   setMapData(msg: MapDataMessage): void {
     this.planets = msg.planets.map((p) => ({
       id: p.id,
       center: { x: p.center.x, y: p.center.y, z: p.center.z },
       radius: p.radius,
+      gravityRadius: p.gravityRadius,
+      captureRadius: p.captureRadius,
     }));
+    this.blastPads = msg.blastPads ?? [];
+    this.blastPadStates.clear();
+    for (const pad of this.blastPads) {
+      this.blastPadStates.set(pad.id, {
+        ownerSlimeGroupId: NO_SLIME_GROUP_ID,
+        ownerColor: 0,
+        coverageProgress: 0,
+      });
+    }
     this.computedRails = msg.rails.map((def) => {
       const planet = msg.planets.find((p) => p.id === def.planetId) ?? msg.planets[0]!;
       return buildComputedRail(def, planet.center, createTerrainConfig(planet));
@@ -207,6 +241,28 @@ export class ClientRuntimeState {
     this.remoteSnapshots.clear();
   }
 
+  applyBlastPadStates(states: readonly BlastPadStateSnapshot[] | undefined): void {
+    if (!states) return;
+    for (const incoming of states) {
+      const local = this.blastPadStates.get(incoming.id);
+      if (local) {
+        local.ownerSlimeGroupId = incoming.ownerSlimeGroupId;
+        local.ownerColor = incoming.ownerColor;
+        local.coverageProgress = incoming.coverageProgress;
+      } else {
+        this.blastPadStates.set(incoming.id, {
+          ownerSlimeGroupId: incoming.ownerSlimeGroupId,
+          ownerColor: incoming.ownerColor,
+          coverageProgress: incoming.coverageProgress,
+        });
+      }
+    }
+  }
+
+  getBlastPadStates(): ReadonlyMap<string, SimBlastPadState> {
+    return this.blastPadStates;
+  }
+
   recordLocalInput(input: InputMessage, planetSlime: Map<string, SimPlanetSlimeState>): void {
     if (!this.localPlayer) return;
     this.pendingInputs.push(input);
@@ -221,6 +277,8 @@ export class ClientRuntimeState {
       this.getStepConfig(this.localPlayer.planetId),
       planetSlime,
       this.computedRails,
+      this.blastPads,
+      this.blastPadStates,
     );
   }
 
@@ -296,6 +354,7 @@ export class ClientRuntimeState {
         this.getStepConfig(this.localPlayer.planetId),
         planetSlime,
         this.computedRails,
+        this.blastPads,
       );
     }
   }

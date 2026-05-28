@@ -6,7 +6,7 @@ export type LayerSelection =
   | {
       kind: "planet";
       planetId: string;
-      panel: "planet" | "terrain" | "props" | "rails" | "atmosphere" | "lighting";
+      panel: "planet" | "terrain" | "props" | "rails" | "blastPads" | "atmosphere" | "lighting";
     };
 
 export function getLayerTitle(layer: LayerSelection): string {
@@ -16,6 +16,7 @@ export function getLayerTitle(layer: LayerSelection): string {
   if (layer.panel === "planet") return "Planet";
   if (layer.panel === "atmosphere") return "Atmosphere";
   if (layer.panel === "rails") return "Rails";
+  if (layer.panel === "blastPads") return "Blast Pads";
   return layer.panel[0].toUpperCase() + layer.panel.slice(1);
 }
 
@@ -150,6 +151,18 @@ export function LayerNavigator({
                   depth={1}
                   onClick={() =>
                     onSelectLayer({ kind: "planet", planetId: planet.id, panel: "rails" })
+                  }
+                />
+                <LayerButton
+                  label="Blast Pads"
+                  active={isLayerSelected(selectedLayer, {
+                    kind: "planet",
+                    planetId: planet.id,
+                    panel: "blastPads",
+                  })}
+                  depth={1}
+                  onClick={() =>
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "blastPads" })
                   }
                 />
                 <LayerGroupButton

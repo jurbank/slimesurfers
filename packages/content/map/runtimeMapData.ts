@@ -94,6 +94,21 @@ export interface RuntimeTerrainJumpFeature {
 
 export type RuntimeTerrainFeature = RuntimeTerrainSlopeFeature | RuntimeTerrainJumpFeature;
 
+export interface RuntimeBlastPad {
+  id: string;
+  planetId: string;
+  normal: { x: number; y: number; z: number };
+  tangent: { x: number; y: number; z: number };
+  targetPlanetId: string;
+  targetNormal: { x: number; y: number; z: number };
+  radius: number;
+  /** @deprecated Per-player cooldown was replaced by slime-charge ownership; ignored. */
+  cooldownMs?: number;
+  launchSpeed: number;
+  upwardBias: number;
+  cameraProfile: "planetHop";
+}
+
 export interface RuntimeMapCel {
   bands: number;
   softness: number;
@@ -105,6 +120,8 @@ export interface RuntimeMapPlanet {
   id: string;
   center: { x: number; y: number; z: number };
   radius: number;
+  gravityRadius?: number;
+  captureRadius?: number;
   terrain: RuntimeMapTerrain;
   colors: RuntimeMapColors;
   atmosphere: RuntimeMapAtmosphere;
@@ -121,6 +138,7 @@ export interface RuntimeMapData {
   planets: RuntimeMapPlanet[];
   cel: RuntimeMapCel;
   rails: RailDef[];
+  blastPads?: RuntimeBlastPad[];
   spawns: Record<string, SpawnPolicy>;
 }
 
@@ -273,6 +291,34 @@ function validateUnitNormal(
     errors.push({
       field,
       message: `normal length ${len.toFixed(4)} deviates from 1 by more than 0.01`,
+    });
+  }
+}
+
+function validateUnitVec3(
+  value: Record<string, unknown>,
+  field: string,
+  errors: ValidationError[],
+): void {
+  const x = value.x;
+  const y = value.y;
+  const z = value.z;
+  if (
+    typeof x !== "number" ||
+    typeof y !== "number" ||
+    typeof z !== "number" ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(z)
+  ) {
+    errors.push({ field, message: "x/y/z must be finite numbers" });
+    return;
+  }
+  const len = Math.sqrt(x * x + y * y + z * z);
+  if (Math.abs(len - 1) > 0.01) {
+    errors.push({
+      field,
+      message: `vector length ${len.toFixed(4)} deviates from 1 by more than 0.01`,
     });
   }
 }
@@ -478,6 +524,10 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
       if (typeof p.radius !== "number" || p.radius <= 0 || !Number.isFinite(p.radius)) {
         errors.push({ field: `planets[${i}].radius`, message: "must be a positive finite number" });
       }
+      if ("gravityRadius" in p)
+        validatePositiveNumber(p.gravityRadius, `planets[${i}].gravityRadius`, errors);
+      if ("captureRadius" in p)
+        validatePositiveNumber(p.captureRadius, `planets[${i}].captureRadius`, errors);
       const center = p.center as Record<string, unknown> | null | undefined;
       if (typeof center !== "object" || center === null) {
         errors.push({ field: `planets[${i}].center`, message: "must be an object" });
@@ -547,6 +597,16 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
     }
   }
 
+  if ("blastPads" in m) {
+    if (!Array.isArray(m.blastPads)) {
+      errors.push({ field: "blastPads", message: "must be an array" });
+    } else {
+      for (let i = 0; i < m.blastPads.length; i++) {
+        validateBlastPad(m.blastPads[i], `blastPads[${i}]`, planetIds, errors);
+      }
+    }
+  }
+
   if (typeof m.spawns !== "object" || m.spawns === null) {
     errors.push({ field: "spawns", message: "must be an object" });
   } else {
@@ -589,6 +649,52 @@ export function validateRuntimeMapData(map: unknown): ValidationResult {
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+function validateBlastPad(
+  pad: unknown,
+  field: string,
+  planetIds: Set<string>,
+  errors: ValidationError[],
+): void {
+  if (typeof pad !== "object" || pad === null) {
+    errors.push({ field, message: "must be an object" });
+    return;
+  }
+  const p = pad as Record<string, unknown>;
+  if (typeof p.id !== "string" || p.id.trim() === "") {
+    errors.push({ field: `${field}.id`, message: "must be a non-empty string" });
+  }
+  for (const key of ["planetId", "targetPlanetId"] as const) {
+    if (typeof p[key] !== "string" || p[key].trim() === "") {
+      errors.push({ field: `${field}.${key}`, message: "must be a non-empty string" });
+    } else if (planetIds.size > 0 && !planetIds.has(p[key])) {
+      errors.push({ field: `${field}.${key}`, message: `references unknown planet "${p[key]}"` });
+    }
+  }
+  for (const key of ["normal", "tangent", "targetNormal"] as const) {
+    const value = p[key];
+    if (typeof value !== "object" || value === null) {
+      errors.push({ field: `${field}.${key}`, message: "must be an object" });
+      continue;
+    }
+    const vec = value as Record<string, unknown>;
+    for (const axis of ["x", "y", "z"]) {
+      if (typeof vec[axis] !== "number" || !Number.isFinite(vec[axis] as number)) {
+        errors.push({ field: `${field}.${key}.${axis}`, message: "must be a finite number" });
+      }
+    }
+    validateUnitVec3(vec, `${field}.${key}`, errors);
+  }
+  validatePositiveNumber(p.radius, `${field}.radius`, errors);
+  if (p.cooldownMs !== undefined) {
+    validatePositiveNumber(p.cooldownMs, `${field}.cooldownMs`, errors);
+  }
+  validatePositiveNumber(p.launchSpeed, `${field}.launchSpeed`, errors);
+  validateFiniteNumber(p.upwardBias, `${field}.upwardBias`, errors);
+  if (p.cameraProfile !== "planetHop") {
+    errors.push({ field: `${field}.cameraProfile`, message: 'must be "planetHop"' });
+  }
 }
 
 function validateSpawnAnchor(
@@ -696,9 +802,69 @@ export const DEV_MAP: RuntimeMapData = {
       props: DEFAULT_RUNTIME_PLANET_PROPS,
       hasWater: true,
     },
+    {
+      id: "planet-1",
+      center: { x: 280, y: 35, z: 20 },
+      radius: DEFAULT_RUNTIME_PLANET_RADIUS,
+      terrain: { ...DEFAULT_RUNTIME_PLANET_TERRAIN, seed: 84 },
+      colors: {
+        sand: 0xf6d28b,
+        grass: 0x7bd96b,
+        rock: 0x7d8290,
+        snow: 0xf4fbff,
+        waterDeep: 0x265fd9,
+      },
+      atmosphere: { ...DEFAULT_RUNTIME_PLANET_ATMOSPHERE, color: 0x89ffcf },
+      lighting: DEFAULT_RUNTIME_PLANET_LIGHTING,
+      props: { ...DEFAULT_RUNTIME_PLANET_PROPS, seed: 6789 },
+      hasWater: true,
+    },
   ],
   cel: DEFAULT_RUNTIME_CEL,
   rails: RAIL_DEFS,
+  blastPads: [
+    {
+      id: "dev-blast-pad-north",
+      planetId: "planet-0",
+      normal: { x: 0.07, y: 0.998, z: 0 },
+      tangent: { x: 0.998, y: -0.07, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -0.92, y: -0.12, z: -0.37 },
+      radius: 5,
+      cooldownMs: 1500,
+      launchSpeed: 78,
+      upwardBias: 0.45,
+      cameraProfile: "planetHop",
+    },
+    {
+      id: "dev-blast-pad-ffa-ring",
+      planetId: "planet-0",
+      // Previous normal (0.462, 0.887, 0) sat in a terrain depression below water level.
+      // Moved to the same latitude (~28° from pole) at +z longitude where terrain is
+      // consistently above water (minH ~7 wu vs waterLevel -3).
+      normal: { x: 0, y: 0.883, z: 0.469 },
+      tangent: { x: 1, y: 0, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -0.92, y: -0.12, z: -0.37 },
+      radius: 5,
+      launchSpeed: 78,
+      upwardBias: 0.45,
+      cameraProfile: "planetHop",
+    },
+    {
+      id: "dev-blast-pad-autojoin-human",
+      planetId: "planet-1",
+      normal: { x: -0.329, y: 0.884, z: 0.332 },
+      tangent: { x: -0.977, y: -0.2, z: -0.075 },
+      targetPlanetId: "planet-0",
+      targetNormal: { x: 1, y: 0, z: 0 },
+      radius: 5,
+      cooldownMs: 1500,
+      launchSpeed: 78,
+      upwardBias: 0.45,
+      cameraProfile: "planetHop",
+    },
+  ],
   spawns: {
     ffa: { kind: "ffa-spread" },
     teams: {

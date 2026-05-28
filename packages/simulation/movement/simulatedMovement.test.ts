@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { stepPlayer, type PlanetData, type PlayerPhysics } from "./simulatedMovement.ts";
+import { NO_SLIME_GROUP_ID } from "@splat/protocol/schemas/slimedState.ts";
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import {
   PlayerMovementState,
@@ -213,6 +214,8 @@ describe("stepPlayer", () => {
       TEST_CONFIG,
       EMPTY_SLIME,
       [],
+      [],
+      new Map(),
       raisedTerrain,
     );
 
@@ -699,5 +702,263 @@ describe("stepPlayer", () => {
     );
     expect(player.planetId).toBe("planet-0");
     expect(distFromCenter).toBeCloseTo(waterRadius + TEST_CONFIG.movement.standingHeight, 3);
+  });
+
+  it("triggers a blast pad into planet-hop flight when the pad is charged in the player's color", () => {
+    const player = createPlayer();
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+      cameraProfile: "planetHop" as const,
+    };
+    const padStates = new Map([
+      ["test-pad", { ownerSlimeGroupId: player.slimeGroupId, ownerColor: 0xff00ff, coverageProgress: 1 }],
+    ]);
+
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+
+    expect(player.planetId).toBe("");
+    expect(player.movementState).toBe(PlayerMovementState.BlastLaunch);
+    expect(player.planetHopTargetPlanetId).toBe("planet-1");
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeGreaterThan(50);
+    // Charge is consumed on use: coverage drops to 0 and ownership clears.
+    expect(padStates.get("test-pad")?.ownerSlimeGroupId).toBe(NO_SLIME_GROUP_ID);
+    expect(padStates.get("test-pad")?.ownerColor).toBe(0);
+    expect(padStates.get("test-pad")?.coverageProgress).toBe(0);
+  });
+
+  it("does not trigger a neutral or enemy-owned blast pad", () => {
+    const player = createPlayer();
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+      cameraProfile: "planetHop" as const,
+    };
+    // Neutral pad — no charge, no launch.
+    const neutralStates = new Map([
+      ["test-pad", { ownerSlimeGroupId: NO_SLIME_GROUP_ID, ownerColor: 0, coverageProgress: 0 }],
+    ]);
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      neutralStates,
+    );
+    expect(player.movementState).not.toBe(PlayerMovementState.BlastLaunch);
+    expect(player.planetId).toBe("planet-0");
+
+    // Enemy-charged pad — different slime group, no launch.
+    const enemyStates = new Map([
+      [
+        "test-pad",
+        { ownerSlimeGroupId: player.slimeGroupId + 1, ownerColor: 0x00ff00, coverageProgress: 1 },
+      ],
+    ]);
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      enemyStates,
+    );
+    expect(player.movementState).not.toBe(PlayerMovementState.BlastLaunch);
+    expect(player.planetId).toBe("planet-0");
+  });
+
+  it("does not trigger a partially-charged blast pad until coverage reaches 1", () => {
+    const player = createPlayer();
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+      cameraProfile: "planetHop" as const,
+    };
+    // Friendly ownership but only 60% covered — pad should refuse to fire.
+    const partialStates = new Map([
+      [
+        "test-pad",
+        { ownerSlimeGroupId: player.slimeGroupId, ownerColor: 0xff00ff, coverageProgress: 0.6 },
+      ],
+    ]);
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      partialStates,
+    );
+    expect(player.movementState).not.toBe(PlayerMovementState.BlastLaunch);
+    expect(player.planetId).toBe("planet-0");
+    // Coverage isn't touched by a failed trigger attempt.
+    expect(partialStates.get("test-pad")?.coverageProgress).toBe(0.6);
+  });
+
+  it("steers planet-hop landing normal during free flight", () => {
+    const player = createPlayer();
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      targetPlanetId: "planet-1",
+      targetNormal: { x: -1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+      cameraProfile: "planetHop" as const,
+    };
+    const padStates = new Map([
+      ["test-pad", { ownerSlimeGroupId: player.slimeGroupId, ownerColor: 0xff00ff, coverageProgress: 1 }],
+    ]);
+
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+    for (let i = 0; i < 12; i++) {
+      stepPlayer(
+        player,
+        { ...createInput(0), seq: i + 2, aimDir: { x: 0, y: 1, z: 0 } },
+        0.05,
+        blastPlanets,
+        TEST_CONFIG,
+        EMPTY_SLIME,
+        [],
+        [pad],
+        padStates,
+      );
+    }
+
+    expect(player.planetHopLandingNormal?.y ?? 0).toBeGreaterThan(0.05);
+  });
+
+  it("recovers generic airborne players toward the nearest planet beyond the gravity zone", () => {
+    // Generic airborne (jumps, rail launches) is always bound to a planet so the player
+    // never drifts off into space. The force-free void is reserved for guided planet hops,
+    // which run through stepPlanetHop and never reach stepAirborne.
+    const player = createPlayer();
+    const planet = { ...TEST_PLANETS[0]!, gravityRadius: 120 };
+    player.planetId = "";
+    player.movementState = PlayerMovementState.Airborne;
+    player.pos = { x: planet.center.x + 300, y: planet.center.y, z: planet.center.z };
+    player.vel = { x: 0, y: 0, z: 12 };
+
+    stepPlayer(player, createInput(0), 0.1, [planet], TEST_CONFIG, EMPTY_SLIME);
+
+    expect(player.vel.x).toBeLessThan(0);
+    expect(player.movementState).toBe(PlayerMovementState.Airborne);
+  });
+
+  it("zeroes velocity and pins the player at the surface for the splat cooldown after a hop landing", () => {
+    const player = createPlayer();
+    const planet = TEST_PLANETS[0]!;
+    // Place the lander right above the surface, diving inward in LandingApproach state.
+    const surfaceRadius = getTerrainRadius(0, 1, 0, TEST_CONFIG);
+    const standing = TEST_CONFIG.movement.standingHeight;
+    player.planetId = planet.id;
+    player.movementState = PlayerMovementState.LandingApproach;
+    player.planetHopSourcePlanetId = "planet-0";
+    player.planetHopTargetPlanetId = "planet-0";
+    player.planetHopLandingNormal = { x: 0, y: 1, z: 0 };
+    player.pos = {
+      x: planet.center.x,
+      y: planet.center.y + surfaceRadius + standing + 0.3,
+      z: planet.center.z,
+    };
+    player.vel = { x: 0, y: -30, z: 0 };
+
+    // Landing tick: stepPlanetHop's landing block fires.
+    stepPlayer(player, createInput(0), 0.05, [planet], TEST_CONFIG, EMPTY_SLIME);
+
+    expect(player.planetId).toBe(planet.id);
+    expect(player.movementState).toBe(PlayerMovementState.Idle);
+    expect(player.vel.x).toBe(0);
+    expect(player.vel.y).toBe(0);
+    expect(player.vel.z).toBe(0);
+    expect((player.splatCooldownMs ?? 0) > 0).toBe(true);
+
+    // While cooldown is active, holding Forward must not move the player.
+    const cooldownStart = player.splatCooldownMs ?? 0;
+    stepPlayer(player, createInput(InputKey.Forward), 0.05, [planet], TEST_CONFIG, EMPTY_SLIME);
+    expect(player.vel.x).toBe(0);
+    expect(player.vel.y).toBe(0);
+    expect(player.vel.z).toBe(0);
+    expect(player.splatCooldownMs ?? 0).toBeLessThan(cooldownStart);
+
+    // Burn the rest of the cooldown.
+    while ((player.splatCooldownMs ?? 0) > 0) {
+      stepPlayer(player, createInput(0), 0.05, [planet], TEST_CONFIG, EMPTY_SLIME);
+    }
+
+    // After the cooldown, Forward input takes effect again.
+    stepPlayer(player, createInput(InputKey.Forward), 0.05, [planet], TEST_CONFIG, EMPTY_SLIME);
+    const speedAfter = Math.hypot(player.vel.x, player.vel.y, player.vel.z);
+    expect(speedAfter).toBeGreaterThan(0);
   });
 });

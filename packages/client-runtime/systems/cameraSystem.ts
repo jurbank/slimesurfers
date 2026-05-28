@@ -26,6 +26,7 @@ export class CameraSystem {
 
   private readonly _playerPos = new THREE.Vector3();
   private readonly _playerUp = new THREE.Vector3();
+  private readonly _targetPlayerUp = new THREE.Vector3();
   private readonly _camForward = new THREE.Vector3();
   private readonly _right = new THREE.Vector3();
   private readonly _arm = new THREE.Vector3();
@@ -38,6 +39,7 @@ export class CameraSystem {
   private _landingDip = 0;
   private _wasAirborne = false;
   private _fovScale = 1.0;
+  private _planetHopBlend = 0;
 
   constructor(options: CameraSystemOptions = {}) {
     this.camera = options.camera ?? this.createDefaultCamera();
@@ -70,9 +72,17 @@ export class CameraSystem {
     nearestPlanetCenter: THREE.Vector3,
     isAirborne: boolean,
     dt: number,
+    planetHop = false,
   ): { x: number; y: number; z: number } {
     this._playerPos.set(playerPos.x, playerPos.y, playerPos.z);
-    this._playerUp.subVectors(this._playerPos, nearestPlanetCenter).normalize();
+    this._targetPlayerUp.subVectors(this._playerPos, nearestPlanetCenter).normalize();
+    if (this._playerUp.lengthSq() < 0.01) {
+      this._playerUp.copy(this._targetPlayerUp);
+    } else {
+      this._playerUp
+        .lerp(this._targetPlayerUp, Math.min(1, dt * (planetHop ? 2.2 : 10)))
+        .normalize();
+    }
 
     this._camForward.set(yawForward.x, yawForward.y, yawForward.z).normalize();
     if (this._camForward.lengthSq() < 0.01) {
@@ -104,13 +114,20 @@ export class CameraSystem {
     this._wasAirborne = isAirborne;
     this._landingDip *= Math.max(0, 1 - dt * 9);
 
+    this._planetHopBlend +=
+      ((planetHop ? 1 : 0) - this._planetHopBlend) * Math.min(1, dt * (planetHop ? 4 : 2.5));
+
     const targetFov =
-      (BASE_FOV + Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN)) * this._fovScale;
+      (BASE_FOV +
+        Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN) +
+        this._planetHopBlend * 14) *
+      this._fovScale;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
     this.camera.updateProjectionMatrix();
 
-    const dynamicBack = CAMERA_BACK + this._smoothSpeed * PULL_BACK_RATE;
-    const dynamicUp = CAMERA_UP - this._landingDip;
+    const dynamicBack =
+      CAMERA_BACK + this._smoothSpeed * PULL_BACK_RATE + this._planetHopBlend * 22;
+    const dynamicUp = CAMERA_UP - this._landingDip + this._planetHopBlend * 10;
 
     this._arm
       .copy(this._camForward)
@@ -163,7 +180,10 @@ export class CameraSystem {
       this.camera.up.applyAxisAngle(this._camForward, bankAngle);
     }
 
-    this._lookAt.copy(this._playerPos).addScaledVector(this._playerUp, 3);
+    this._lookAt
+      .copy(this._playerPos)
+      .addScaledVector(this._playerUp, 3 + this._planetHopBlend * 5)
+      .addScaledVector(this._camForward, this._planetHopBlend * 18);
     this.camera.lookAt(this._lookAt);
 
     this._cameraWorldForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);

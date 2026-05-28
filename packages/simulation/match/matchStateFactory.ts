@@ -22,6 +22,8 @@ export function buildPlanets(map: RuntimeMapData): PlanetData[] {
     id: p.id,
     center: { x: p.center.x, y: p.center.y, z: p.center.z },
     radius: p.radius,
+    gravityRadius: p.gravityRadius,
+    captureRadius: p.captureRadius,
   }));
 }
 
@@ -134,6 +136,7 @@ export function createSimMatchState(
         },
       ]),
     ),
+    blastPadStates: new Map(),
     projectiles: new Map(),
     pickups: createWeaponPickups(pickupCfg, weaponPickupLayout, planetDefs),
     healthPickups: createHealthPickups(pickupCfg, planetDefs),

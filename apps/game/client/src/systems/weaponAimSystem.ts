@@ -44,8 +44,8 @@ export interface WeaponFireOutput {
 }
 
 export class WeaponAimSystem {
-  private planetEntries: { center: THREE.Vector3; terrainCfg: TerrainConfig }[] = [
-    { center: new THREE.Vector3(), terrainCfg: GAME_CONFIG },
+  private planetEntries: { id: string; center: THREE.Vector3; terrainCfg: TerrainConfig }[] = [
+    { id: "planet-0", center: new THREE.Vector3(), terrainCfg: GAME_CONFIG },
   ];
   private lastAimDir: { x: number; y: number; z: number } = { x: 0, y: 0, z: 1 };
   private fireHoldStartMs: number | null = null;
@@ -66,9 +66,15 @@ export class WeaponAimSystem {
 
   setMapData(msg: MapDataMessage): void {
     this.planetEntries = msg.planets.map((p) => ({
+      id: p.id,
       center: new THREE.Vector3(p.center.x, p.center.y, p.center.z),
       terrainCfg: createTerrainConfig(p),
     }));
+  }
+
+  planetCenter(planetId: string | undefined): THREE.Vector3 | null {
+    if (!planetId) return null;
+    return this.planetEntries.find((entry) => entry.id === planetId)?.center ?? null;
   }
 
   nearestPlanetCenter(pos: THREE.Vector3): THREE.Vector3 {
@@ -76,6 +82,7 @@ export class WeaponAimSystem {
   }
 
   private findNearestPlanetEntry(pos: THREE.Vector3): {
+    id: string;
     center: THREE.Vector3;
     terrainCfg: TerrainConfig;
   } {

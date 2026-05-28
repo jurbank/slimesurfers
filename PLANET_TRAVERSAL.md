@@ -1,316 +1,430 @@
 # Planet Traversal
 
-## Direction
+This document is scoped to the first playable interplanetary traversal milestone. Broader route networks, editor tools, and additional traversal types can build from this blast pad implementation once the core launch, flight, camera, and landing feel are proven.
 
-Slime Surfers can treat planets as rideable hubs connected by traversal setpieces. A player should be able to surf around a planet, hit a launcher, space rail, boost gate, or portal, travel through an orbital route, and land on another planet without the map feeling like separate disconnected levels.
+## First Playable: Blast Pad Planet Hop
 
-The strongest reference is Sonic Frontiers-style traversal readability mixed with Mario Galaxy-like planet hopping and snowboard/surf flow. The goal is not to copy floating obstacle courses exactly, but to make large traversal lines visible, fun, and planet-native.
+### Goal
 
-## Core Fantasy
+Add a flat launch pad near the player spawn that blasts the player off the current planet and toward the adjacent planet. The route should be playable, steerable, and cinematic instead of a teleport. The player should feel like they are diving from the Fortnite bus: committed to the route, moving very fast, but still able to influence the landing area.
 
-- Ride terrain, rails, jumps, banks, bowls, and surfable paths on each planet.
-- Use interplanetary structures to move between planets.
-- Make space travel playable instead of a loading transition.
-- Let authors build a small solar playground with routes, landings, challenges, and shortcuts.
+Success criteria:
 
-## Traversal Building Blocks
+- A pad is visible and readable near the default spawn.
+- Stepping onto the pad triggers a server-authoritative launch.
+- The launch arc reaches the adjacent planet under normal steering.
+- The player can steer in flight to pick a landing zone.
+- Camera transitions blend smoothly from surface follow, to launch reveal, to high-speed flight, to landing follow.
+- The route feels fast through FOV, camera offset, roll/bank, wind streaks, audio, and speed lines without hiding gameplay.
 
-### Surface Structures
+### Blast Pad Behavior
 
-These live on or near a planet surface.
+The first pad should be a flat authored structure snapped to the source planet surface.
 
-- Boost pads
-- Launch ramps
-- Quarter pipes
-- Half-pipe sections
-- Rails and curved rails
-- Wall-ride panels
-- Bounce pads
-- Hoop or ring gates
-- Landing pads
-- Bowls and banked turns
-- Slime geysers or launch fountains
-
-Each structure should have one of three roles:
-
-- Flow: keeps the player moving or accelerates them into a route.
-- Trick: creates airtime, grind time, wall rides, flips, or risky landings.
-- Readability: tells the player where a fun path is.
-
-### Space Routes
-
-These connect planets.
-
-- Space rails that arc from one planet to another
-- Launcher-to-landing jump arcs
-- Portal rings
-- Boost tunnels
-- Free-flight corridors
-- Gravity slingshot paths
-- Rail cannons
-
-Space routes should feel authored and readable from far away. They can be decorated with rings, lights, signs, boost markers, floating platforms, and checkpoint buoys.
-
-### Landing Zones
-
-Interplanetary travel needs safe and satisfying landings.
-
-- Snow banks
-- Slime pools
-- Curved catch ramps
-- Rail catches
-- Bowls
-- Flat pads
-- Portal exits
-
-The editor should warn when a landing is too steep, blocked, underwater, or aimed into bad terrain.
-
-## Editor Tools
-
-### Planet Network View
-
-A zoomed-out editor mode for multi-planet layout.
-
-- Show planets as large nodes in 3D space.
-- Show space routes as edges.
-- Select a planet to edit local surface features.
-- Select a route to edit its launch point, control points, travel type, target, and landing.
-- Show route direction arrows and estimated travel time.
-
-### Traversal Structures Tool
-
-A placement tool for rideable modules.
-
-Initial prefabs:
-
-- Boost pad
-- Hoop or gate
-- Launch ramp
-- Flat rail
-- Curved rail
-- Platform
-- Landing pad
-
-Controls:
-
-- Surface snap
-- Height offset
-- Rotation around surface normal
-- Scale
-- Direction handle
-- Optional terrain conforming
-
-### Space Route Tool
-
-A tool for authoring interplanetary travel.
-
-Route kinds:
-
-- Rail
-- Launcher
-- Portal
-- Boost tunnel
-- Free-flight corridor
-
-Authoring flow:
-
-1. Pick source planet and surface point.
-2. Pick destination planet and landing point.
-3. Choose route kind.
-4. Adjust control points in space.
-5. Preview travel direction and landing.
-6. Validate reachability and landing quality.
-
-### Park Presets
-
-Fast ways to make a planet fun.
-
-- Rail garden
-- Big-air line
-- Beginner slope
-- Bowl cluster
-- Sky rail spiral
-- Planet ring road
-- Jump hoop line
-- Floating island chain
-- Boost canyon
-
-Presets should remain editable after placement.
-
-### Playtest Overlay
-
-During editor preview, record and visualize:
-
-- Player path
-- Speed
-- Airtime
-- Rail contact
-- Landing impact
-- Missed route attempts
-- Frequently used areas
-
-This helps authors tune flow without guessing.
-
-## Runtime Map Shape
-
-The current runtime map already supports multiple planets, rails, spawns, and terrain features. Interplanetary traversal can be added as a separate layer so local planet rails do not become overloaded.
-
-Example direction:
+Runtime properties:
 
 ```ts
-interface RuntimeSpaceRoute {
+interface RuntimeBlastPad {
   id: string;
-  kind: "rail" | "launcher" | "portal" | "boostTunnel" | "freeFlight";
-  from: {
-    planetId: string;
-    normal: { x: number; y: number; z: number };
-  };
-  to: {
-    planetId: string;
-    normal: { x: number; y: number; z: number };
-  };
-  controlPoints: { x: number; y: number; z: number }[];
-  travelTime?: number;
+  planetId: string;
+  normal: { x: number; y: number; z: number };
+  tangent: { x: number; y: number; z: number };
+  targetPlanetId: string;
+  targetNormal: { x: number; y: number; z: number };
+  radius: number;
+  cooldownMs: number;
+  launchSpeed: number;
+  upwardBias: number;
+  cameraProfile: "planetHop";
 }
 ```
 
+The `normal` anchors the pad to the source planet. The `tangent` points toward the intended exit direction along the surface. The launch vector should blend:
+
+- Surface normal for immediate separation from the planet.
+- Tangent direction for readable forward momentum.
+- Direction toward the target planet or route control point for reliable arrival.
+
+Trigger rules:
+
+- Trigger only when a live player overlaps the pad footprint while grounded on the same planet.
+- Use a short per-player cooldown so a player cannot retrigger every tick.
+- Require server-side overlap detection and launch impulse application.
+- Let the client predict the trigger for responsiveness, then reconcile to the server result.
+
+Initial placement:
+
+- Put one pad flat near the default spawn on `planet-0`.
+- Aim it at the closest adjacent planet.
+- Add a matching landing helper on the target planet: a broad slime/snow catch zone or shallow bowl.
+- Keep the first version explicit and authored instead of deriving every pad from nearest-neighbor planets.
+
+### Flight State
+
+Add a distinct interplanetary flight state rather than treating the launch as generic airborne movement. Generic airborne movement currently pulls toward the nearest planet, which is good for jumps, but interplanetary travel needs a longer guided phase.
+
+Suggested movement states:
+
+- `Surface`: existing planet-bound movement.
+- `BlastLaunch`: brief impulse and camera reveal, about 0.25 to 0.5 seconds.
+- `PlanetHopFlight`: high-speed guided airborne traversal.
+- `LandingApproach`: target planet gravity takes over and landing assist increases.
+- `Surface`: existing landed state on the destination planet.
+
+During `PlanetHopFlight`:
+
+- Preserve high forward speed.
+- Let player input steer the velocity direction within a capped cone.
+- Bias gravity or route assist toward the destination planet so the launch is reliable.
+- Keep enough drift that different landing choices are possible.
+- Disable immediate snapping back to the source planet.
+- Use the nearest relevant target planet for orientation once the player crosses the route midpoint.
+
+Air steering direction should come from camera-relative input:
+
+- Forward input dives toward the aim point.
+- Back input bleeds speed and raises the nose slightly.
+- Left/right input yaws the velocity vector.
+- Anchor or dive input can increase descent toward the destination planet.
+
+### Launch And Landing Tuning
+
+Start with generous assist, then reduce it once the feel is proven.
+
+Recommended initial tuning:
+
+- Launch speed high enough to reach the target in 2.5 to 4.0 seconds.
+- Initial lift clears source planet terrain by a wide margin.
+- Steering cone around 35 to 50 degrees.
+- Mild auto-aim toward a broad destination hemisphere.
+- Strong landing capture only in the final approach zone.
+- Landing impact converts excess downward speed into forward surface velocity instead of stopping the player.
+
+Landing quality rules:
+
+- If the player lands in the authored catch zone, preserve speed and continue surfing.
+- If the player lands outside the ideal zone but on valid terrain, allow it with a heavier impact camera dip.
+- If the player misses the planet, add a soft recovery assist that bends them back toward the destination rather than hard resetting them.
+
+### Smooth Planet Handoff Model
+
+The blast pad should not behave like a raw physics cannon that throws the player into orbit. It should behave like an authored planet-hop route with a smooth source exit, a fast controlled flight segment, and a smooth target capture. The right feel is closer to Mario Galaxy launch stars or a Fortnite drop route than a free orbital simulation.
+
+Recommended model:
+
+- **Keep planet gravity spherical, but limit its influence.**
+  - Planet gravity should remain radial toward the planet center while the player is on or near that planet.
+  - Each planet should have a gravity/capture zone instead of affecting the entire map.
+  - Outside all planet gravity zones, normal airborne movement should not choose a nearest planet by default.
+  - This avoids invisible hard boundaries where two large gravity wells touch.
+
+- **Do not use nearest-planet gravity during the main hop.**
+  - Nearest-planet gravity causes abrupt authority changes when the player crosses the midpoint between planets.
+  - It also makes the camera up vector flip suddenly from source-planet up to target-planet up.
+  - During `PlanetHopFlight`, gravity should be route-controlled, not globally nearest-planet controlled.
+
+- **Use a route guide curve as the primary source of truth.**
+  - Generate a cubic Bezier or Hermite arc from source pad to target landing normal.
+  - The curve should start tangent to the source pad direction and end tangent to the target landing approach.
+  - The player's forward progress moves along this curve at high speed.
+  - Steering adds a bounded offset around the curve, not a fully free orbital trajectory.
+
+- **Blend influence across phases.**
+  - `BlastLaunch`: source planet up and pad tangent dominate.
+  - `SourceExit`: source gravity/up fades out over about 0.4 to 0.8 seconds.
+  - `RouteCruise`: route tangent/up frame dominates; no source or target gravity flip.
+  - `TargetCapture`: target up and landing normal fade in over about 0.8 to 1.2 seconds.
+  - `LandingApproach`: target surface gravity/contact rules take over.
+
+This means the player is not orbiting either planet for most of the hop. They are being carried through a route corridor. That is acceptable because the blast pad is an authored traversal device, not a general spaceflight system.
+
+#### Gravity Recommendation
+
+Use limited spherical planet gravity plus route-guided travel. The goal is to keep Mario Galaxy-style local planet walking without letting distant planets fight over the player.
+
+Planet gravity zones:
+
+- Each planet has an influence radius, likely derived from planet radius.
+- Inside the zone, gravity pulls radially toward that planet center.
+- Outside all zones, generic airborne movement has no planet gravity unless another gameplay system applies it.
+- If zones overlap, the current active planet or active route should win; do not let raw nearest-planet selection decide camera or movement.
+- A target planet capture zone can be larger than its normal gravity zone for authored travel routes.
+
+Use three different gravity behaviors by planet-hop phase:
+
+1. **Source exit**
+   - Apply a short outward push from the source planet.
+   - Fade source gravity to zero quickly.
+   - Prevent snapping back to the source planet while the route is active.
+
+2. **Cruise**
+   - Apply no normal nearest-planet gravity.
+   - Maintain speed along the guide curve.
+   - Let input steer within a cone or corridor around the curve.
+   - Add very mild pull back toward the curve if the player drifts too far.
+
+3. **Target capture**
+   - Fade in target gravity and target up.
+   - Convert route velocity into target-surface-relative approach velocity.
+   - Aim toward a broad landing zone, not a single point.
+   - Preserve useful tangent velocity on contact so landing flows into surfing.
+
+Avoid a hard midpoint switch from source gravity to target gravity. That switch is the main cause of the current abrupt camera/physics flip.
+
+Implementation direction for gravity zones:
+
+```ts
+interface RuntimeMapPlanet {
+  // existing fields...
+  gravityRadius?: number;
+  captureRadius?: number;
+}
+```
+
+If the map omits these values, derive defaults:
+
+- `gravityRadius = radius * 1.8` for normal local airborne gravity.
+- `captureRadius = radius * 2.4` for route/landing capture.
+
+The exact numbers should be tuned, but the key rule is architectural: normal airborne movement asks for a dominant gravity planet inside valid influence zones, not a global nearest planet.
+
+#### Camera Handoff Recommendation
+
+The camera needs its own route frame during planet-hop flight.
+
+- During source exit, camera up should still mostly follow source surface up.
+- During cruise, camera up should be a stable route up vector derived from the guide curve, not nearest planet up.
+- During target capture, camera up should smoothly slerp toward target surface up.
+- The look target should blend from player-forward, to route tangent/look-ahead, to landing zone.
+- FOV and camera distance should peak during cruise, then ease down during target capture.
+- No camera phase should instantly call `lookAt` with a newly flipped up vector.
+
+A good implementation shape is:
+
+```ts
+interface PlanetHopRouteState {
+  sourcePlanetId: string;
+  targetPlanetId: string;
+  progress: number; // 0..1 along route
+  lateralOffset: number;
+  verticalOffset: number;
+  routePos: Vec3Data;
+  routeTangent: Vec3Data;
+  routeUp: Vec3Data;
+  targetUpBlend: number;
+}
+```
+
+The simulation owns progress and route-relative steering. The client camera can derive presentation from the same route state or from snapshot fields that are enough to reconstruct the route frame.
+
+#### Steering Recommendation
+
+Air steering should feel meaningful without letting the player miss by accident.
+
+- Use camera-relative Fortnite-style flight controls, not surface-relative movement controls.
+- The player should steer the body/velocity through the air while the route corridor quietly keeps the hop recoverable.
+- Steering changes the intended landing area within a broad target hemisphere, not just the player pose.
+
+Control feel:
+
+- **Look direction / camera aim**
+  - The camera aim defines the desired flight heading.
+  - The player slowly yaws/pitches toward this heading rather than snapping.
+  - Aim can bias the landing marker on the target planet.
+
+- **Forward input**
+  - Dives along the camera aim direction.
+  - Increases speed and target-capture rate.
+  - Narrows the glide arc, creating a committed fast descent.
+
+- **Backward input**
+  - Raises the nose and slows target capture.
+  - Gives more hang time and a wider correction window.
+  - Should not allow reversing back to the source planet.
+
+- **Left/right input**
+  - Adds lateral drift around the route.
+  - Moves the predicted landing point sideways across the target hemisphere.
+  - Should have enough authority to feel skillful, but the route assist should keep the player inside a recoverable corridor.
+
+- **Anchor/dive input**
+  - Optional fast-dive modifier.
+  - Strongly accelerates target capture once the target planet is visible.
+  - Useful for skilled players who want to land faster and more precisely.
+
+The player should be able to choose where they land on the target side, but first implementation should strongly recover them back into a safe landing if they steer poorly.
+
+Suggested first-pass numbers:
+
+- Lateral steering cone: 35 to 50 degrees from route tangent.
+- Landing hemisphere radius: 25 to 45 surface world units around the authored target normal.
+- Dive speed gain: 15% to 30% above cruise speed.
+- Back/glide speed loss: 10% to 20% below cruise speed.
+- Route correction strength: weak near center, strong near corridor edge.
+- Minimum target capture: always enough to land within 3 to 5 seconds.
+
+Implementation shape:
+
+```ts
+interface PlanetHopSteering {
+  desiredHeading: Vec3Data;
+  lateralOffset: number;
+  verticalOffset: number;
+  diveAmount: number;
+  glideAmount: number;
+  targetLandingNormal: Vec3Data;
+}
+```
+
+Each tick:
+
+1. Read camera aim and input.
+2. Convert aim into a route-relative desired heading.
+3. Integrate lateral/vertical offsets with clamps.
+4. Derive a target landing normal from those offsets.
+5. Advance route progress based on cruise speed plus dive/glide modifiers.
+6. Blend actual velocity toward route tangent plus steering heading.
+7. In target capture, pull toward the steered landing normal rather than the planet center.
+
+The key feel requirement is that steering changes where the player lands. If the player can only wiggle during a fixed cinematic arc, it will feel like a cutscene instead of Fortnite-style diving.
+
+#### Implementation Update
+
+Replace the current simple assist model with this route-guided model in stages:
+
+1. Add route progress and target route frame fields to player state.
+2. Add limited gravity/capture zones and stop using global nearest-planet gravity outside those zones.
+3. Build a deterministic source-to-target curve from the blast pad definition.
+4. Drive `PlanetHopFlight` position/velocity from curve progress plus steer offsets.
+5. Remove nearest-planet gravity from the hop cruise phase.
+6. Add camera support for route up and target-up blending.
+7. Tune source exit and target capture durations before adding more effects.
+
+### Camera Plan
+
+All camera changes should be blended. Avoid hard cuts unless the player respawns.
+
+Camera phases:
+
+1. **Surface Follow**
+   - Existing follow camera.
+   - Pad should be visible in front of the player before activation.
+
+2. **Pad Anticipation**
+   - Starts when the player enters the pad footprint or just after trigger.
+   - Camera pulls slightly up and out so the player can see the target planet.
+   - FOV begins widening.
+   - Blend duration: about 0.2 seconds.
+
+3. **Launch Reveal**
+   - Camera swings/pulls back behind and above the player as the pad fires.
+   - Keep the player centered low enough that the target planet and route are readable.
+   - Add a short impulse shake, but keep it directional and low amplitude.
+   - Blend duration: about 0.3 to 0.5 seconds.
+
+4. **High-Speed Flight**
+   - Camera sits farther behind the player than normal.
+   - FOV expands with speed.
+   - Camera bank follows lateral steering.
+   - Add subtle roll and speed-line alignment along velocity.
+   - Look-ahead targets the current velocity direction blended with the destination planet.
+
+5. **Landing Approach**
+   - Camera lowers and moves back toward normal gameplay framing.
+   - FOV eases down, but not before the landing point is readable.
+   - Up vector blends from route-relative to destination planet surface normal.
+   - Blend duration: about 0.5 seconds.
+
+6. **Landing Follow**
+   - Existing follow camera resumes after contact.
+   - Use the existing landing dip behavior, scaled by landing speed.
+
+Implementation direction:
+
+- Add camera mode/profile support to `CameraSystem` instead of embedding all launch behavior into the default follow logic.
+- Use blendable camera targets: position offset, look-at offset, FOV scale, up vector, bank, and shake amount.
+- Drive camera mode from predicted local movement state, corrected by server state if reconciliation disagrees.
+
+### Feeling Fast
+
+Use multiple small effects instead of one overpowering effect.
+
+Visual effects:
+
+- Pad charge glow and expanding ring at activation.
+- Quick launch shockwave on the planet surface.
+- Velocity-aligned streaks during flight.
+- Slight chromatic or vignette effect only at peak speed if the renderer already supports post effects.
+- Target planet landing marker or catch-zone glow visible during approach.
+
+Audio:
+
+- Pad charge or spring sound before launch.
+- Strong launch burst.
+- Wind rush loop that rises with speed.
+- Landing thump/squish that varies with impact speed.
+
+Camera feel:
+
+- FOV grows quickly on launch, then breathes with speed.
+- Camera pulls farther back as speed rises.
+- Lateral steering creates readable camera bank.
+- Micro shake is speed-scaled and decays during landing approach.
+
+### Data And Architecture Notes
+
+Keep launch pads and interplanetary routes separate from local rails. A blast pad can reference a route, but the pad itself is a surface structure.
+
 Suggested split:
 
-- Planet rails: local surface grind and trick features.
-- Space routes: large-scale routes between planets.
-- Structures: authored gameplay modules that may create boosts, launches, landings, or collision.
-- Decorations: non-gameplay visual dressing.
+- `RuntimeBlastPad`: surface trigger and launch tuning.
+- `RuntimeSpaceRoute`: optional route assist/control points between planets.
+- `RuntimeLandingZone`: broad destination assist and validation target.
 
-## Gameplay Modes This Unlocks
+Server authority:
 
-- Planet-hop race across several planets
-- Trick route through launchers, hoops, and rails
-- Territory spread across multiple planets
-- King of the orbit around high-value route hubs
-- Delivery or relay routes between planets
-- Time-trial lines with checkpoints
-- Exploration challenges using rings and hidden shortcuts
+- Server decides when the pad triggers.
+- Server writes movement state, launch velocity, source route, target planet, and cooldown.
+- Client predicts the launch for local feel but does not choose launch speed or target.
 
-## Performance Notes
+Networking:
 
-A 4-planet map is not inherently too expensive. It becomes expensive if every planet is rendered, simulated, collided, and networked at full detail all the time.
+- Blast pad definitions are static map data sent at join.
+- Per-player flight state is dynamic player state.
+- Pad activation can be a lightweight event for effects and audio.
 
-The performance strategy should be:
+### Editor Follow-Up
 
-- Simulate only what matters.
-- Render nearby or visible planets at high detail.
-- Render distant planets with cheaper meshes/materials.
-- Keep traversal structures lightweight and instanced where possible.
-- Keep authoritative gameplay checks server-side but spatially scoped.
+After the first hand-placed pad works, add editor support.
 
-### What Should Be Cheap
+Editor requirements:
 
-Multiple planets are fine if each planet is mostly static authored data:
+- Surface-snap blast pad placement.
+- Direction handle showing tangent/launch direction.
+- Target planet selector.
+- Destination normal picker.
+- Preview arc from source pad to destination catch zone.
+- Validation for blocked launch paths, too-steep landing normals, missing target planet, and unreachable travel time.
 
-- Planet transforms
-- Runtime map data
-- Surface colors
-- Atmosphere settings
-- Static rails and structures
-- Distant low-detail planet meshes
+The editor should export blast pads, routes, and landing zones as runtime map data. Any future editor implementation must update `apps/editor/EDITOR_CHANGELOG.md` in the same turn.
 
-Four planets with modest terrain detail should be practical on desktop if distant planets use lower-detail visuals and the scene avoids excessive transparent/cloud layers.
+### Build Order
 
-### What Gets Expensive
+1. Add static runtime map data for one blast pad and one destination landing zone.
+2. Render the blast pad on the client as a simple flat pad with a clear direction arrow.
+3. Add server-side pad overlap detection and per-player cooldown.
+4. Add `BlastLaunch` and `PlanetHopFlight` movement handling in simulation.
+5. Add client prediction for pad activation and flight steering.
+6. Add camera mode/profile blending for planet-hop launch and flight.
+7. Add visual and audio effects for pad charge, launch, wind rush, and landing.
+8. Add a broad catch-zone landing assist on the destination planet.
+9. Add tests for trigger authority, cooldown, target planet handoff, steering limits, and landing capture.
+10. Tune speed, FOV, camera distance, steering cone, and landing retention with a two-planet dev map.
 
-The main risks are:
+### Open Tuning Questions
 
-- High-detail terrain meshes for every planet at once
-- Per-frame collision queries against every planet, rail, and structure
-- Many transparent atmosphere/cloud shells
-- Large numbers of individual prop meshes instead of instancing
-- Network snapshots containing unnecessary per-planet or per-route state
-- Paint/slime systems replicated or evaluated globally instead of near active players
-- Physics or AI running across all planets with no spatial culling
-
-### Rendering Approach
-
-Use a level-of-detail model:
-
-- Active planet: full terrain, water, rails, structures, props, effects.
-- Nearby destination planet: medium terrain, visible landing/route markers.
-- Distant planets: simple mesh, reduced atmosphere, minimal props.
-- Offscreen planets: skip most rendering work.
-
-Routes should also LOD:
-
-- Nearby route: full rails, boost markers, rings, particles.
-- Distant route: simple curve or glowing strip.
-- Offscreen route: no draw or very cheap marker.
-
-### Simulation Approach
-
-The server should not run all planet interactions globally every tick.
-
-Recommended rules:
-
-- Each player has an active planet or active route.
-- Movement checks query the active planet, nearby landing candidates, and the route currently being used.
-- Paint/slime updates apply only to the player’s current planet or rail/route surface.
-- Pickups and hazards sleep when no players are nearby.
-- Bots are assigned to active areas instead of roaming every planet continuously.
-
-### Network Approach
-
-The map can be sent once at join time, but dynamic state should be scoped.
-
-Good dynamic replication:
-
-- Players near the local player
-- Players on the same planet or route
-- Paint updates for relevant planet surfaces
-- Active route events
-- Nearby pickups and hazards
-
-Avoid:
-
-- Broadcasting every planet’s dynamic details to every player every tick
-- Treating all planets as one flat always-relevant world
-
-### Editor Performance
-
-The editor needs similar constraints.
-
-- Rebuild only the edited planet.
-- Keep non-active planets in lower-detail preview mode.
-- Debounce expensive terrain rebuilds.
-- Use instancing for repeated props and route markers.
-- Show route previews with simplified geometry until selected.
-
-## Practical Scope For 4 Planets
-
-Four planets should be feasible if the first version follows these constraints:
-
-- One active high-detail planet at a time.
-- Other planets rendered as simplified previews.
-- Space routes represented as simple curves plus a few markers.
-- No full per-planet paint simulation unless players are there.
-- Props and repeated traversal objects use instancing.
-- Existing rooms use the map at room creation; live hot-swapping can come later.
-
-The first implementation should target a small route network:
-
-- 2 to 4 planets
-- 1 to 3 routes between them
-- A handful of launch/landing structures
-- Low dynamic object count
-
-This gives the design room to grow without committing to a fully simulated open solar system immediately.
-
-## Recommended Build Order
-
-1. Add a planet network view.
-2. Add simple space route runtime data.
-3. Add visual-only route preview curves in the editor.
-4. Add launcher and landing point authoring.
-5. Add one playable route type, likely a space rail or portal.
-6. Add runtime movement handoff between planet and route.
-7. Add LOD rules for non-active planets.
-8. Add playtest telemetry for route attempts, speed, airtime, and landings.
-
-The best first playable milestone is a two-planet route: launch from planet A, travel through a readable space rail or boost tunnel, and land on planet B.
+- Should blast pads be one-way at first, or should every pad pair automatically create a return pad?
+- Should players be vulnerable and shootable during planet-hop flight?
+- Should flight steering use normal movement controls only, or should anchor/dive have a special fast-descent role?
+- Should missing the destination be possible in competitive modes, or should route assist always recover the player?
+- Should the first implementation use an explicit route curve, or just a launch vector plus target planet assist?

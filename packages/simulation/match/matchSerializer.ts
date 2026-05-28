@@ -30,6 +30,15 @@ export function buildSnapshotMessage(simState: SimMatchState, tickCount: number)
       lastGrindT: player.lastGrindT,
       grindSpeed: player.grindSpeed,
       grindCooldownMs: player.grindCooldownMs,
+      planetHopSourcePlanetId: player.planetHopSourcePlanetId,
+      planetHopTargetPlanetId: player.planetHopTargetPlanetId,
+      planetHopLandingNormal: {
+        x: player.planetHopLandingNormal.x,
+        y: player.planetHopLandingNormal.y,
+        z: player.planetHopLandingNormal.z,
+      },
+      planetHopElapsedMs: player.planetHopElapsedMs,
+      splatCooldownMs: player.splatCooldownMs,
       isShooting: isPlayerShooting(player, simState.elapsedMs),
       equippedWeaponId: player.equippedWeaponId,
       disposableShotsRemaining: player.disposableShotsRemaining,
@@ -81,7 +90,24 @@ export function buildSnapshotMessage(simState: SimMatchState, tickCount: number)
     });
   });
 
-  return { tick: tickCount, players, projectiles, pickups, healthPickups };
+  const blastPadStates: SnapshotMessage["blastPadStates"] = [];
+  simState.blastPadStates.forEach((state, id) => {
+    blastPadStates.push({
+      id,
+      ownerSlimeGroupId: state.ownerSlimeGroupId,
+      ownerColor: state.ownerColor,
+      coverageProgress: state.coverageProgress,
+    });
+  });
+
+  return {
+    tick: tickCount,
+    players,
+    projectiles,
+    pickups,
+    healthPickups,
+    blastPadStates,
+  };
 }
 
 export function buildLeaderboardMessage(

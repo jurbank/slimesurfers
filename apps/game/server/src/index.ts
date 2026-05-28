@@ -4,6 +4,7 @@ try {
   // no .env in production — env vars set in environment
 }
 
+import { existsSync, watch } from "node:fs";
 import { Server, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Request, Response } from "express";
@@ -149,4 +150,49 @@ void gameServer.listen(port).then(() => {
         console.warn(`Failed to create ${mode.id} lobby room`, err);
       });
   }
+  registerMapFileWatcher();
 });
+
+/** Dev-only: when the editor republishes the runtime map, dispose any live
+ *  `match` rooms so the next `joinOrCreate` rebuilds against the new file.
+ *  `MatchRoom.onCreate` already calls `resolveMap()` which re-reads from disk,
+ *  so the dispose-and-rebuild path picks up edits without a server restart. */
+function registerMapFileWatcher(): void {
+  if (process.env.NODE_ENV === "production") return;
+  const mapPath = process.env.MAP_FILE;
+  if (!mapPath) return;
+  if (!existsSync(mapPath)) {
+    console.warn(`[map-watch] MAP_FILE="${mapPath}" does not exist; skipping watcher`);
+    return;
+  }
+
+  // fs.watch can fire twice for a single editor write on some platforms;
+  // debounce so we only dispose once per publish.
+  let pending: NodeJS.Timeout | null = null;
+  watch(mapPath, () => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      void disposeMatchRooms();
+    }, 150);
+  });
+  console.log(`[map-watch] watching ${mapPath}`);
+}
+
+async function disposeMatchRooms(): Promise<void> {
+  try {
+    const rooms = await matchMaker.query({ name: "match" });
+    let disposed = 0;
+    for (const room of rooms) {
+      try {
+        await matchMaker.remoteRoomCall(room.roomId, "disconnect", []);
+        disposed += 1;
+      } catch (err) {
+        console.warn(`[map-watch] failed to dispose room ${room.roomId}:`, err);
+      }
+    }
+    console.log(`[map-watch] my-map.json changed → disposed ${disposed} match room(s)`);
+  } catch (err) {
+    console.warn("[map-watch] dispose pass failed:", err);
+  }
+}

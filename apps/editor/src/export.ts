@@ -1,10 +1,29 @@
-import type { RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
-import type { EditorConfig, PreviewSpawnState } from "./types.ts";
+import type { RuntimeBlastPad, RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
+import type { EditorBlastPad, EditorConfig, PreviewSpawnState } from "./types.ts";
 import type { RailState } from "./tools/rails/RailTypes.ts";
 import { editorTerrainFeaturesToRuntime } from "./terrainFeatures.ts";
 
 function dot(a: [number, number, number], b: [number, number, number]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function toRuntimeBlastPad(pad: EditorBlastPad): RuntimeBlastPad {
+  return {
+    id: pad.id,
+    planetId: pad.planetId,
+    normal: { x: pad.normal[0], y: pad.normal[1], z: pad.normal[2] },
+    tangent: { x: pad.tangent[0], y: pad.tangent[1], z: pad.tangent[2] },
+    targetPlanetId: pad.targetPlanetId,
+    targetNormal: {
+      x: pad.targetNormal[0],
+      y: pad.targetNormal[1],
+      z: pad.targetNormal[2],
+    },
+    radius: pad.radius,
+    launchSpeed: pad.launchSpeed,
+    upwardBias: pad.upwardBias,
+    cameraProfile: "planetHop",
+  };
 }
 
 function slugify(name: string): string {
@@ -48,6 +67,15 @@ export function editorStateToRuntimeMap(
       };
     });
 
+  const runtimeBlastPads = (config.blastPads ?? [])
+    .filter(
+      (pad) =>
+        pad.planetId !== pad.targetPlanetId &&
+        planetIds.has(pad.planetId) &&
+        planetIds.has(pad.targetPlanetId),
+    )
+    .map(toRuntimeBlastPad);
+
   return {
     version: 1,
     mapId: slugify(mapName),
@@ -74,6 +102,11 @@ export function editorStateToRuntimeMap(
       hatchScale: config.shaders.cel.hatchScale,
     },
     rails: runtimeRails,
+    ...(runtimeBlastPads.length > 0 ? { blastPads: runtimeBlastPads } : {}),
+    // The editor's "Preview Spawn" only drives the dev spawn policy — it's a
+    // test seat for the author, not a production spawn anchor. Real ffa/teams
+    // gameplay keeps the spread/zone policies, which will get their own editor
+    // authoring (per-team anchors, FFA hot zones) when those are added.
     spawns: {
       ffa: { kind: "ffa-spread" },
       teams: { kind: "ffa-spread" },

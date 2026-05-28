@@ -12,6 +12,8 @@ const OPACITY_FADE_OUT_SPEED = 12; // ~0.2s to fully hide
 const OPACITY_FADE_IN_SPEED = 6; // ~0.35s to fully reveal
 const SUBMERSION_DELAY = 0.06; // seconds submerged before fade-out begins
 const HELD_WEAPON_MODEL_SIZE = 0.95;
+const LANDING_SQUASH_DURATION = 0.45; // seconds the squash takes to ease back to normal
+const LANDING_SQUASH_AMOUNT = 0.6; // max Y compression at impact (0 = none, 1 = flat)
 
 interface PlayerTransformState extends PlayerVisualState {
   disposableShotsRemaining: number;
@@ -26,6 +28,7 @@ export class LocalPlayer {
   private readonly surfVisualRotation = new THREE.Quaternion();
   private readonly surfTargetRotation = new THREE.Quaternion();
   private surfLaunchTimer = 0;
+  private landingSquashTimer = 0;
   private currentOpacity = 1;
   private submersionTimer = 0;
 
@@ -82,6 +85,14 @@ export class LocalPlayer {
       const stretch = 1 + Math.sin(t * Math.PI) * 0.6;
       const squash = 1 / Math.sqrt(stretch);
       this.visual.liveMesh.scale.set(squash, stretch, squash);
+    } else if (this.landingSquashTimer > 0) {
+      this.landingSquashTimer = Math.max(0, this.landingSquashTimer - dt);
+      const t = this.landingSquashTimer / LANDING_SQUASH_DURATION;
+      const squashY = 1 - LANDING_SQUASH_AMOUNT * t;
+      const expandXZ = 1 / Math.sqrt(squashY);
+      this.visual.liveMesh.scale.set(expandXZ, squashY, expandXZ);
+    } else {
+      this.visual.liveMesh.scale.set(1, 1, 1);
     }
 
     const effectivelySubmerged = isPlayerEffectivelySubmerged(state);
@@ -106,6 +117,10 @@ export class LocalPlayer {
 
   triggerSurfLaunch(): void {
     this.surfLaunchTimer = 0.4;
+  }
+
+  triggerLandingSquash(): void {
+    this.landingSquashTimer = LANDING_SQUASH_DURATION;
   }
 
   triggerTrick(trickId: string, combo?: number): void {

@@ -21,6 +21,11 @@ export function SpawnsPanel({
   return (
     <div className="space-y-4">
       <Section title="Preview Spawn">
+        <p className="text-xs text-zinc-500 pb-1">
+          Used by the editor preview and by published-map dev-mode gameplay
+          (set <code className="text-zinc-300">VITE_CLUSTER_PLAYER_SPAWNS=true</code>). Real
+          ffa/teams spawning uses the mode's spread/zone policy.
+        </p>
         <button
           onClick={() => onPlacementActiveChange(!placementActive)}
           className={`w-full py-2 text-xs rounded font-semibold transition-colors ${

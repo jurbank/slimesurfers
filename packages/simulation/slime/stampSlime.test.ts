@@ -18,6 +18,7 @@ function createSimState(): SimMatchState {
     mapTerrain: DEV_MAP.planets[0]!.terrain,
     planets: new Map(),
     railStates: new Map(),
+    blastPadStates: new Map(),
     projectiles: new Map(),
     pickups: new Map(),
     matchPhase: MatchPhase.Active,

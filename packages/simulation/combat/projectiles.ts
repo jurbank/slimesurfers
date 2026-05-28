@@ -42,6 +42,7 @@ export interface CombatConfig extends TerrainConfig {
   movement: {
     collisionRadius: number;
     standingHeight: number;
+    planetHopLandingKillRadius?: number;
   };
   slime: {
     maxLevel: number;
@@ -561,6 +562,47 @@ function applySplashDamage(
   });
 }
 
+/**
+ * Splats the planet on a blast-pad landing impact: paints a kill-sized burst in the
+ * lander's colors and instantly kills any enemies caught inside the splat radius.
+ * Returns the slime stamps to replicate. Kill events are reported via recordKillEvent.
+ */
+export function applyPlanetHopLandingImpact(
+  simState: SimMatchState,
+  lander: SimPlayerState,
+  planets: PlanetData[],
+  cfg: CombatConfig,
+  recordKillEvent?: RecordKillEvent,
+): SlimeStampMessage[] {
+  const stamps: SlimeStampMessage[] = [];
+  if (lander.movementState === PlayerMovementState.Dead) return stamps;
+
+  // Massive splat in the lander's colors — same multi-stamp pattern as a death burst,
+  // so the painted area visually matches what a player kill produces on the surface.
+  addDeathBurstSlime(simState, stamps, lander, lander, planets, cfg);
+
+  const killRadius = cfg.movement.planetHopLandingKillRadius ?? 0;
+  if (killRadius > 0) {
+    applySplashDamage(
+      simState,
+      stamps,
+      lander,
+      lander.sessionId,
+      lander.teamId,
+      lander.pos,
+      killRadius,
+      // Guaranteed lethal: a player should never survive being landed on.
+      9999,
+      planets,
+      cfg,
+      new Set(),
+      undefined,
+      recordKillEvent,
+    );
+  }
+  return stamps;
+}
+
 function getBlastFallbackDirection(player: SimPlayerState, planets: PlanetData[]): SimVec3 {
   let nearestPlanet: PlanetData | undefined;
   let nearestDistance = Infinity;
@@ -634,6 +676,7 @@ function respawnPlayer(
   player.health = cfg.player.maxHealth;
   player.slimeLevel = cfg.slime.maxLevel;
   player.respawnTimer = 0;
+  player.splatCooldownMs = 0;
   player.movementState = PlayerMovementState.Idle;
   player.surfState = PlayerSurfState.SurfingVisible;
   player.isCarving = false;

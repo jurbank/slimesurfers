@@ -27,8 +27,12 @@ import {
   type RailSurfaceSample,
 } from "../tools/rails/railCarving.ts";
 import type { RailState, RailToolState } from "../tools/rails/RailTypes.ts";
+import { BlastPadTool } from "../tools/blastPads/BlastPadTool.ts";
+import { BlastPadPreviewVisuals } from "../tools/blastPads/BlastPadPreviewVisuals.ts";
+import type { BlastPadToolState } from "../tools/blastPads/BlastPadTypes.ts";
 import type {
   BrushState,
+  EditorBlastPad,
   EditorConfig,
   EditorTerrainFeature,
   EditorPlanet,
@@ -99,6 +103,9 @@ export class EditorScene {
   private readonly propSlimeTool: PropSlimeTool;
   private readonly railTool: RailTool;
   private readonly railPreviewVisuals: RailPreviewVisuals;
+  private readonly blastPadTool: BlastPadTool;
+  private readonly blastPadPreviewVisuals: BlastPadPreviewVisuals;
+  private hasBlastPadMode = false;
   private readonly baseTerrainProvider: TerrainSurfaceProvider;
   private readonly previewTerrainProvider: TerrainSurfaceProvider;
   private readonly playerPreview: PlayerPreviewController;
@@ -143,6 +150,11 @@ export class EditorScene {
     private readonly onPreviewSpawnChange: (spawn: PreviewSpawnState) => void,
     private readonly onPerformanceStats: (stats: PerformanceStats) => void,
     private readonly onPlanetSelected: ((id: string) => void) | null = null,
+    private readonly onBlastPadsChange: ((pads: EditorBlastPad[]) => void) | null = null,
+    private readonly onBlastPadSelectionChange: ((padId: string | null) => void) | null = null,
+    private readonly onBlastPadPickTargetComplete:
+      | ((padId: string, targetPlanetId: string) => void)
+      | null = null,
   ) {
     this.canvas = canvas;
     this.currentConfig = config;
@@ -179,6 +191,7 @@ export class EditorScene {
     this.slopeFeatureTool = new SlopeFeatureTool();
     this.propSlimeTool = new PropSlimeTool();
     this.railTool = new RailTool();
+    this.blastPadTool = new BlastPadTool();
     this.baseTerrainProvider = {
       getHeight: (nx, ny, nz, cfg) => getTerrainHeight(nx, ny, nz, cfg),
       getRadius: (nx, ny, nz, cfg) => getTerrainRadius(nx, ny, nz, cfg),
@@ -195,6 +208,9 @@ export class EditorScene {
       config,
       this.previewTerrainProvider,
     );
+    this.blastPadPreviewVisuals = new BlastPadPreviewVisuals(this.scene);
+    this.blastPadPreviewVisuals.setPlanets(config.planets);
+    this.blastPadPreviewVisuals.setPads(config.blastPads ?? []);
     this.railPreviewVisuals = new RailPreviewVisuals(
       this.scene,
       config,
@@ -295,6 +311,26 @@ export class EditorScene {
       config,
       terrainProvider: this.baseTerrainProvider,
     });
+    this.blastPadTool.connect({
+      canvas,
+      camera: this.camera,
+      scene: this.scene,
+      getPlanetMesh: (id) => this.planetRenders.get(id)?.terrainMesh ?? null,
+      getPlanet: (id) => this.currentConfig.planets.find((p) => p.id === id) ?? null,
+      getKnownPlanetIds: () => new Set(this.currentConfig.planets.map((p) => p.id)),
+      shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
+      onPadsChange: (pads) => {
+        this.blastPadPreviewVisuals.setPads(pads);
+        this.onBlastPadsChange?.(pads);
+      },
+      onSelectionChange: (padId) => {
+        this.blastPadPreviewVisuals.setSelectedPadId(padId);
+        this.onBlastPadSelectionChange?.(padId);
+      },
+      onPickTargetComplete: (padId, targetPlanetId) => {
+        this.onBlastPadPickTargetComplete?.(padId, targetPlanetId);
+      },
+    });
 
     this.updateUniforms(config);
     this.playerPreview.setSpawn(previewSpawn);
@@ -337,6 +373,22 @@ export class EditorScene {
     this.railTool.setRailToolState(state);
   }
 
+  setBlastPads(pads: EditorBlastPad[]): void {
+    this.blastPadPreviewVisuals.setPads(pads);
+    this.blastPadTool.syncHandles();
+  }
+
+  setBlastPadToolState(state: BlastPadToolState | null): void {
+    if (this.isPreviewActive) {
+      this.blastPadTool.setToolState(null);
+      this.hasBlastPadMode = false;
+      return;
+    }
+    this.hasBlastPadMode = !!state && (state.mode != null || state.pickTargetForPadId != null);
+    this.blastPadPreviewVisuals.setSelectedPadId(state?.selectedPadId ?? null);
+    this.blastPadTool.setToolState(state);
+  }
+
   setSpawnPlacementActive(active: boolean): void {
     this.spawnPlacementActive = active && !this.isPreviewActive;
     if (this.spawnPlacementActive) {
@@ -375,7 +427,11 @@ export class EditorScene {
     this.slopeFeatureTool.setToolState(null);
     this.jumpFeatureTool.setToolState(null);
     this.propSlimeTool.setBrushState(null);
-    if (active) this.railTool.setRailToolState(null);
+    if (active) {
+      this.railTool.setRailToolState(null);
+      this.blastPadTool.setToolState(null);
+      this.hasBlastPadMode = false;
+    }
     this.railPreviewVisuals.setActive(active);
     this.playerPreview.setActive(active);
   }
@@ -410,6 +466,9 @@ export class EditorScene {
     this.syncPlanetRenders(config);
     this.rebuildPlanetMeshes();
     this.railPreviewVisuals.setConfig(config);
+    this.blastPadPreviewVisuals.setPlanets(config.planets);
+    this.blastPadPreviewVisuals.setPads(config.blastPads ?? []);
+    this.blastPadTool.syncHandles();
     this.rebuildWater(config);
     this.updateUniforms(config);
   }
@@ -438,6 +497,9 @@ export class EditorScene {
       const render = this.planetRenders.get(planet.id);
       if (render) this.updateUniformsForPlanet(planet, render, config.shaders.cel);
     }
+    this.blastPadPreviewVisuals.setPlanets(config.planets);
+    this.blastPadPreviewVisuals.setPads(config.blastPads ?? []);
+    this.blastPadTool.syncHandles();
     this.updateSpawnMarker();
   }
 
@@ -521,6 +583,8 @@ export class EditorScene {
     this.slopeFeatureTool.dispose();
     this.propSlimeTool.dispose();
     this.railTool.dispose();
+    this.blastPadTool.dispose();
+    this.blastPadPreviewVisuals.dispose();
     this.railPreviewVisuals.dispose();
     this.playerPreview.dispose();
     this.disposeSpawnMarker();
@@ -934,7 +998,8 @@ export class EditorScene {
       this.hasTerrainStamp ||
       this.hasTerrainFeatureMode ||
       this.hasPropBrush ||
-      this.hasRailMode
+      this.hasRailMode ||
+      this.hasBlastPadMode
     ) {
       return;
     }

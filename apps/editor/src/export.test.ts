@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
 import { validateRuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
-import { defaultEditorConfig } from "./types.ts";
+import {
+  defaultEditorBlastPad,
+  defaultEditorConfig,
+  defaultEditorPlanet,
+  type EditorBlastPad,
+} from "./types.ts";
 import type { RailState } from "./tools/rails/RailTypes.ts";
 
 describe("editorStateToRuntimeMap rail export", () => {
@@ -185,6 +190,65 @@ describe("editorStateToRuntimeMap rail export", () => {
         smoothing: 1,
       },
     ]);
+    expect(validateRuntimeMapData(map).valid).toBe(true);
+  });
+});
+
+describe("editorStateToRuntimeMap blast pad export", () => {
+  test("exports authored blast pads with cameraProfile and dropped self-targeting pads", () => {
+    const config = defaultEditorConfig();
+    config.planets = [
+      defaultEditorPlanet("planet-0"),
+      defaultEditorPlanet("planet-1", { x: 400, y: 0, z: 0 }),
+    ];
+    const validPad = defaultEditorBlastPad("pad-1", "planet-0", "planet-1");
+    validPad.normal = [0, 1, 0];
+    validPad.tangent = [1, 0, 0];
+    validPad.targetNormal = [-1, 0, 0];
+    validPad.radius = 6;
+    validPad.launchSpeed = 95;
+    validPad.upwardBias = 0.6;
+    const selfTargeting: EditorBlastPad = {
+      ...defaultEditorBlastPad("pad-self", "planet-0", "planet-0"),
+    };
+    const unknownTarget: EditorBlastPad = {
+      ...defaultEditorBlastPad("pad-unknown", "planet-0", "planet-99"),
+    };
+    config.blastPads = [validPad, selfTargeting, unknownTarget];
+
+    const map = editorStateToRuntimeMap(
+      config,
+      [],
+      { planetId: "planet-0", normal: [0, 1, 0] },
+      "Pad Test Map",
+    );
+
+    expect(map.blastPads).toEqual([
+      {
+        id: "pad-1",
+        planetId: "planet-0",
+        normal: { x: 0, y: 1, z: 0 },
+        tangent: { x: 1, y: 0, z: 0 },
+        targetPlanetId: "planet-1",
+        targetNormal: { x: -1, y: 0, z: 0 },
+        radius: 6,
+        launchSpeed: 95,
+        upwardBias: 0.6,
+        cameraProfile: "planetHop",
+      },
+    ]);
+    expect(validateRuntimeMapData(map).valid).toBe(true);
+  });
+
+  test("omits blastPads field when no pads exist", () => {
+    const config = defaultEditorConfig();
+    const map = editorStateToRuntimeMap(
+      config,
+      [],
+      { planetId: "planet-0", normal: [0, 1, 0] },
+      "No Pads",
+    );
+    expect("blastPads" in map).toBe(false);
     expect(validateRuntimeMapData(map).valid).toBe(true);
   });
 });

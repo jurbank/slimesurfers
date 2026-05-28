@@ -30,6 +30,11 @@ export interface PlayerSnapshot {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
+  planetHopSourcePlanetId?: string;
+  planetHopTargetPlanetId?: string;
+  planetHopLandingNormal?: Vec3Data;
+  planetHopElapsedMs?: number;
+  splatCooldownMs?: number;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
@@ -57,6 +62,14 @@ export interface SnapshotMessage {
   projectiles: ProjectileSnapshot[];
   pickups: PickupSnapshot[];
   healthPickups: HealthPickupSnapshot[];
+  blastPadStates?: BlastPadStateSnapshot[];
+}
+
+export interface BlastPadStateSnapshot {
+  id: string;
+  ownerSlimeGroupId: number;
+  ownerColor: number;
+  coverageProgress: number;
 }
 
 export interface ProjectileSnapshot {
@@ -210,6 +223,8 @@ export interface MapDataMessage {
     id: string;
     center: { x: number; y: number; z: number };
     radius: number;
+    gravityRadius?: number;
+    captureRadius?: number;
     terrain: {
       seed: number;
       baseAmplitude: number;
@@ -290,5 +305,18 @@ export interface MapDataMessage {
     planetId: string;
     controlPoints: Array<{ nx: number; ny: number; nz: number; heightOffset: number }>;
     slimeCorridorRadius: number;
+  }>;
+  blastPads?: Array<{
+    id: string;
+    planetId: string;
+    normal: { x: number; y: number; z: number };
+    tangent: { x: number; y: number; z: number };
+    targetPlanetId: string;
+    targetNormal: { x: number; y: number; z: number };
+    radius: number;
+    cooldownMs?: number;
+    launchSpeed: number;
+    upwardBias: number;
+    cameraProfile: "planetHop";
   }>;
 }

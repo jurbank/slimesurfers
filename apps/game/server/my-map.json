@@ -39,8 +39,33 @@
         "color": 6404351,
         "intensity": 0.85,
         "opacity": 0.42,
+        "blendMode": "normal",
         "fresnelPower": 2.4,
-        "falloffPower": 1.5
+        "falloffPower": 1.5,
+        "clouds": {
+          "enabled": true,
+          "height": 26,
+          "thickness": 4,
+          "density": 0.48,
+          "color": 16777215,
+          "shadowStrength": 0.34,
+          "coverageScale": 3.6,
+          "movementSpeed": 0.08,
+          "opacity": 0.72,
+          "blendMode": "normal",
+          "puffs": {
+            "enabled": true,
+            "height": 18,
+            "thickness": 10,
+            "density": 10,
+            "size": 14,
+            "color": 16777215,
+            "opacity": 0.78,
+            "blendMode": "normal",
+            "shadowStrength": 0.28,
+            "movementSpeed": 0.04
+          }
+        }
       },
       "lighting": {
         "sunAzimuth": 63,
@@ -70,7 +95,7 @@
       "terrain": {
         "seed": 42,
         "baseAmplitude": 54,
-        "frequency": 1.6,
+        "frequency": 1.4,
         "octaves": 3,
         "lacunarity": 2.2,
         "persistence": 0.45,
@@ -95,8 +120,33 @@
         "color": 6404351,
         "intensity": 0.85,
         "opacity": 0.42,
+        "blendMode": "normal",
         "fresnelPower": 2.4,
-        "falloffPower": 1.5
+        "falloffPower": 1.5,
+        "clouds": {
+          "enabled": true,
+          "height": 26,
+          "thickness": 4,
+          "density": 0.48,
+          "color": 16777215,
+          "shadowStrength": 0.34,
+          "coverageScale": 3.6,
+          "movementSpeed": 0.08,
+          "opacity": 0.72,
+          "blendMode": "normal",
+          "puffs": {
+            "enabled": true,
+            "height": 18,
+            "thickness": 10,
+            "density": 10,
+            "size": 14,
+            "color": 16777215,
+            "opacity": 0.78,
+            "blendMode": "normal",
+            "shadowStrength": 0.28,
+            "movementSpeed": 0.04
+          }
+        }
       },
       "lighting": {
         "sunAzimuth": 63,
@@ -122,170 +172,31 @@
     "hatchStrength": 0.15,
     "hatchScale": 5
   },
-  "rails": [
+  "rails": [],
+  "blastPads": [
     {
-      "id": 0,
+      "id": "blast-pad-1",
       "planetId": "planet-0",
-      "slimeCorridorRadius": 8,
-      "controlPoints": [
-        {
-          "nx": 0.5,
-          "ny": 0.866,
-          "nz": 0,
-          "heightOffset": 4.5
-        },
-        {
-          "nx": 0.4698,
-          "ny": 0.866,
-          "nz": 0.171,
-          "heightOffset": 6
-        },
-        {
-          "nx": 0.383,
-          "ny": 0.866,
-          "nz": 0.3214,
-          "heightOffset": 10
-        },
-        {
-          "nx": 0.25,
-          "ny": 0.866,
-          "nz": 0.433,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.0868,
-          "ny": 0.866,
-          "nz": 0.4924,
-          "heightOffset": 12
-        },
-        {
-          "nx": -0.0868,
-          "ny": 0.866,
-          "nz": 0.4924,
-          "heightOffset": 12
-        },
-        {
-          "nx": -0.25,
-          "ny": 0.866,
-          "nz": 0.433,
-          "heightOffset": 12
-        },
-        {
-          "nx": -0.383,
-          "ny": 0.866,
-          "nz": 0.3214,
-          "heightOffset": 10
-        },
-        {
-          "nx": -0.4698,
-          "ny": 0.866,
-          "nz": 0.171,
-          "heightOffset": 6
-        },
-        {
-          "nx": -0.5,
-          "ny": 0.866,
-          "nz": 0,
-          "heightOffset": 4.5
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "planetId": "planet-0",
-      "slimeCorridorRadius": 8,
-      "controlPoints": [
-        {
-          "nx": -0.383,
-          "ny": -0.866,
-          "nz": -0.321,
-          "heightOffset": 4.5
-        },
-        {
-          "nx": -0.25,
-          "ny": -0.866,
-          "nz": -0.433,
-          "heightOffset": 6
-        },
-        {
-          "nx": -0.087,
-          "ny": -0.866,
-          "nz": -0.492,
-          "heightOffset": 10
-        },
-        {
-          "nx": 0.087,
-          "ny": -0.866,
-          "nz": -0.492,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.25,
-          "ny": -0.866,
-          "nz": -0.433,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.383,
-          "ny": -0.866,
-          "nz": -0.321,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.47,
-          "ny": -0.866,
-          "nz": -0.171,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.5,
-          "ny": -0.866,
-          "nz": 0,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.47,
-          "ny": -0.866,
-          "nz": 0.171,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.383,
-          "ny": -0.866,
-          "nz": 0.321,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.25,
-          "ny": -0.866,
-          "nz": 0.433,
-          "heightOffset": 12
-        },
-        {
-          "nx": 0.087,
-          "ny": -0.866,
-          "nz": 0.492,
-          "heightOffset": 12
-        },
-        {
-          "nx": -0.087,
-          "ny": -0.866,
-          "nz": 0.492,
-          "heightOffset": 10
-        },
-        {
-          "nx": -0.25,
-          "ny": -0.866,
-          "nz": 0.433,
-          "heightOffset": 6
-        },
-        {
-          "nx": -0.383,
-          "ny": -0.866,
-          "nz": 0.321,
-          "heightOffset": 40.5
-        }
-      ]
+      "normal": {
+        "x": 0.20904164881435092,
+        "y": 0.9777226419202616,
+        "z": -0.018974312568351543
+      },
+      "tangent": {
+        "x": 0.977904268284232,
+        "y": -0.20895815664566797,
+        "z": 0.0063032406526473996
+      },
+      "targetPlanetId": "planet-1",
+      "targetNormal": {
+        "x": -0.9701425001453319,
+        "y": 0.24253562503633297,
+        "z": 0
+      },
+      "radius": 5,
+      "launchSpeed": 78,
+      "upwardBias": 0.45,
+      "cameraProfile": "planetHop"
     }
   ],
   "spawns": {
@@ -301,9 +212,9 @@
       "anchor": {
         "planetId": "planet-0",
         "normal": {
-          "x": 0,
-          "y": 1,
-          "z": 0
+          "x": 0.18627162523155003,
+          "y": 0.9676049725119272,
+          "z": 0.17042153268818344
         }
       }
     }

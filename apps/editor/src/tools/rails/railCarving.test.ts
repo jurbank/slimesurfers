@@ -79,6 +79,7 @@ const TEST_CONFIG: EditorConfig = {
       hasWater: false,
     },
   ],
+  blastPads: [],
   shaders: {
     cel: { enabled: true, bands: 3, softness: 0.2, hatchStrength: 0, hatchScale: 1 },
   },

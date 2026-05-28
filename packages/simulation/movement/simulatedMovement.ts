@@ -1,4 +1,5 @@
 import { InputKey, type InputMessage } from "@splat/protocol/network/clientMessages.ts";
+import type { RuntimeBlastPad } from "@splat/content/map/runtimeMapData.ts";
 import {
   type Vec3Data,
   type QuatData,
@@ -22,8 +23,10 @@ import {
 import {
   PlayerMovementState,
   PlayerSurfState,
+  type SimBlastPadState,
   type SimPlanetSlimeState,
 } from "../match/simState.ts";
+import { NO_SLIME_GROUP_ID } from "@splat/protocol/schemas/slimedState.ts";
 import { getSlimeAtPoint } from "../slime/slimeDetection.ts";
 import {
   getTerrainHeight,
@@ -40,6 +43,8 @@ export interface PlanetData {
   id: string;
   center: Vec3Data;
   radius: number;
+  gravityRadius?: number;
+  captureRadius?: number;
 }
 
 /** Subset of SimPlayerState that the movement step reads and mutates. */
@@ -58,6 +63,11 @@ export interface PlayerPhysics {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
+  planetHopSourcePlanetId?: string;
+  planetHopTargetPlanetId?: string;
+  planetHopLandingNormal?: Vec3Data;
+  planetHopElapsedMs?: number;
+  splatCooldownMs?: number;
   isOnFriendlySlime: boolean;
 }
 
@@ -88,6 +98,13 @@ export interface StepConfig extends TerrainConfig {
     waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
     waterSkiLateralDrag: number;
+    planetHopLaunchDurationSeconds?: number;
+    planetHopSteeringDegrees?: number;
+    planetHopAssistAcceleration?: number;
+    planetHopMaxDurationSeconds?: number;
+    planetHopLandingCaptureDistance?: number;
+    planetHopLandingSpeedRetention?: number;
+    planetHopLandingSplatCooldownMs?: number;
   };
   rail: {
     snapDistance: number;
@@ -157,13 +174,161 @@ function getWaterContact(
   return { radialNormal: n, surfaceNormal: n, centerPos, centerRadius: waterRadius };
 }
 
+function findPlanet(planets: PlanetData[], planetId: string): PlanetData | undefined {
+  return planets.find((planet) => planet.id === planetId);
+}
+
+function getGravityRadius(planet: PlanetData): number {
+  return planet.gravityRadius ?? planet.radius * 1.8;
+}
+
+function getCaptureRadius(planet: PlanetData): number {
+  return planet.captureRadius ?? planet.radius * 2.4;
+}
+
+function getPlanetHopLaunchDuration(cfg: StepConfig): number {
+  return cfg.movement.planetHopLaunchDurationSeconds ?? 0.35;
+}
+
+function getPlanetHopAssistAcceleration(cfg: StepConfig): number {
+  return cfg.movement.planetHopAssistAcceleration ?? 34;
+}
+
+function getPlanetHopMaxDuration(cfg: StepConfig): number {
+  return cfg.movement.planetHopMaxDurationSeconds ?? 6;
+}
+
+function getPlanetHopLandingCaptureDistance(cfg: StepConfig): number {
+  return cfg.movement.planetHopLandingCaptureDistance ?? 42;
+}
+
+function getPlanetHopLandingSplatCooldownMs(cfg: StepConfig): number {
+  return cfg.movement.planetHopLandingSplatCooldownMs ?? 500;
+}
+
+function getPlanetHopLandingSteerRate(target: PlanetData): number {
+  return 45 / Math.max(target.radius, 1);
+}
+
+function getPlanetHopCruiseAssist(state: PlayerPhysics): number {
+  return state.movementState === PlayerMovementState.LandingApproach ? 1.0 : 0.45;
+}
+
+function tryTriggerBlastPad(
+  state: PlayerPhysics,
+  planets: PlanetData[],
+  cfg: StepConfig,
+  blastPads: readonly RuntimeBlastPad[],
+  padStates: Map<string, SimBlastPadState>,
+  terrainProvider?: TerrainSurfaceProvider,
+): boolean {
+  if (state.planetId === "") return false;
+  if (
+    state.movementState === PlayerMovementState.Dead ||
+    state.movementState === PlayerMovementState.Grinding
+  ) {
+    return false;
+  }
+  const sourcePlanet = findPlanet(planets, state.planetId);
+  if (!sourcePlanet) return false;
+
+  for (const pad of blastPads) {
+    if (pad.planetId !== state.planetId) continue;
+    // Pad is charged only when its coverage is full AND the dominant owner is this
+    // player's slime group. Each stamp drips coverage in the painter's color; enemies
+    // drain it by painting over. Triggering consumes the charge fully — coverage and
+    // ownership reset, so the pad must be re-painted to charge again.
+    const padState = padStates.get(pad.id);
+    if (!padState) continue;
+    if (
+      padState.coverageProgress < 1 ||
+      padState.ownerSlimeGroupId === NO_SLIME_GROUP_ID ||
+      padState.ownerSlimeGroupId !== state.slimeGroupId
+    ) {
+      continue;
+    }
+    const targetPlanet = findPlanet(planets, pad.targetPlanetId);
+    if (!targetPlanet) continue;
+
+    const normal = normalize(pad.normal);
+    const tangent = normalize(projectOntoPlane(pad.tangent, normal));
+    const padSurfaceRadius =
+      (terrainProvider?.getRadius(normal.x, normal.y, normal.z, cfg, sourcePlanet.id) ??
+        getTerrainRadius(normal.x, normal.y, normal.z, cfg)) + cfg.movement.standingHeight;
+    const padCenter = add(sourcePlanet.center, scale(normal, padSurfaceRadius));
+    const playerNormal = normalize(sub(state.pos, sourcePlanet.center));
+    const footprintDot = Math.max(-1, Math.min(1, dot(playerNormal, normal)));
+    const footprintDistance = Math.acos(footprintDot) * sourcePlanet.radius;
+    if (footprintDistance > pad.radius + cfg.movement.collisionRadius) continue;
+
+    const targetNormal = normalize(pad.targetNormal);
+    const targetSurfaceRadius =
+      (terrainProvider?.getRadius(
+        targetNormal.x,
+        targetNormal.y,
+        targetNormal.z,
+        cfg,
+        targetPlanet.id,
+      ) ?? getTerrainRadius(targetNormal.x, targetNormal.y, targetNormal.z, cfg)) +
+      cfg.movement.standingHeight;
+    const targetPoint = add(targetPlanet.center, scale(targetNormal, targetSurfaceRadius));
+    const toTarget = normalize(sub(targetPoint, state.pos));
+    const launchDir = normalize(
+      add(add(scale(normal, pad.upwardBias), scale(tangent, 0.65)), scale(toTarget, 1.35)),
+    );
+
+    assign(state.pos, add(padCenter, scale(normal, cfg.movement.surfaceSnapDistance + 0.75)));
+    assign(state.vel, scale(launchDir, pad.launchSpeed));
+    state.planetId = "";
+    state.movementState = PlayerMovementState.BlastLaunch;
+    state.surfState =
+      state.surfState === PlayerSurfState.None ? PlayerSurfState.SurfingVisible : state.surfState;
+    state.isCarving = false;
+    state.grindRailId = -1;
+    state.planetHopSourcePlanetId = pad.planetId;
+    state.planetHopTargetPlanetId = pad.targetPlanetId;
+    state.planetHopLandingNormal = targetNormal;
+    state.planetHopElapsedMs = 0;
+    // Consume the charge: coverage drops to 0 and ownership clears, so the pad must
+    // be repainted from scratch before it can fire again.
+    padState.ownerSlimeGroupId = NO_SLIME_GROUP_ID;
+    padState.ownerColor = 0;
+    padState.coverageProgress = 0;
+    return true;
+  }
+
+  return false;
+}
+
+// Prefer the planet whose gravity zone the player is inside (closest by normalized
+// distance). Used to pick which planet's gravity dominates when zones are defined.
+function getDominantGravityPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
+  let best: PlanetData | null = null;
+  let bestNormalizedDistance = Infinity;
+  for (const planet of planets) {
+    const dist = vlen(sub(pos, planet.center));
+    const gravityRadius = getGravityRadius(planet);
+    if (dist > gravityRadius) continue;
+    const normalizedDistance = dist / gravityRadius;
+    if (normalizedDistance < bestNormalizedDistance) {
+      bestNormalizedDistance = normalizedDistance;
+      best = planet;
+    }
+  }
+  return best;
+}
+
+// Absolute nearest planet, always defined when any planet exists. Generic airborne
+// movement (jumps, rail launches) is always bound to a planet so the player never
+// drifts off into the force-free void — that void is reserved for guided planet hops,
+// which run through stepPlanetHop and never reach stepAirborne.
 function getNearestPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
   let nearest: PlanetData | null = null;
   let nearestDist = Infinity;
   for (const planet of planets) {
-    const d = vlen(sub(pos, planet.center));
-    if (d < nearestDist) {
-      nearestDist = d;
+    const dist = vlen(sub(pos, planet.center));
+    if (dist < nearestDist) {
+      nearestDist = dist;
       nearest = planet;
     }
   }
@@ -510,7 +675,8 @@ function stepAirborne(
     state.surfState = PlayerSurfState.None;
   }
   state.isCarving = state.surfState !== PlayerSurfState.None && anchorPressed;
-  const nearest = getNearestPlanet(state.pos, planets);
+  const nearest =
+    getDominantGravityPlanet(state.pos, planets) ?? getNearestPlanet(state.pos, planets);
 
   if (nearest !== null) {
     const toPlanet = sub(nearest.center, state.pos);
@@ -575,6 +741,153 @@ function stepAirborne(
   }
 }
 
+function stepPlanetHop(
+  state: PlayerPhysics,
+  input: InputMessage,
+  dt: number,
+  planets: PlanetData[],
+  cfg: StepConfig,
+  terrainProvider?: TerrainSurfaceProvider,
+): void {
+  state.isOnFriendlySlime = false;
+  state.isCarving = false;
+  state.skiJumpCharge = 0;
+  state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
+  state.planetHopElapsedMs = (state.planetHopElapsedMs ?? 0) + dt * 1000;
+
+  const target = findPlanet(planets, state.planetHopTargetPlanetId ?? "");
+  if (!target) {
+    state.movementState = PlayerMovementState.Airborne;
+    stepAirborne(state, input, dt, planets, cfg, terrainProvider);
+    return;
+  }
+
+  if (
+    state.movementState === PlayerMovementState.BlastLaunch &&
+    (state.planetHopElapsedMs ?? 0) >= getPlanetHopLaunchDuration(cfg) * 1000
+  ) {
+    state.movementState = PlayerMovementState.PlanetHopFlight;
+  }
+
+  let landingNormal = normalize(
+    state.planetHopLandingNormal ?? normalize(sub(state.pos, target.center)),
+  );
+  const aimLen = vlen(input.aimDir);
+  const aimDir = aimLen > 1e-4 ? scale(input.aimDir, 1 / aimLen) : normalize(state.vel);
+  if (aimLen > 1e-4 && state.movementState !== PlayerMovementState.BlastLaunch) {
+    const landingSteer = projectOntoPlane(aimDir, landingNormal);
+    const landingSteerLen = vlen(landingSteer);
+    if (landingSteerLen > 1e-4) {
+      landingNormal = normalize(
+        add(
+          landingNormal,
+          scale(landingSteer, (getPlanetHopLandingSteerRate(target) * dt) / landingSteerLen),
+        ),
+      );
+      state.planetHopLandingNormal = landingNormal;
+    }
+  }
+
+  const targetSurfaceRadius =
+    (terrainProvider?.getRadius(
+      landingNormal.x,
+      landingNormal.y,
+      landingNormal.z,
+      cfg,
+      target.id,
+    ) ?? getTerrainRadius(landingNormal.x, landingNormal.y, landingNormal.z, cfg)) +
+    cfg.movement.standingHeight;
+  const targetPoint = add(target.center, scale(landingNormal, targetSurfaceRadius));
+  const targetDir = normalize(sub(targetPoint, state.pos));
+
+  const speed = Math.max(vlen(state.vel), 1);
+  if (aimLen > 1e-4 && state.movementState !== PlayerMovementState.BlastLaunch) {
+    const currentDir = scale(state.vel, 1 / speed);
+    const steeringDegrees = cfg.movement.planetHopSteeringDegrees ?? 45;
+    const steerStrength = Math.min(1, dt * (steeringDegrees / 12));
+    const freeFlightDir = normalize(add(scale(aimDir, 0.75), scale(targetDir, 0.25)));
+    const steeredDir = normalize(
+      add(scale(currentDir, 1 - steerStrength), scale(freeFlightDir, steerStrength)),
+    );
+    assign(state.vel, scale(steeredDir, speed));
+  }
+
+  const forwardPressed = (input.keys & InputKey.Forward) !== 0;
+  const backwardPressed = (input.keys & InputKey.Backward) !== 0;
+  if (forwardPressed || backwardPressed) {
+    const speedDelta = cfg.movement.airBoostAcceleration * dt * (forwardPressed ? 1 : -0.65);
+    const nextSpeed = Math.max(cfg.movement.moveSpeed * 2, speed + speedDelta);
+    assign(state.vel, scale(normalize(state.vel), nextSpeed));
+  }
+
+  const elapsedSeconds = (state.planetHopElapsedMs ?? 0) / 1000;
+  const assistScale = elapsedSeconds > getPlanetHopMaxDuration(cfg) ? 1.6 : 1;
+  assign(
+    state.vel,
+    add(
+      state.vel,
+      scale(
+        targetDir,
+        getPlanetHopAssistAcceleration(cfg) * getPlanetHopCruiseAssist(state) * assistScale * dt,
+      ),
+    ),
+  );
+
+  assign(state.pos, add(state.pos, scale(state.vel, dt)));
+
+  const up = normalize(sub(state.pos, target.center));
+  const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+  assignQuat(state.rot, normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, up), state.rot)));
+
+  const toTargetCenter = sub(target.center, state.pos);
+  const distToCenter = vlen(toTargetCenter);
+  if (distToCenter < 0.01) return;
+  const gravDir = scale(toTargetCenter, 1 / distToCenter);
+  const upDir = scale(gravDir, -1);
+  const toLanding = sub(targetPoint, state.pos);
+  const landingPointDistance = vlen(toLanding);
+  const rawLandingRadius =
+    terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, cfg, target.id) ??
+    getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
+  const waterRadius = target.radius + cfg.terrain.waterLevel;
+  const landingRadius = Math.max(rawLandingRadius, waterRadius);
+  const landingDistance = distToCenter - (landingRadius + cfg.movement.standingHeight);
+
+  const targetCaptureDistance = Math.max(0, getCaptureRadius(target) - landingRadius);
+  if (
+    landingPointDistance <= Math.min(getPlanetHopLandingCaptureDistance(cfg), targetCaptureDistance)
+  ) {
+    state.movementState = PlayerMovementState.LandingApproach;
+    const landingPull =
+      landingPointDistance > 1e-4 ? scale(toLanding, 1 / landingPointDistance) : gravDir;
+    const velToward = dot(state.vel, landingPull);
+    if (velToward > 0 || landingPointDistance > cfg.movement.surfaceSnapDistance) {
+      assign(state.vel, add(state.vel, scale(landingPull, cfg.movement.gravityAcceleration * dt)));
+    }
+  }
+
+  if (landingDistance <= cfg.movement.surfaceSnapDistance) {
+    const velToward = dot(state.vel, gravDir);
+    if (velToward > 0) {
+      // Hard-stop on splat impact: velocity goes to zero and the player is pinned at
+      // the landing point for the splat cooldown (see stepPlayer). The squash visual
+      // plays during this window, then the player pops back up under normal control.
+      assign(
+        state.pos,
+        add(target.center, scale(upDir, landingRadius + cfg.movement.standingHeight)),
+      );
+      assign(state.vel, { x: 0, y: 0, z: 0 });
+      state.planetId = target.id;
+      state.planetHopSourcePlanetId = "";
+      state.planetHopTargetPlanetId = "";
+      state.planetHopLandingNormal = upDir;
+      state.planetHopElapsedMs = 0;
+      state.splatCooldownMs = getPlanetHopLandingSplatCooldownMs(cfg);
+      state.movementState = PlayerMovementState.Idle;
+    }
+  }
+}
+
 // -- Public entry point ------------------------------------------------------
 
 /**
@@ -590,6 +903,8 @@ export function stepPlayer(
   cfg: StepConfig,
   planetSlime: Map<string, SimPlanetSlimeState>,
   rails: ComputedRail[] = [],
+  blastPads: readonly RuntimeBlastPad[] = [],
+  padStates: Map<string, SimBlastPadState> = new Map(),
   terrainProvider?: TerrainSurfaceProvider,
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
@@ -598,12 +913,41 @@ export function stepPlayer(
     state.isOnFriendlySlime = false;
     return;
   }
+  state.splatCooldownMs = Math.max(0, (state.splatCooldownMs ?? 0) - dt * 1000);
   if (state.movementState === PlayerMovementState.Grinding) {
     stepGrinding(state, input, rails, dt, cfg);
     return;
   }
+  if (
+    state.movementState === PlayerMovementState.BlastLaunch ||
+    state.movementState === PlayerMovementState.PlanetHopFlight ||
+    state.movementState === PlayerMovementState.LandingApproach
+  ) {
+    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+    return;
+  }
+  // Splat freeze: after a blast-pad landing the player is pinned at impact (zero vel,
+  // no input movement, no pad re-trigger) for the splat cooldown. The squash visual
+  // eases over the same window so the player visibly compresses then pops back up.
+  if ((state.splatCooldownMs ?? 0) > 0 && state.planetId !== "") {
+    state.vel.x = 0;
+    state.vel.y = 0;
+    state.vel.z = 0;
+    state.movementState = PlayerMovementState.Idle;
+    state.skiJumpCharge = 0;
+    state.isCarving = false;
+    state.surfState = PlayerSurfState.None;
+    return;
+  }
+  if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
+    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+    return;
+  }
   if (state.planetId !== "") {
     stepOnSurface(state, input, dt, planets, cfg, planetSlime, terrainProvider);
+    if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
+      stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+    }
   } else {
     stepAirborne(state, input, dt, planets, cfg, terrainProvider);
     // After airborne integration, check if the player is close enough to a rail to snap.

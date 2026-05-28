@@ -5,7 +5,11 @@ import {
   getSlimeStampChordRadius,
   getPlanetSurfaceChordRadius,
 } from "@splat/content/config/gameConfig.ts";
-import { DEV_MAP, type RuntimeMapData } from "@splat/content/map/runtimeMapData.ts";
+import {
+  DEV_MAP,
+  type RuntimeBlastPad,
+  type RuntimeMapData,
+} from "@splat/content/map/runtimeMapData.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { type InputMessage } from "@splat/protocol/network/clientMessages.ts";
 import { MatchPhase } from "@splat/protocol/network/matchPhase.ts";
@@ -17,6 +21,7 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import {
+  applyPlanetHopLandingImpact,
   rechargePlayerSlime,
   tickProjectiles,
   tryFireHitscan,
@@ -31,13 +36,13 @@ import { createStampBuckets } from "../slime/slimeDetection.ts";
 import { applySlimeImpact } from "../slime/stampSlime.ts";
 import { createTerritoryCells } from "../slime/territoryGrid.ts";
 import { generateBotInput, removeBotState } from "../ai/botController.ts";
-import { RAIL_SLIME_NODES } from "@splat/protocol/schemas/slimedState.ts";
+import { NO_SLIME_GROUP_ID, RAIL_SLIME_NODES } from "@splat/protocol/schemas/slimedState.ts";
 import {
   isTrickMovementState,
   processAirTricks,
   settleAirTricksOnLanding,
 } from "../tricks/airTricks.ts";
-import { type SimMatchState, type SimPlayerState } from "./simState.ts";
+import { isPlanetHopMovementState, type SimMatchState, type SimPlayerState } from "./simState.ts";
 import { selectSpawnSurface } from "./spawnSelection.ts";
 import { sanitizeInputMessage } from "./inputSanitizer.ts";
 import {
@@ -95,6 +100,7 @@ export interface MatchSimulationOptions {
 export class MatchSimulation {
   readonly mode: GameModeDefinition;
   private readonly planets: PlanetData[];
+  private readonly blastPads: readonly RuntimeBlastPad[];
   private readonly rails: ComputedRail[];
   private readonly stepCfg: StepConfig;
   private readonly stepCfgs: Map<string, StepConfig>;
@@ -117,6 +123,7 @@ export class MatchSimulation {
   ) {
     this.mode = mode;
     this.planets = buildPlanets(map);
+    this.blastPads = map.blastPads ?? [];
     this.stepCfg = buildStepConfig(map);
     this.stepCfgs = new Map(map.planets.map((planet) => [planet.id, buildStepConfig(map, planet)]));
     this.rails = buildRails(map);
@@ -129,6 +136,14 @@ export class MatchSimulation {
       this.rails,
       this.stepCfg,
     );
+    // Seed neutral pad states so every pad has an entry from tick zero.
+    for (const pad of this.blastPads) {
+      this.simState.blastPadStates.set(pad.id, {
+        ownerSlimeGroupId: NO_SLIME_GROUP_ID,
+        ownerColor: 0,
+        coverageProgress: 0,
+      });
+    }
   }
 
   get players(): ReadonlyMap<string, SimPlayerState> {
@@ -336,6 +351,7 @@ export class MatchSimulation {
 
   private recordSlimeStamp(message: SlimeStampMessage): void {
     this.pendingSlimeStamps.push(message);
+    this.applyStampToPadOwnership(message);
 
     const planetMessages = this.recentSlimeStamps.get(message.planetId) ?? [];
     planetMessages.push(message);
@@ -350,6 +366,51 @@ export class MatchSimulation {
 
   private recordKillEvent(message: Omit<KillEventMessage, "seq">): void {
     this.pendingKillEvents.push({ ...message, seq: ++this.killSeq });
+  }
+
+  /**
+   * Coverage-based pad charging: each stamp inside a pad's footprint contributes
+   * `chargePerStamp * distFactor` (centered stamps count most, edge stamps barely).
+   * Friendly paint (matching owner, or pad is neutral) adds to coverage and locks
+   * ownership in. Enemy paint drains coverage; if it hits zero the pad goes neutral
+   * and the next paint claims it. A pad only fires once coverage reaches 1 — see
+   * the trigger gate in tryTriggerBlastPad.
+   */
+  private applyStampToPadOwnership(message: SlimeStampMessage): void {
+    if (this.blastPads.length === 0) return;
+    const planet = this.planets.find((p) => p.id === message.planetId);
+    if (!planet) return;
+    for (const pad of this.blastPads) {
+      if (pad.planetId !== message.planetId) continue;
+      const dot = Math.max(
+        -1,
+        Math.min(
+          1,
+          message.nx * pad.normal.x + message.ny * pad.normal.y + message.nz * pad.normal.z,
+        ),
+      );
+      const greatCircleDistance = Math.acos(dot) * planet.radius;
+      if (greatCircleDistance > pad.radius) continue;
+      const state = this.simState.blastPadStates.get(pad.id);
+      if (!state) continue;
+      const distFactor = Math.max(0, 1 - greatCircleDistance / pad.radius);
+      const contribution = GAME_CONFIG.slimeStamp.blastPadChargePerStamp * distFactor;
+      if (contribution <= 0) continue;
+      const isFriendly =
+        state.ownerSlimeGroupId === NO_SLIME_GROUP_ID ||
+        state.ownerSlimeGroupId === message.slimeGroupId;
+      if (isFriendly) {
+        state.ownerSlimeGroupId = message.slimeGroupId;
+        state.ownerColor = message.color;
+        state.coverageProgress = Math.min(1, state.coverageProgress + contribution);
+      } else {
+        state.coverageProgress = Math.max(0, state.coverageProgress - contribution);
+        if (state.coverageProgress <= 0) {
+          state.ownerSlimeGroupId = NO_SLIME_GROUP_ID;
+          state.ownerColor = 0;
+        }
+      }
+    }
   }
 
   private maybeStampRailCorridor(player: SimPlayerState, prevGrindId: number): void {
@@ -407,6 +468,7 @@ export class MatchSimulation {
     nowMs: number,
   ): void {
     const wasTrickActive = isTrickMovementState(player.movementState);
+    const wasPlanetHop = isPlanetHopMovementState(player.movementState);
     const prevGrindId = player.grindRailId;
     stepPlayer(
       player,
@@ -416,8 +478,20 @@ export class MatchSimulation {
       this.getStepConfig(player.planetId),
       this.simState.planets,
       this.rails,
+      this.blastPads,
+      this.simState.blastPadStates,
     );
     this.maybeStampRailCorridor(player, prevGrindId);
+    if (wasPlanetHop && !isPlanetHopMovementState(player.movementState) && player.planetId !== "") {
+      const stamps = applyPlanetHopLandingImpact(
+        this.simState,
+        player,
+        this.planets,
+        this.getGameplayConfig(player.planetId),
+        (event) => this.recordKillEvent(event),
+      );
+      for (const stamp of stamps) this.recordSlimeStamp(stamp);
+    }
     if (isTrickMovementState(player.movementState)) {
       const tricks = processAirTricks(this.simState, player, input, dtSec * 1000, nowMs);
       this.pendingTrickEvents.push(...tricks.trickEvents);

@@ -2,6 +2,18 @@
 
 Agent-maintained notes for changes that touch `apps/editor`.
 
+## 2026-05-26
+
+- Added blast pad authoring across `src/types.ts`, `src/editorPersistence.ts`, `src/export.ts`, `src/LayerNavigator.tsx`, `src/App.tsx`, `src/preview/PlanetPreview.tsx`, `src/preview/EditorScene.ts`, new `src/panels/BlastPadsPanel.tsx`, and new `src/tools/blastPads/{BlastPadTypes,BlastPadTool,BlastPadPreviewVisuals}.ts`.
+- User-visible behavior: each planet in the layer navigator now has a Blast Pads sub-panel; users can click the source planet to place a pad, drag it to move it, click it in delete mode to remove it, pick a destination planet by dropdown or by clicking another planet on the canvas, slide the heading to rotate the launch tangent, aim the tangent at the target with a button, and tune pad radius, launch speed, and upward bias; placed pads render in 3D with a flat platform, an orange direction arrow, and a dashed Bezier arc to the destination landing point, and they round-trip through Publish/Download to `RuntimeMapData.blastPads` (`cameraProfile` fixed to `planetHop`).
+- Validation: `vp fmt apps/editor/src/types.ts apps/editor/src/editorPersistence.ts apps/editor/src/export.ts apps/editor/src/export.test.ts apps/editor/src/LayerNavigator.tsx apps/editor/src/App.tsx apps/editor/src/preview/PlanetPreview.tsx apps/editor/src/preview/EditorScene.ts apps/editor/src/panels/BlastPadsPanel.tsx apps/editor/src/tools/blastPads/BlastPadTypes.ts apps/editor/src/tools/blastPads/BlastPadTool.ts apps/editor/src/tools/blastPads/BlastPadPreviewVisuals.ts apps/editor/src/tools/rails/railCarving.test.ts apps/editor/EDITOR_CHANGELOG.md`; `vp check --no-fmt`; `vp test`; editor dev server smoke test on `http://127.0.0.1:2587/` returned HTTP 200.
+
+## 2026-05-21
+
+- Changed `src/preview/PlayerPreviewController.ts` to pass the new blast-pad argument through shared movement simulation.
+- User-visible behavior: no editor behavior change; preview movement stays on the shared runtime path after blast pad support was added.
+- Validation: `vp check`; `vp test`.
+
 ## 2026-05-20
 
 - Added active planet reset in `src/App.tsx` and `src/panels/PlanetPanel.tsx`.

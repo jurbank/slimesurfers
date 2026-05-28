@@ -170,6 +170,8 @@ export class PlayerPreviewController {
       this.stepConfig,
       EMPTY_SLIME,
       [],
+      [],
+      new Map(),
       this.terrainProvider,
     );
     this.updateMesh();

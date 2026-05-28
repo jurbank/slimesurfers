@@ -102,11 +102,15 @@ export class RoomConnection {
     this._winningTeamId = undefined;
     const devClusterSpawns =
       import.meta.env.DEV && import.meta.env.VITE_CLUSTER_PLAYER_SPAWNS === "true";
-    this.room = await colyseusClient.joinOrCreate(
-      "match",
-      { ...options, devClusterSpawns },
-      GameState,
-    );
+    // When dev cluster spawns are on, override the default matchMode to "dev"
+    // so the server's cluster-spawn policy (anchored at the editor-authored
+    // Preview Spawn) actually takes effect. An explicit lobby selection still
+    // wins — only the default "ffa" gets remapped.
+    const joinOptions =
+      devClusterSpawns && options.matchMode === "ffa"
+        ? { ...options, matchMode: "dev" as const, devClusterSpawns }
+        : { ...options, devClusterSpawns };
+    this.room = await colyseusClient.joinOrCreate("match", joinOptions, GameState);
 
     this.room.onMessage(MessageType.MapData, (message: MapDataMessage) => {
       callbacks.onMapData(message);

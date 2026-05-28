@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { RENDER_CONFIG } from "@splat/content/config/renderConfig.ts";
+import { isPlanetHopMovementState } from "@splat/simulation/match/simState.ts";
 import { HealthBar } from "./healthBar.ts";
 import { Nameplate, type TeamRelation } from "./nameplate.ts";
 import {
@@ -10,9 +11,12 @@ import {
 } from "./playerVisualRig.ts";
 
 const HELD_WEAPON_MODEL_SIZE = 1.95;
+const LANDING_SQUASH_DURATION = 0.45;
+const LANDING_SQUASH_AMOUNT = 0.6;
 
 interface PlayerTransformState extends PlayerVisualState {
   health: number;
+  planetId: string;
 }
 
 /** A remote player's mesh — position updated from server snapshots. */
@@ -21,6 +25,8 @@ export class RemotePlayer {
   private readonly visual: PlayerVisualRig;
   private readonly healthBar: HealthBar;
   private readonly nameplate: Nameplate;
+  private prevMovementState = -1;
+  private landingSquashTimer = 0;
 
   constructor(scene: THREE.Scene, slimeColor: number, patternId = 0, name = "") {
     this.visual = new PlayerVisualRig(slimeColor, patternId, {
@@ -41,6 +47,8 @@ export class RemotePlayer {
     this.visual.setTransform(state);
 
     if (this.visual.updateDeath(state, dt)) {
+      this.prevMovementState = state.movementState;
+      this.landingSquashTimer = 0;
       this.mesh.visible = true;
       this.healthBar.update(state, dt, GAME_CONFIG.player.maxHealth);
       this.nameplate.update(false, dt, camera);
@@ -49,6 +57,24 @@ export class RemotePlayer {
 
     this.visual.updateAlivePose(state, dt);
     this.visual.updateWeapon(state.equippedWeaponId);
+
+    if (
+      this.prevMovementState !== -1 &&
+      isPlanetHopMovementState(this.prevMovementState) &&
+      !isPlanetHopMovementState(state.movementState) &&
+      state.planetId !== ""
+    ) {
+      this.landingSquashTimer = LANDING_SQUASH_DURATION;
+    }
+    this.prevMovementState = state.movementState;
+
+    if (this.landingSquashTimer > 0) {
+      this.landingSquashTimer = Math.max(0, this.landingSquashTimer - dt);
+      const t = this.landingSquashTimer / LANDING_SQUASH_DURATION;
+      const squashY = 1 - LANDING_SQUASH_AMOUNT * t;
+      const expandXZ = 1 / Math.sqrt(squashY);
+      this.visual.liveMesh.scale.set(expandXZ, squashY, expandXZ);
+    }
 
     const effectivelySubmerged = isPlayerEffectivelySubmerged(state);
     this.mesh.visible = !effectivelySubmerged;

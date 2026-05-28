@@ -18,10 +18,12 @@ import {
 import { DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { NETWORK_CONFIG } from "@splat/content/config/networkConfig.ts";
 import { appendSlimeStamp, getSlimeAtPoint } from "../slime/slimeDetection.ts";
-import { getTerrainRadius } from "../terrain/planetTerrain.ts";
+import { createTerrainConfig, getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { buildComputedRail, sampleRailAt } from "../movement/railSpline.ts";
 import { PlayerMovementState, PlayerSurfState } from "./simState.ts";
 import { MatchSimulation } from "./matchSimulation.ts";
+import { applyPlanetHopLandingImpact } from "../combat/projectiles.ts";
+import { buildPlanets, buildStepConfig } from "./matchStateFactory.ts";
 import { generateBotInput } from "../ai/botController.ts";
 
 const MACHINE_GUN_KILL_SHOTS = Math.ceil(
@@ -1226,9 +1228,16 @@ describe("MatchSimulation", () => {
   });
 
   it("recharges slime slowly by default, faster on friendly slime, and fastest while surfing", () => {
-    const neutralSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
-    const slimedSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
-    const surfingSimulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const mapWithoutBlastPads = { ...DEV_MAP, blastPads: [] };
+    const neutralSimulation = new MatchSimulation(FFA_MODE, mapWithoutBlastPads, {
+      seedTestSlime: false,
+    });
+    const slimedSimulation = new MatchSimulation(FFA_MODE, mapWithoutBlastPads, {
+      seedTestSlime: false,
+    });
+    const surfingSimulation = new MatchSimulation(FFA_MODE, mapWithoutBlastPads, {
+      seedTestSlime: false,
+    });
 
     const neutral = neutralSimulation.addPlayer("session-1", "Neutral");
     const slimed = slimedSimulation.addPlayer("session-1", "Slimed");
@@ -1904,5 +1913,100 @@ describe("MatchSimulation", () => {
     expect(target.health).toBe(GAME_CONFIG.player.maxHealth);
     expect(target.movementState).toBe(PlayerMovementState.Idle);
     expect(target.respawnTimer).toBe(0);
+  });
+
+  it("blast-pad landing splats the target planet and kills enemies in the splat radius", () => {
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const lander = simulation.addPlayer("lander", "Lander");
+    const victim = simulation.addPlayer("victim", "Victim");
+
+    // Use a land direction on planet-0 (the dev spawn anchor normal) so the splat
+    // isn't gated by the water/sand-band check inside applySlimeImpact.
+    const targetPlanet = DEV_MAP.planets[0]!;
+    const rawNormal = { x: 0.18, y: 0.96, z: 0.2 };
+    const normalLen = Math.hypot(rawNormal.x, rawNormal.y, rawNormal.z);
+    const outward = {
+      x: rawNormal.x / normalLen,
+      y: rawNormal.y / normalLen,
+      z: rawNormal.z / normalLen,
+    };
+    const terrainCfg = createTerrainConfig(targetPlanet);
+    const surfaceRadius = getTerrainRadius(outward.x, outward.y, outward.z, terrainCfg);
+    const standing = GAME_CONFIG.movement.standingHeight;
+
+    const landingPos = {
+      x: targetPlanet.center.x + (surfaceRadius + standing) * outward.x,
+      y: targetPlanet.center.y + (surfaceRadius + standing) * outward.y,
+      z: targetPlanet.center.z + (surfaceRadius + standing) * outward.z,
+    };
+    lander.pos = { ...landingPos };
+    lander.planetId = targetPlanet.id;
+    lander.movementState = PlayerMovementState.Moving;
+    victim.pos = { ...landingPos };
+    victim.planetId = targetPlanet.id;
+    victim.movementState = PlayerMovementState.Idle;
+    const victimHealthBefore = victim.health;
+
+    const planets = buildPlanets(DEV_MAP);
+    const gameplayCfg = { ...GAME_CONFIG, ...buildStepConfig(DEV_MAP, targetPlanet) };
+    const killEvents: { victimSessionId: string | undefined }[] = [];
+    const stamps = applyPlanetHopLandingImpact(
+      simulation.matchState,
+      lander,
+      planets,
+      gameplayCfg,
+      (event) => killEvents.push({ victimSessionId: event.victimSessionId }),
+    );
+
+    expect(victim.movementState).toBe(PlayerMovementState.Dead);
+    expect(victim.health).toBeLessThan(victimHealthBefore);
+    expect(lander.killCount).toBe(1);
+    expect(killEvents.some((e) => e.victimSessionId === "victim")).toBe(true);
+    // Multi-stamp burst on the target planet, in the lander's color.
+    expect(stamps.length).toBeGreaterThan(0);
+    expect(stamps.every((s) => s.planetId === targetPlanet.id)).toBe(true);
+    expect(stamps.every((s) => s.color === lander.slimeColor)).toBe(true);
+  });
+
+  it("blast-pad landing does not kill enemies outside the splat radius", () => {
+    const simulation = new MatchSimulation(FFA_MODE, DEV_MAP, { seedTestSlime: false });
+    const lander = simulation.addPlayer("lander", "Lander");
+    const bystander = simulation.addPlayer("bystander", "Bystander");
+
+    const targetPlanet = DEV_MAP.planets[0]!;
+    const rawNormal = { x: 0.18, y: 0.96, z: 0.2 };
+    const normalLen = Math.hypot(rawNormal.x, rawNormal.y, rawNormal.z);
+    const outward = {
+      x: rawNormal.x / normalLen,
+      y: rawNormal.y / normalLen,
+      z: rawNormal.z / normalLen,
+    };
+    const terrainCfg = createTerrainConfig(targetPlanet);
+    const surfaceRadius = getTerrainRadius(outward.x, outward.y, outward.z, terrainCfg);
+    const standing = GAME_CONFIG.movement.standingHeight;
+    const killRadius = GAME_CONFIG.movement.planetHopLandingKillRadius;
+
+    lander.pos = {
+      x: targetPlanet.center.x + (surfaceRadius + standing) * outward.x,
+      y: targetPlanet.center.y + (surfaceRadius + standing) * outward.y,
+      z: targetPlanet.center.z + (surfaceRadius + standing) * outward.z,
+    };
+    lander.planetId = targetPlanet.id;
+    lander.movementState = PlayerMovementState.Moving;
+    // Bystander well outside the kill radius (more than 2× the radius away).
+    bystander.pos = {
+      x: lander.pos.x,
+      y: lander.pos.y,
+      z: lander.pos.z + killRadius * 2 + 5,
+    };
+    bystander.planetId = targetPlanet.id;
+    bystander.movementState = PlayerMovementState.Idle;
+
+    const planets = buildPlanets(DEV_MAP);
+    const gameplayCfg = { ...GAME_CONFIG, ...buildStepConfig(DEV_MAP, targetPlanet) };
+    applyPlanetHopLandingImpact(simulation.matchState, lander, planets, gameplayCfg);
+
+    expect(bystander.movementState).not.toBe(PlayerMovementState.Dead);
+    expect(lander.killCount).toBe(0);
   });
 });

@@ -54,6 +54,16 @@ describe("validateRuntimeMapData", () => {
     expect(result.errors.some((e) => e.field === "planets[0].radius")).toBe(true);
   });
 
+  test("rejects non-positive planet gravity radius", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      planets: [{ ...DEV_MAP.planets[0]!, gravityRadius: 0 }],
+      blastPads: [],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "planets[0].gravityRadius")).toBe(true);
+  });
+
   test("rejects missing terrain field", () => {
     const planet0 = DEV_MAP.planets[0]!;
     const { seed: _seed, ...terrainWithoutSeed } = planet0.terrain;
@@ -116,6 +126,7 @@ describe("validateRuntimeMapData", () => {
     const result = validateRuntimeMapData({
       ...DEV_MAP,
       planets: [planetWithoutFeatures],
+      blastPads: [],
     });
 
     expect(result.valid).toBe(true);
@@ -162,6 +173,7 @@ describe("validateRuntimeMapData", () => {
           ],
         },
       ],
+      blastPads: [],
     });
 
     expect(result.valid).toBe(true);
@@ -193,6 +205,7 @@ describe("validateRuntimeMapData", () => {
           ],
         },
       ],
+      blastPads: [],
     });
 
     expect(result.valid).toBe(true);
@@ -263,6 +276,21 @@ describe("validateRuntimeMapData", () => {
     });
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.field === "spawns.dev.anchor.planetId")).toBe(true);
+  });
+
+  test("rejects blast pad referencing unknown target planet", () => {
+    const result = validateRuntimeMapData({
+      ...DEV_MAP,
+      blastPads: [
+        {
+          ...DEV_MAP.blastPads![0]!,
+          targetPlanetId: "planet-99",
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "blastPads[0].targetPlanetId")).toBe(true);
   });
 
   test("rejects unknown spawn policy kind", () => {

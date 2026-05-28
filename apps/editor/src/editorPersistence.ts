@@ -6,6 +6,7 @@ import {
 import {
   defaultEditorConfig,
   defaultEditorPlanet,
+  type EditorBlastPad,
   type EditorConfig,
   type EditorPlanet,
   type EditorSculptState,
@@ -161,8 +162,17 @@ function getSavedRails(parsed: Partial<EditorSaveState>): RailState[] | null {
 
 function normalizeEditorConfig(config: EditorConfig): EditorConfig {
   const baseConfig = defaultEditorConfig();
+  const planetIds = new Set(
+    config.planets.map((planet, index) =>
+      typeof planet.id === "string" ? planet.id : `planet-${index}`,
+    ),
+  );
   return {
     ...config,
+    blastPads: normalizeEditorBlastPads(
+      (config as unknown as { blastPads?: unknown }).blastPads,
+      planetIds,
+    ),
     shaders: {
       ...baseConfig.shaders,
       ...config.shaders,
@@ -312,6 +322,54 @@ function normalizeTerrainFeatures(
       ];
     })
     .filter((feature) => feature.kind !== "slope" || feature.points.length >= 2);
+}
+
+function normalizeEditorBlastPads(pads: unknown, planetIds: Set<string>): EditorBlastPad[] {
+  if (!Array.isArray(pads)) return [];
+  const out: EditorBlastPad[] = [];
+  const seenIds = new Set<string>();
+  for (let i = 0; i < pads.length; i++) {
+    const raw = pads[i] as Partial<EditorBlastPad> | undefined;
+    if (!raw || typeof raw !== "object") continue;
+    if (typeof raw.planetId !== "string" || !planetIds.has(raw.planetId)) continue;
+    if (typeof raw.targetPlanetId !== "string" || !planetIds.has(raw.targetPlanetId)) continue;
+    if (raw.planetId === raw.targetPlanetId) continue;
+    const id =
+      typeof raw.id === "string" && raw.id.trim() !== "" && !seenIds.has(raw.id)
+        ? raw.id
+        : `blast-pad-${i + 1}`;
+    seenIds.add(id);
+    out.push({
+      id,
+      planetId: raw.planetId,
+      targetPlanetId: raw.targetPlanetId,
+      normal: coerceUnitVec3(raw.normal, [0, 1, 0]),
+      tangent: coerceUnitVec3(raw.tangent, [1, 0, 0]),
+      targetNormal: coerceUnitVec3(raw.targetNormal, [0, 1, 0]),
+      radius: coerceFinitePositive(raw.radius, 5),
+      launchSpeed: coerceFinitePositive(raw.launchSpeed, 78),
+      upwardBias: Number.isFinite(raw.upwardBias) ? (raw.upwardBias as number) : 0.45,
+    });
+  }
+  return out;
+}
+
+function coerceUnitVec3(
+  value: unknown,
+  fallback: [number, number, number],
+): [number, number, number] {
+  if (!Array.isArray(value) || value.length < 3) return fallback;
+  const x = Number(value[0]);
+  const y = Number(value[1]);
+  const z = Number(value[2]);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return fallback;
+  const len = Math.hypot(x, y, z);
+  if (len < 1e-6) return fallback;
+  return [x / len, y / len, z / len];
+}
+
+function coerceFinitePositive(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function normalizeSculptState(

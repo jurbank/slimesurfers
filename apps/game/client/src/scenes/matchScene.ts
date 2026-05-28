@@ -28,13 +28,14 @@ import { SurfTrailSystem } from "../systems/surfTrailSystem.ts";
 import { TrickTextSystem } from "../systems/trickTextSystem.ts";
 import { EmoteBubbleSystem } from "../systems/emoteBubbleSystem.ts";
 import { RailSystem } from "../systems/railSystem.ts";
+import { BlastPadSystem } from "../systems/blastPadSystem.ts";
 import { MatchAudioSystem } from "../systems/sound/matchAudioSystem.ts";
 import { SoundSystem } from "../systems/sound/soundSystem.ts";
 import { AUDIO } from "../assets/audioConfig.ts";
 import { RoomConnection } from "../network/roomConnection.ts";
 import { LocalPlayer } from "../entities/player/player.ts";
 import { RemotePlayer } from "../entities/player/remotePlayer.ts";
-import { ClientRuntimeState } from "../network/runtimeState.ts";
+import { ClientRuntimeState, type RuntimePlayerState } from "../network/runtimeState.ts";
 import { CombatHud } from "../ui/CombatHud.ts";
 import { SurfDebugHud } from "../ui/SurfDebugHud.ts";
 import { CountdownOverlay } from "../ui/CountdownOverlay.ts";
@@ -69,6 +70,7 @@ export class MatchScene {
   private readonly trickText: TrickTextSystem;
   private readonly emoteBubbles: EmoteBubbleSystem;
   private readonly rails: RailSystem;
+  private readonly blastPads: BlastPadSystem;
   private readonly sound: SoundSystem;
   private readonly matchAudio: MatchAudioSystem;
   private readonly connection: RoomConnection;
@@ -107,6 +109,7 @@ export class MatchScene {
   private lastLocalHealth: number | null = null;
   private lastWasCarving = false;
   private lastWasAirborne = false;
+  private lastWasPlanetHop = false;
   private portal: PortalSystem | null = null;
 
   private onDisconnectCb: (() => void) | null = null;
@@ -251,6 +254,7 @@ export class MatchScene {
     this.trickText = new TrickTextSystem();
     this.emoteBubbles = new EmoteBubbleSystem();
     this.rails = new RailSystem(this.render.scene);
+    this.blastPads = new BlastPadSystem(this.render.scene);
     this.sound = new SoundSystem();
     this.matchAudio = new MatchAudioSystem(
       this.sound,
@@ -403,6 +407,7 @@ export class MatchScene {
     this.runtime.setMapData(msg);
     this.weaponAim.setMapData(msg);
     this.rails.setMapData(msg);
+    this.blastPads.setMapData(msg);
     this.projectiles.setMapPlanets(msg.planets);
 
     if (firstBuild) {
@@ -476,6 +481,39 @@ export class MatchScene {
     this.localTrail = new SurfTrailSystem(this.render.scene, slimeColor);
     this.localPlayerColor = slimeColor;
     this.localPlayerPatternId = patternId;
+  }
+
+  private readonly _hopCenter = new THREE.Vector3();
+  private readonly _hopAxis = new THREE.Vector3();
+  private readonly _hopRel = new THREE.Vector3();
+
+  /**
+   * Up-vector reference center for the follow camera. During a planet hop this blends
+   * from the source planet center to the target along the route by progress, so the
+   * camera up eases from source-surface up to target-surface up instead of snapping to
+   * target up at launch. Outside a hop it resolves to the player's current planet.
+   */
+  private cameraUpReferenceCenter(
+    state: RuntimePlayerState,
+    playerPos: THREE.Vector3,
+  ): THREE.Vector3 {
+    const target = this.weaponAim.planetCenter(state.planetHopTargetPlanetId);
+    const source = this.weaponAim.planetCenter(state.planetHopSourcePlanetId);
+    if (target && source) {
+      this._hopAxis.subVectors(target, source);
+      const totalSq = this._hopAxis.lengthSq();
+      if (totalSq > 1e-6) {
+        this._hopRel.subVectors(playerPos, source);
+        const progress = Math.min(1, Math.max(0, this._hopRel.dot(this._hopAxis) / totalSq));
+        return this._hopCenter.copy(source).lerp(target, progress);
+      }
+      return this._hopCenter.copy(target);
+    }
+    return (
+      target ??
+      this.weaponAim.planetCenter(state.planetId) ??
+      this.weaponAim.nearestPlanetCenter(playerPos)
+    );
   }
 
   private resolveTeamVisual(
@@ -706,6 +744,10 @@ export class MatchScene {
     const localSessionId = this.connection.sessionId;
     const liveRemoteIds = new Set<string>();
     this.matchAudio.handleSnapshotPlayers(snapshot.players);
+    // Apply pad ownership BEFORE reconciling players so the re-run of pending inputs
+    // uses the latest authoritative pad state for trigger gating.
+    this.runtime.applyBlastPadStates(snapshot.blastPadStates);
+    this.blastPads.setPadStates(this.runtime.getBlastPadStates());
     for (const player of snapshot.players) {
       const isLocal = player.sessionId === localSessionId;
       const visual = this.resolveTeamVisual(player.sessionId, player.slimeColor, player.patternId);
@@ -765,6 +807,7 @@ export class MatchScene {
     this.healthPickups.clear();
     this.projectiles.clear();
     this.rails.dispose(this.render.scene);
+    this.blastPads.dispose();
     this.trickText.clear();
     this.emoteBubbles.clear();
     this.leaderboard.clear();
@@ -873,10 +916,10 @@ export class MatchScene {
       }
 
       playerPos.set(localState.pos.x, localState.pos.y, localState.pos.z);
-      const planetCenter = this.weaponAim.nearestPlanetCenter(playerPos);
+      const activePlanetCenter = this.cameraUpReferenceCenter(localState, playerPos);
 
       // Update orientation (parallel transport + yaw); return value unused here.
-      this.input.computeAimDir(playerPos, planetCenter);
+      this.input.computeAimDir(playerPos, activePlanetCenter);
       const yawForward = this.input.getYawForward();
 
       // aimDir for this frame comes from the previous frame's camera position.
@@ -910,7 +953,12 @@ export class MatchScene {
 
       const predictedLocalState = this.runtime.getLocalPlayerState();
       if (predictedLocalState) {
-        const isNowAirborne = predictedLocalState.movementState === PlayerMovementState.Airborne;
+        const isPlanetHop =
+          predictedLocalState.movementState === PlayerMovementState.BlastLaunch ||
+          predictedLocalState.movementState === PlayerMovementState.PlanetHopFlight ||
+          predictedLocalState.movementState === PlayerMovementState.LandingApproach;
+        const isNowAirborne =
+          predictedLocalState.movementState === PlayerMovementState.Airborne || isPlanetHop;
         const isNowSurfing = predictedLocalState.surfState !== PlayerSurfState.None;
         this.input.setSubmergeActive(isNowSurfing);
 
@@ -926,14 +974,22 @@ export class MatchScene {
           this.localPlayer?.triggerSurfLaunch();
           this.sound.playSfx("surfLaunch");
         }
+        if (this.lastWasPlanetHop && !isPlanetHop && predictedLocalState.planetId !== "") {
+          this.localPlayer?.triggerLandingSquash();
+        }
         this.lastWasAirborne = isNowAirborne;
+        this.lastWasPlanetHop = isPlanetHop;
         this.lastWasCarving = isNowSurfing && predictedLocalState.isCarving && !isNowAirborne;
       }
       if (predictedLocalState && this.localPlayer) {
-        const visualRotation =
-          predictedLocalState.movementState === PlayerMovementState.Airborne
-            ? this.input.getLocalRotation()
-            : undefined;
+        const isPlanetHop =
+          predictedLocalState.movementState === PlayerMovementState.BlastLaunch ||
+          predictedLocalState.movementState === PlayerMovementState.PlanetHopFlight ||
+          predictedLocalState.movementState === PlayerMovementState.LandingApproach;
+        const isAirborneLike =
+          predictedLocalState.movementState === PlayerMovementState.Airborne || isPlanetHop;
+        const visualRotation = isAirborneLike ? this.input.getLocalRotation() : undefined;
+        const predictedPlanetCenter = this.cameraUpReferenceCenter(predictedLocalState, playerPos);
         this.localPlayer.update(
           predictedLocalState,
           dt,
@@ -948,7 +1004,7 @@ export class MatchScene {
             predictedLocalState.slimeColor,
             predictedLocalState.patternId,
           );
-          this.localTrail.update(predictedLocalState, planetCenter, visual.slimeColor);
+          this.localTrail.update(predictedLocalState, predictedPlanetCenter, visual.slimeColor);
         }
         this.weaponAim.setLastAimDir(
           this.camera.update(
@@ -956,9 +1012,10 @@ export class MatchScene {
             predictedLocalState.vel,
             yawForward,
             this.input.getPitch(),
-            planetCenter,
-            predictedLocalState.movementState === PlayerMovementState.Airborne,
+            predictedPlanetCenter,
+            isAirborneLike,
             dt,
+            isPlanetHop,
           ),
         );
       }

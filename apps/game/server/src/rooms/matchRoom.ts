@@ -191,7 +191,32 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
     this.devClusterSpawns =
       process.env.NODE_ENV !== "production" && options.devClusterSpawns === true;
     this.map = resolveMap(options);
-    this.simulation = new MatchSimulation(resolveGameMode(resolveMatchMode(options)), this.map, {
+    const resolvedMode = resolveMatchMode(options);
+    const baseMode = resolveGameMode(resolvedMode);
+    // `map.spawns[modeId]` is the per-map override for spawn placement (this is
+    // what the editor's Publish writes). When present we override the mode's
+    // built-in `spawnPolicy` so authored maps actually drive where players land.
+    // Falls through to the mode's hardcoded policy when the map omits the key.
+    const mapPolicy = this.map.spawns[baseMode.id];
+    const mode = mapPolicy
+      ? {
+          ...baseMode,
+          spawnPolicy: mapPolicy,
+          spawnPlanetId:
+            mapPolicy.kind === "cluster" ? mapPolicy.anchor.planetId : baseMode.spawnPlanetId,
+        }
+      : baseMode;
+    if (process.env.NODE_ENV !== "production") {
+      const anchor =
+        mode.spawnPolicy.kind === "cluster"
+          ? `${mode.spawnPolicy.anchor.planetId}@(${mode.spawnPolicy.anchor.normal.x.toFixed(2)},${mode.spawnPolicy.anchor.normal.y.toFixed(2)},${mode.spawnPolicy.anchor.normal.z.toFixed(2)})`
+          : mode.spawnPolicy.kind;
+      const source = mapPolicy ? "map" : "mode-default";
+      console.log(
+        `[match-room] new room: mapId=${this.map.mapId} mode=${resolvedMode} devCluster=${String(options.devClusterSpawns)} clientMatchMode=${String(options.matchMode)} spawn=${anchor} (from ${source})`,
+      );
+    }
+    this.simulation = new MatchSimulation(mode, this.map, {
       lobbyEnabled: true,
       seedTestSlime: isEnvFlagEnabled(process.env.SEED_TEST_SLIME),
       weaponPickupLayout: resolveWeaponPickupLayout(),
@@ -236,6 +261,7 @@ export class MatchRoom extends Room<{ state: GameState; metadata: MatchRoomMetad
         terrainFeatures: planet.terrainFeatures ?? [],
       })),
       rails: this.map.rails,
+      blastPads: this.map.blastPads ?? [],
     });
 
     const bootstrap = buildJoinBootstrap(this.simulation);
