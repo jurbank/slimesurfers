@@ -118,6 +118,18 @@ export function LayerNavigator({
             {expandedPlanets.has(planet.id) && (
               <>
                 <LayerButton
+                  label="Planet"
+                  active={isLayerSelected(selectedLayer, {
+                    kind: "planet",
+                    planetId: planet.id,
+                    panel: "planet",
+                  })}
+                  depth={1}
+                  onClick={() =>
+                    onSelectLayer({ kind: "planet", planetId: planet.id, panel: "planet" })
+                  }
+                />
+                <LayerButton
                   label="Terrain"
                   active={isLayerSelected(selectedLayer, {
                     kind: "planet",

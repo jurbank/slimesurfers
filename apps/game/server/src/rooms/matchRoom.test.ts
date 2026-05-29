@@ -135,6 +135,32 @@ describe("MatchRoom", () => {
     }
   });
 
+  it("uses the map's spawn policy over the mode's hardcoded default", () => {
+    // DEV_MAP.spawns.dev exactly matches DEV_MODE's hardcoded DEV_CLUSTER_ANCHOR
+    // out of the box, so a custom map is the only way to actually exercise the
+    // override path. Without this fix the editor's Publish doesn't drive spawn.
+    const customAnchor = { x: -0.5, y: 0.3, z: -0.8 };
+    const customMap = {
+      ...DEV_MAP,
+      spawns: {
+        ...DEV_MAP.spawns,
+        dev: {
+          kind: "cluster" as const,
+          radius: 12,
+          anchor: { planetId: "planet-0", normal: customAnchor },
+        },
+      },
+    };
+    const harness = createRoomHarness({ devClusterSpawns: true, mapData: customMap });
+    const sim = (harness.room as unknown as { simulation: MatchSimulation }).simulation;
+    expect(sim.mode.id).toBe("dev");
+    expect(sim.mode.spawnPolicy.kind).toBe("cluster");
+    if (sim.mode.spawnPolicy.kind === "cluster") {
+      expect(sim.mode.spawnPolicy.anchor.normal).toEqual(customAnchor);
+      expect(sim.mode.spawnPolicy.radius).toBe(12);
+    }
+  });
+
   it("enables seeded slime only when SEED_TEST_SLIME is true", () => {
     const previousSeedTestSlime = process.env.SEED_TEST_SLIME;
     try {

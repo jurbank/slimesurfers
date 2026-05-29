@@ -82,18 +82,141 @@
         "seed": 12345,
         "rocketEnabled": true
       },
-      "hasWater": true
+      "hasWater": true,
+      "terrainFeatures": [
+        {
+          "id": "slope-mpqapj4k",
+          "kind": "slope",
+          "enabled": true,
+          "width": 30,
+          "bank": 0,
+          "edgeFalloff": 10,
+          "smoothing": 0.9,
+          "transitionLength": 0,
+          "points": [
+            {
+              "nx": -0.05205289955491188,
+              "ny": 0.8823725948596751,
+              "nz": 0.4676634468167575,
+              "heightOffset": 8
+            },
+            {
+              "nx": 0.008858752173999927,
+              "ny": 0.09673591860448554,
+              "nz": 0.9952706589474374,
+              "heightOffset": 39.43432323822995
+            }
+          ]
+        },
+        {
+          "id": "jump-mpqaqh12",
+          "kind": "jump",
+          "enabled": true,
+          "nx": -0.12762249017876656,
+          "ny": -0.025288374806924106,
+          "nz": 0.9915003772567084,
+          "tx": 0.991645311076483,
+          "ty": -0.022165655881426757,
+          "tz": 0.12707580697902865,
+          "width": 24,
+          "length": 34,
+          "height": 10,
+          "edgeFalloff": 8,
+          "smoothing": 1
+        }
+      ]
     },
     {
       "id": "planet-1",
       "center": {
-        "x": 400,
+        "x": 506,
+        "y": 175,
+        "z": 0
+      },
+      "radius": 300,
+      "terrain": {
+        "seed": 43,
+        "baseAmplitude": 18.5,
+        "frequency": 1.15,
+        "octaves": 3,
+        "lacunarity": 1.65,
+        "persistence": 0.45,
+        "heightSmoothingStrength": 0.45,
+        "heightSmoothingSampleAngle": 0.035,
+        "icosahedronDetail": 10,
+        "waterLevel": -3,
+        "sandBand": 1.5,
+        "rockLevel": 6.6,
+        "snowLevel": 3
+      },
+      "colors": {
+        "sand": 13942904,
+        "grass": 15921906,
+        "rock": 9079418,
+        "snow": 15660280,
+        "waterDeep": 669811
+      },
+      "atmosphere": {
+        "enabled": true,
+        "height": 18,
+        "color": 6404351,
+        "intensity": 0.85,
+        "opacity": 0.42,
+        "blendMode": "normal",
+        "fresnelPower": 2.4,
+        "falloffPower": 1.5,
+        "clouds": {
+          "enabled": true,
+          "height": 26,
+          "thickness": 4,
+          "density": 0.48,
+          "color": 16777215,
+          "shadowStrength": 0.34,
+          "coverageScale": 3.6,
+          "movementSpeed": 0.08,
+          "opacity": 0.72,
+          "blendMode": "normal",
+          "puffs": {
+            "enabled": true,
+            "height": 18,
+            "thickness": 10,
+            "density": 10,
+            "size": 14,
+            "color": 16777215,
+            "opacity": 0.78,
+            "blendMode": "normal",
+            "shadowStrength": 0.28,
+            "movementSpeed": 0.04
+          }
+        }
+      },
+      "lighting": {
+        "sunAzimuth": 63,
+        "sunElevation": 53,
+        "sunIntensity": 1,
+        "ambientIntensity": 0.5,
+        "rimColor": 9090303,
+        "rimStrength": 0.4,
+        "rimPower": 3
+      },
+      "props": {
+        "treeDensity": 400,
+        "cactusDensity": 200,
+        "seed": 12345,
+        "rocketEnabled": true
+      },
+      "hasWater": true
+    },
+    {
+      "id": "planet-2",
+      "center": {
+        "x": 800,
         "y": 0,
         "z": 0
       },
-      "radius": 100,
+      "radius": 300,
       "terrain": {
-        "seed": 42,
+        "seed": 731553407,
         "baseAmplitude": 54,
         "frequency": 1.4,
         "octaves": 3,
@@ -160,7 +283,7 @@
       "props": {
         "treeDensity": 400,
         "cactusDensity": 200,
-        "seed": 12345,
+        "seed": 731553407,
         "rocketEnabled": true
       },
       "hasWater": true
@@ -178,23 +301,47 @@
       "id": "blast-pad-1",
       "planetId": "planet-0",
       "normal": {
-        "x": 0.20904164881435092,
-        "y": 0.9777226419202616,
-        "z": -0.018974312568351543
+        "x": 0,
+        "y": 1,
+        "z": 0
       },
       "tangent": {
-        "x": 0.977904268284232,
-        "y": -0.20895815664566797,
-        "z": 0.0063032406526473996
+        "x": 1,
+        "y": 0,
+        "z": 0
       },
       "targetPlanetId": "planet-1",
       "targetNormal": {
-        "x": -0.9701425001453319,
-        "y": 0.24253562503633297,
+        "x": -0.9891929635653334,
+        "y": -0.14661951040988142,
         "z": 0
       },
       "radius": 5,
       "launchSpeed": 78,
+      "upwardBias": 0.45,
+      "cameraProfile": "planetHop"
+    },
+    {
+      "id": "blast-pad-2",
+      "planetId": "planet-1",
+      "normal": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "tangent": {
+        "x": -0.9455185755993167,
+        "y": 0,
+        "z": -0.32556815445715703
+      },
+      "targetPlanetId": "planet-0",
+      "targetNormal": {
+        "x": 0.9331077616825828,
+        "y": 0.35959686468004676,
+        "z": 0
+      },
+      "radius": 5,
+      "launchSpeed": 44,
       "upwardBias": 0.45,
       "cameraProfile": "planetHop"
     }
@@ -212,9 +359,9 @@
       "anchor": {
         "planetId": "planet-0",
         "normal": {
-          "x": 0.18627162523155003,
-          "y": 0.9676049725119272,
-          "z": 0.17042153268818344
+          "x": 0.18344731952485008,
+          "y": 0.9823599704945848,
+          "z": -0.036276291555590076
         }
       }
     }

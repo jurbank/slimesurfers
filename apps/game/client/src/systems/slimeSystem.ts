@@ -17,6 +17,14 @@ interface AnimatedSplat {
   edgeNoiseOffset: THREE.Vector3;
 }
 
+interface PlanetHeightMapEntry {
+  texture: THREE.Texture;
+  /** Half of the smallest occludable feature, in world units — used as a
+   * permissive tolerance on the height comparison so noise/sphere-curvature
+   * don't accidentally clip ordinary splats. */
+  tolerance: number;
+}
+
 export class SlimeSystem {
   private readonly renderTargets = new Map<string, THREE.WebGLRenderTarget>();
   private readonly permanentRenderTargets = new Map<string, THREE.WebGLRenderTarget>();
@@ -27,10 +35,23 @@ export class SlimeSystem {
   private readonly copyMaterial: THREE.ShaderMaterial;
   private readonly seenStamps = new Set<string>();
   private readonly activeSplats: AnimatedSplat[] = [];
+  private readonly planetHeightMaps = new Map<string, PlanetHeightMapEntry>();
+  /** Placeholder bound when a planet hasn't registered a heightmap yet; with
+   * `occlusionEnabled = false` the shader ignores it entirely. */
+  private readonly placeholderHeightMap: THREE.DataTexture;
 
   private readonly stampHistory = new Map<string, SlimeStampMessage[]>();
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
+    this.placeholderHeightMap = new THREE.DataTexture(
+      new Float32Array([1]),
+      1,
+      1,
+      THREE.RedFormat,
+      THREE.FloatType,
+    );
+    this.placeholderHeightMap.needsUpdate = true;
+
     this.brushMaterial = new THREE.ShaderMaterial({
       uniforms: {
         brushColor: { value: new THREE.Color(0xffffff) },
@@ -44,6 +65,9 @@ export class SlimeSystem {
         edgeNoiseScale: { value: GAME_CONFIG.slimeStamp.edgeNoiseScale },
         edgeNoiseStrength: { value: GAME_CONFIG.slimeStamp.edgeNoiseStrength },
         edgeNoiseOffset: { value: new THREE.Vector3() },
+        heightMap: { value: this.placeholderHeightMap },
+        occlusionEnabled: { value: false },
+        occlusionTolerance: { value: 0 },
       },
       vertexShader: stampVertexShader,
       fragmentShader: stampFragmentShader,
@@ -84,6 +108,16 @@ export class SlimeSystem {
       this.permanentRenderTargets.set(planetId, this.createSlimeRenderTarget());
     }
     return this.renderTargets.get(planetId)!;
+  }
+
+  /** Register a per-planet heightmap so the stamp shader can reject pixels
+   * whose line-of-sight from the impact is occluded by terrain. */
+  setPlanetHeightMap(planetId: string, texture: THREE.Texture, tolerance: number): void {
+    const previous = this.planetHeightMaps.get(planetId);
+    if (previous && previous.texture !== texture) {
+      previous.texture.dispose();
+    }
+    this.planetHeightMaps.set(planetId, { texture, tolerance });
   }
 
   getStampHistory(planetId: string): readonly SlimeStampMessage[] {
@@ -299,6 +333,19 @@ export class SlimeSystem {
     this.brushMaterial.uniforms.stampRadius.value = splat.radius;
     this.brushMaterial.uniforms.bloomProgress.value = bloomProgress;
     this.brushMaterial.uniforms.edgeNoiseOffset.value.copy(splat.edgeNoiseOffset);
+
+    const heightMap = this.planetHeightMaps.get(splat.planetId);
+    if (heightMap) {
+      this.brushMaterial.uniforms.heightMap.value = heightMap.texture;
+      this.brushMaterial.uniforms.occlusionEnabled.value = true;
+      this.brushMaterial.uniforms.occlusionTolerance.value = heightMap.tolerance;
+    } else {
+      // No heightmap registered yet — fall back to the chord-only behaviour.
+      this.brushMaterial.uniforms.heightMap.value = this.placeholderHeightMap;
+      this.brushMaterial.uniforms.occlusionEnabled.value = false;
+      this.brushMaterial.uniforms.occlusionTolerance.value = 0;
+    }
+
     this.renderer.setRenderTarget(renderTarget);
     this.renderer.render(this.brushScene, this.brushCamera);
   }

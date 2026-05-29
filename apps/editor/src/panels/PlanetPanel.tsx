@@ -41,7 +41,14 @@ export function PlanetPanel({
 
   function addPlanet() {
     const id = nextPlanetId(planets);
-    onPlanetsChange([...planets, defaultEditorPlanet(id, { x: 400, y: 0, z: 0 })]);
+    const base = defaultEditorPlanet(id, { x: 400, y: 0, z: 0 });
+    const seed = Math.floor(Math.random() * 1_000_000_000);
+    const nextPlanet = {
+      ...base,
+      terrain: { ...base.terrain, seed },
+      props: { ...base.props, seed },
+    };
+    onPlanetsChange([...planets, nextPlanet]);
     onActivePlanetChange(id);
   }
 

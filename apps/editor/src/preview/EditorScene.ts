@@ -180,9 +180,8 @@ export class EditorScene {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.06;
-    this.controls.minDistance = 115;
-    this.controls.maxDistance = 600;
     this.controls.target.set(0, 0, 0);
+    this.applyCameraDistanceLimits(config.planets[0]!.radius);
 
     // Phase 1: init sculpt data and tool instances before planet build
     this.brushTool = new BrushTool(config);
@@ -455,6 +454,7 @@ export class EditorScene {
     const newTarget = new THREE.Vector3(center.x, center.y, center.z);
     this.controls.target.copy(newTarget);
     this.camera.position.copy(newTarget).add(camOffset);
+    this.applyCameraDistanceLimits(this.getPlanetById(id).radius);
     this.controls.update();
     this.updateSpawnMarker();
   }
@@ -508,9 +508,25 @@ export class EditorScene {
     const cx = planet.center.x;
     const cy = planet.center.y;
     const cz = planet.center.z;
-    this.camera.position.set(cx, cy + 40, cz + 230);
+    this.camera.position.set(cx, cy + planet.radius * 0.4, cz + planet.radius * 2.3);
     this.controls.target.set(cx, cy, cz);
+    this.applyCameraDistanceLimits(planet.radius);
     this.controls.update();
+  }
+
+  private applyCameraDistanceLimits(planetRadius: number): void {
+    this.controls.minDistance = Math.max(planetRadius * 1.15, 5);
+    this.controls.maxDistance = Math.max(planetRadius * 8, 600);
+    const target = this.controls.target;
+    const offset = this.camera.position.clone().sub(target);
+    const dist = offset.length();
+    if (dist > this.controls.maxDistance) {
+      offset.setLength(this.controls.maxDistance);
+      this.camera.position.copy(target).add(offset);
+    } else if (dist < this.controls.minDistance) {
+      offset.setLength(this.controls.minDistance);
+      this.camera.position.copy(target).add(offset);
+    }
   }
 
   getPerformanceStats(): PerformanceStats {
@@ -630,7 +646,7 @@ export class EditorScene {
     );
     const planetMaterial = createPlanetMaterial({
       slimeMask: null,
-      planetCenter: new THREE.Vector3(0, 0, 0),
+      planetCenter: new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z),
       planetRadius: planet.radius,
       waterRadius,
       waterLevel: planet.terrain.waterLevel,
@@ -726,6 +742,8 @@ export class EditorScene {
     const u = render.planetMaterial.uniforms;
     const waterRadius = planet.radius + planet.terrain.waterLevel;
 
+    u.planetCenter.value.set(planet.center.x, planet.center.y, planet.center.z);
+    u.planetRadius.value = planet.radius;
     u.waterLevel.value = planet.terrain.waterLevel;
     u.sandBand.value = planet.terrain.sandBand;
     u.rockLevel.value = planet.terrain.rockLevel;
@@ -811,6 +829,7 @@ export class EditorScene {
     activeRender.terrainMesh.geometry = newGeo;
     activeRender.outlineMesh.geometry = newGeo;
     oldGeo.dispose();
+    this.applyCameraDistanceLimits(planet.radius);
     this.railPreviewVisuals.setConfig(this.currentConfig);
     this.railTool.syncSurface();
     this.slopeFeatureTool.syncSurface();

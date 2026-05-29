@@ -401,7 +401,13 @@ export function App() {
     const planets = configRef.current.planets;
     const id = nextPlanetId(planets);
     const centerOffset = 400 * planets.length;
-    const nextPlanet = defaultEditorPlanet(id, { x: centerOffset, y: 0, z: 0 });
+    const base = defaultEditorPlanet(id, { x: centerOffset, y: 0, z: 0 });
+    const seed = Math.floor(Math.random() * 1_000_000_000);
+    const nextPlanet = {
+      ...base,
+      terrain: { ...base.terrain, seed },
+      props: { ...base.props, seed },
+    };
     const nextConfig = { ...configRef.current, planets: [...planets, nextPlanet] };
     configRef.current = nextConfig;
     setConfig(nextConfig);

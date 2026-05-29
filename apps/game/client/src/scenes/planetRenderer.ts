@@ -18,6 +18,11 @@ import type { SlimeSystem } from "../systems/slimeSystem.ts";
 type MapPlanet = MapDataMessage["planets"][number];
 type MapCel = MapDataMessage["cel"];
 
+// Resolution of the per-planet heightmap baked for the slime stamp shader.
+// Lower than the mask resolution because the occlusion check only needs the
+// smooth, low-frequency shape of the terrain — peaks and cliffs, not noise.
+const SLIME_HEIGHT_MAP_RESOLUTION = 256;
+
 function toMapDataPlanets(planets: typeof DEV_MAP.planets): MapDataMessage["planets"] {
   return planets.map((planet) => ({ ...planet, terrainFeatures: planet.terrainFeatures ?? [] }));
 }
@@ -93,6 +98,8 @@ export class PlanetRenderer {
 
       const atmosphere = this.atmosphereMaterials[i];
       if (atmosphere) this.applyAtmosphereMaterialConfig(atmosphere, mapPlanet);
+
+      this.registerSlimeHeightMap(mapPlanet, planetCfg);
     }
 
     return false;
@@ -177,7 +184,54 @@ export class PlanetRenderer {
         this.waterMaterials.push(null);
         this.waterMeshes.push(null);
       }
+
+      this.registerSlimeHeightMap(p, cfg);
     }
+  }
+
+  /**
+   * Bakes a per-planet heightmap (displaced surface radius keyed by UV) and
+   * hands it to the slime system so the stamp shader can do occlusion checks.
+   * Without this, paint cones project onto every UV in their angular reach —
+   * including the back side of peaks/cliffs sitting inside the cone.
+   */
+  private registerSlimeHeightMap(planet: MapPlanet, cfg: TerrainConfig): void {
+    const resolution = SLIME_HEIGHT_MAP_RESOLUTION;
+    const data = new Float32Array(resolution * resolution);
+
+    for (let v = 0; v < resolution; v++) {
+      const vCoord = (v + 0.5) / resolution;
+      const theta = vCoord * Math.PI;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
+      for (let u = 0; u < resolution; u++) {
+        const uCoord = (u + 0.5) / resolution;
+        // Inverse UV mapping — must match the one in stampShader.ts.
+        const phi = (1 - 2 * uCoord) * Math.PI;
+        const nx = sinT * Math.cos(phi);
+        const ny = -cosT;
+        const nz = sinT * Math.sin(phi);
+        data[v * resolution + u] = getTerrainRadius(nx, ny, nz, cfg);
+      }
+    }
+
+    const texture = new THREE.DataTexture(
+      data,
+      resolution,
+      resolution,
+      THREE.RedFormat,
+      THREE.FloatType,
+    );
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+
+    // Tolerance scales with the heightmap's texel angular size so noise-level
+    // bumps below our sampling resolution don't accidentally clip paint.
+    const tolerance = (Math.PI * planet.radius) / resolution;
+    this.slime.setPlanetHeightMap(planet.id, texture, tolerance);
   }
 
   private buildTerrainGeometry(cfg: TerrainConfig): THREE.BufferGeometry {
