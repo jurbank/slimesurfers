@@ -663,6 +663,7 @@ function stepAirborne(
   planets: PlanetData[],
   cfg: StepConfig,
   terrainProvider?: TerrainSurfaceProvider,
+  cfgForPlanet?: (planetId: string) => StepConfig | undefined,
 ): void {
   state.isOnFriendlySlime = false;
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
@@ -720,10 +721,11 @@ function stepAirborne(
     if (dist < 0.01) return; // degenerate: inside planet centre
     const gravDir = scale(toPlanet, 1 / dist);
     const upDir = scale(gravDir, -1);
+    const nearestCfg = cfgForPlanet?.(nearest.id) ?? cfg;
     const rawLandingRadius =
-      terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, cfg, nearest.id) ??
-      getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
-    const waterRadius = cfg.planet.radius + cfg.terrain.waterLevel;
+      terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, nearestCfg, nearest.id) ??
+      getTerrainRadius(upDir.x, upDir.y, upDir.z, nearestCfg);
+    const waterRadius = nearestCfg.planet.radius + nearestCfg.terrain.waterLevel;
     const landingRadius = Math.max(rawLandingRadius, waterRadius);
     if (dist <= landingRadius + cfg.movement.standingHeight + cfg.movement.surfaceSnapDistance) {
       // Only land when moving toward the planet — prevents re-landing immediately after a jump.
@@ -748,6 +750,7 @@ function stepPlanetHop(
   planets: PlanetData[],
   cfg: StepConfig,
   terrainProvider?: TerrainSurfaceProvider,
+  cfgForPlanet?: (planetId: string) => StepConfig | undefined,
 ): void {
   state.isOnFriendlySlime = false;
   state.isCarving = false;
@@ -758,7 +761,7 @@ function stepPlanetHop(
   const target = findPlanet(planets, state.planetHopTargetPlanetId ?? "");
   if (!target) {
     state.movementState = PlayerMovementState.Airborne;
-    stepAirborne(state, input, dt, planets, cfg, terrainProvider);
+    stepAirborne(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     return;
   }
 
@@ -788,14 +791,15 @@ function stepPlanetHop(
     }
   }
 
+  const targetCfg = cfgForPlanet?.(target.id) ?? cfg;
   const targetSurfaceRadius =
     (terrainProvider?.getRadius(
       landingNormal.x,
       landingNormal.y,
       landingNormal.z,
-      cfg,
+      targetCfg,
       target.id,
-    ) ?? getTerrainRadius(landingNormal.x, landingNormal.y, landingNormal.z, cfg)) +
+    ) ?? getTerrainRadius(landingNormal.x, landingNormal.y, landingNormal.z, targetCfg)) +
     cfg.movement.standingHeight;
   const targetPoint = add(target.center, scale(landingNormal, targetSurfaceRadius));
   const targetDir = normalize(sub(targetPoint, state.pos));
@@ -847,9 +851,9 @@ function stepPlanetHop(
   const toLanding = sub(targetPoint, state.pos);
   const landingPointDistance = vlen(toLanding);
   const rawLandingRadius =
-    terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, cfg, target.id) ??
-    getTerrainRadius(upDir.x, upDir.y, upDir.z, cfg);
-  const waterRadius = target.radius + cfg.terrain.waterLevel;
+    terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, targetCfg, target.id) ??
+    getTerrainRadius(upDir.x, upDir.y, upDir.z, targetCfg);
+  const waterRadius = target.radius + targetCfg.terrain.waterLevel;
   const landingRadius = Math.max(rawLandingRadius, waterRadius);
   const landingDistance = distToCenter - (landingRadius + cfg.movement.standingHeight);
 
@@ -906,6 +910,7 @@ export function stepPlayer(
   blastPads: readonly RuntimeBlastPad[] = [],
   padStates: Map<string, SimBlastPadState> = new Map(),
   terrainProvider?: TerrainSurfaceProvider,
+  cfgForPlanet?: (planetId: string) => StepConfig | undefined,
 ): void {
   if (state.movementState === PlayerMovementState.Dead) {
     state.surfState = PlayerSurfState.None;
@@ -923,7 +928,7 @@ export function stepPlayer(
     state.movementState === PlayerMovementState.PlanetHopFlight ||
     state.movementState === PlayerMovementState.LandingApproach
   ) {
-    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     return;
   }
   // Splat freeze: after a blast-pad landing the player is pinned at impact (zero vel,
@@ -940,16 +945,16 @@ export function stepPlayer(
     return;
   }
   if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
-    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     return;
   }
   if (state.planetId !== "") {
     stepOnSurface(state, input, dt, planets, cfg, planetSlime, terrainProvider);
     if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
-      stepPlanetHop(state, input, dt, planets, cfg, terrainProvider);
+      stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     }
   } else {
-    stepAirborne(state, input, dt, planets, cfg, terrainProvider);
+    stepAirborne(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     // After airborne integration, check if the player is close enough to a rail to snap.
     if (
       state.movementState === PlayerMovementState.Airborne &&

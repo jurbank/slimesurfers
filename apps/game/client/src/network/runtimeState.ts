@@ -279,6 +279,8 @@ export class ClientRuntimeState {
       this.computedRails,
       this.blastPads,
       this.blastPadStates,
+      undefined,
+      (id) => this.stepCfgs.get(id),
     );
   }
 
@@ -355,6 +357,9 @@ export class ClientRuntimeState {
         planetSlime,
         this.computedRails,
         this.blastPads,
+        undefined,
+        undefined,
+        (id) => this.stepCfgs.get(id),
       );
     }
   }

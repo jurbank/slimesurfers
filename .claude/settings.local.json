@@ -57,7 +57,9 @@
       "Bash(lsof -nP -iTCP:5173 -sTCP:LISTEN)",
       "Bash(ps -eo pid,lstart,command)",
       "Bash(awk '$4 == \"cwd\" { print $NF }')",
-      "Bash(ps -p 55564 -o pid,user,command)"
+      "Bash(ps -p 55564 -o pid,user,command)",
+      "Bash(vp dlx *)",
+      "Bash(awk -F: '{print $1, $2}')"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -49,6 +49,10 @@ function createPlanetData(config: EditorConfig): PlanetData[] {
 
 function createStepConfig(config: EditorConfig, spawn: PreviewSpawnState): StepConfig {
   const planet = getPreviewPlanet(config, spawn);
+  return createStepConfigForPlanet(planet);
+}
+
+function createStepConfigForPlanet(planet: EditorConfig["planets"][number]): StepConfig {
   return {
     planet: { radius: planet.radius },
     movement: { ...GAME_CONFIG.movement },
@@ -56,6 +60,10 @@ function createStepConfig(config: EditorConfig, spawn: PreviewSpawnState): StepC
     terrain: { ...planet.terrain },
     terrainFeatures: editorTerrainFeaturesToRuntime(planet.terrainFeatures),
   };
+}
+
+function createStepConfigs(config: EditorConfig): Map<string, StepConfig> {
+  return new Map(config.planets.map((planet) => [planet.id, createStepConfigForPlanet(planet)]));
 }
 
 function applyQuat(
@@ -69,6 +77,7 @@ function applyQuat(
 export class PlayerPreviewController {
   private config: EditorConfig;
   private stepConfig: StepConfig;
+  private stepConfigs: Map<string, StepConfig>;
   private active = false;
   private seq = 0;
   private submergePressed = false;
@@ -110,6 +119,7 @@ export class PlayerPreviewController {
     this.config = config;
     PLANETS = createPlanetData(config);
     this.stepConfig = createStepConfig(config, this.spawn);
+    this.stepConfigs = createStepConfigs(config);
     this.cameraSystem = new CameraSystem({ camera, manageWindowResize: false });
     this.player = this.createPlayerState();
     this.createPlayerMesh();
@@ -127,12 +137,14 @@ export class PlayerPreviewController {
     this.config = config;
     PLANETS = createPlanetData(config);
     this.stepConfig = createStepConfig(config, this.spawn);
+    this.stepConfigs = createStepConfigs(config);
     if (this.active) this.snapPlayerToSurface();
   }
 
   setSpawn(spawn: PreviewSpawnState): void {
     this.spawn = spawn;
     this.stepConfig = createStepConfig(this.config, spawn);
+    this.stepConfigs = createStepConfigs(this.config);
     if (this.active) this.player = this.createPlayerState();
   }
 
@@ -167,12 +179,13 @@ export class PlayerPreviewController {
       this.createInput(Math.min(dt, MAX_DT)),
       Math.min(dt, MAX_DT),
       PLANETS,
-      this.stepConfig,
+      this.stepConfigs.get(this.player.planetId) ?? this.stepConfig,
       EMPTY_SLIME,
       [],
       [],
       new Map(),
       this.terrainProvider,
+      (id) => this.stepConfigs.get(id),
     );
     this.updateMesh();
     this.updateCamera(dt);
@@ -254,13 +267,8 @@ export class PlayerPreviewController {
     );
     if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
     normal.normalize();
-    const radius = this.terrainProvider.getRadius(
-      normal.x,
-      normal.y,
-      normal.z,
-      this.stepConfig,
-      planet.id,
-    );
+    const cfg = this.stepConfigs.get(planet.id) ?? this.stepConfig;
+    const radius = this.terrainProvider.getRadius(normal.x, normal.y, normal.z, cfg, planet.id);
     this.player.pos.x = planet.center.x + normal.x * (radius + GAME_CONFIG.movement.standingHeight);
     this.player.pos.y = planet.center.y + normal.y * (radius + GAME_CONFIG.movement.standingHeight);
     this.player.pos.z = planet.center.z + normal.z * (radius + GAME_CONFIG.movement.standingHeight);

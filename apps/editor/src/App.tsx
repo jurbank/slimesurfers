@@ -32,6 +32,7 @@ import {
   type TerrainFeatureToolState,
 } from "./types.ts";
 import { editorStateToRuntimeMap } from "./export.ts";
+import { scalePlanetForRadius } from "./terrainScaling.ts";
 import {
   clearEditorState,
   createInitialEditorState,
@@ -419,17 +420,35 @@ export function App() {
   function handlePlanetsChange(planets: EditorPlanet[]) {
     markDirty();
     const prev = configRef.current;
-    const next = { ...prev, planets };
+    // When the active planet's radius changes, scale its absolute-unit terrain
+    // bands and feature heights proportionally. Otherwise shrinking past the
+    // mountain amplitude inverts the terrain through the core, and growing
+    // leaves a paper-thin landscape.
+    const activeId = activePlanetIdRef.current;
+    const prevActive = prev.planets.find((p) => p.id === activeId);
+    const nextActive = planets.find((p) => p.id === activeId);
+    let scaledPlanets = planets;
+    if (
+      prevActive &&
+      nextActive &&
+      prevActive.radius > 0 &&
+      nextActive.radius !== prevActive.radius
+    ) {
+      const scale = nextActive.radius / prevActive.radius;
+      const scaled = scalePlanetForRadius(nextActive, scale);
+      scaledPlanets = planets.map((p) => (p.id === activeId ? scaled : p));
+    }
+    const next = { ...prev, planets: scaledPlanets };
     configRef.current = next;
 
-    if (!planets.find((p) => p.id === activePlanetIdRef.current)) {
-      const firstId = planets[0]?.id ?? "";
+    if (!scaledPlanets.find((p) => p.id === activePlanetIdRef.current)) {
+      const firstId = scaledPlanets[0]?.id ?? "";
       activePlanetIdRef.current = firstId;
       setActivePlanetId(firstId);
       setSelectedLayer({ kind: "planet", planetId: firstId, panel: "planet" });
     }
 
-    const planetIds = new Set(planets.map((planet) => planet.id));
+    const planetIds = new Set(scaledPlanets.map((planet) => planet.id));
     const nextRails = railsRef.current.filter((rail) => planetIds.has(rail.planetId));
     if (nextRails.length !== railsRef.current.length) {
       railsRef.current = nextRails;
@@ -454,10 +473,7 @@ export function App() {
     setConfig(next);
     sceneRef.current?.updateUniforms(next);
 
-    const activeId = activePlanetIdRef.current;
-    const activeRadiusChanged =
-      planets.find((p) => p.id === activeId)?.radius !==
-      prev.planets.find((p) => p.id === activeId)?.radius;
+    const activeRadiusChanged = prevActive?.radius !== nextActive?.radius;
     if (activeRadiusChanged) {
       rebuildPlanetNow();
       sceneRef.current?.rebuildWater(next);
@@ -474,8 +490,12 @@ export function App() {
     if (!confirmed) return;
 
     markDirty();
+    const baseDefault = defaultEditorPlanet(activeId, currentPlanet.center);
+    // Preserve the user's chosen radius and scale the default terrain to fit;
+    // the confirm dialog promises to reset bands/colors/props, not size.
+    const sized = { ...baseDefault, radius: currentPlanet.radius };
     const resetPlanet = {
-      ...defaultEditorPlanet(activeId, currentPlanet.center),
+      ...scalePlanetForRadius(sized, currentPlanet.radius / baseDefault.radius),
       id: activeId,
     };
     const nextConfig = {

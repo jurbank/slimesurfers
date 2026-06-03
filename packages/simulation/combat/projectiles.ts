@@ -712,6 +712,7 @@ export function tryFireProjectile(
   planets: PlanetData[],
   cfg: CombatConfig,
   recordKillEvent?: RecordKillEvent,
+  cfgForPlanet?: (planetId: string) => CombatConfig | undefined,
 ): SlimeStampMessage[] {
   const slimeStamps: SlimeStampMessage[] = [];
   if ((input.keys & InputKey.Fire) === 0) {
@@ -775,7 +776,8 @@ export function tryFireProjectile(
 
     let bestTerrain: { impactPos: SimVec3; distance: number; planetId: string } | undefined;
     for (const planet of planets) {
-      const impactPos = findTerrainImpactOnSegment(muzzlePos, sprayEnd, planet, 0, cfg);
+      const planetCfg = cfgForPlanet?.(planet.id) ?? cfg;
+      const impactPos = findTerrainImpactOnSegment(muzzlePos, sprayEnd, planet, 0, planetCfg);
       if (!impactPos) continue;
       const hitDistance = distance(muzzlePos, impactPos);
       if (bestTerrain && hitDistance >= bestTerrain.distance) continue;
@@ -872,6 +874,7 @@ export function tickProjectiles(
   cfg: CombatConfig,
   selectRespawnPoint?: SelectRespawnPoint,
   recordKillEvent?: RecordKillEvent,
+  cfgForPlanet?: (planetId: string) => CombatConfig | undefined,
 ): SlimeStampMessage[] {
   const slimeStamps: SlimeStampMessage[] = [];
   simState.players.forEach((player) => {
@@ -998,12 +1001,13 @@ export function tickProjectiles(
 
     if (!hit) {
       for (const planet of planets) {
+        const planetCfg = cfgForPlanet?.(planet.id) ?? cfg;
         const impactPos = findTerrainImpactOnSegment(
           startPos,
           projectile.pos,
           planet,
           weapon.projectileCollisionRadius,
-          cfg,
+          planetCfg,
         );
         if (impactPos) {
           const planetState = simState.planets.get(planet.id);
@@ -1064,6 +1068,7 @@ export function tryFireHitscan(
   planets: PlanetData[],
   cfg: CombatConfig,
   recordKillEvent?: RecordKillEvent,
+  cfgForPlanet?: (planetId: string) => CombatConfig | undefined,
 ): SlimeStampMessage[] {
   const slimeStamps: SlimeStampMessage[] = [];
   if ((input.keys & InputKey.Fire) === 0) return slimeStamps;
@@ -1092,7 +1097,16 @@ export function tryFireHitscan(
     if (dot(scale(toTarget, 1 / dist), aimDir) < cosHalfAngle) return;
 
     const nearestPlanet = getNearestPlanet(muzzlePos, planets);
-    if (nearestPlanet && findTerrainImpactOnSegment(muzzlePos, target.pos, nearestPlanet, 0, cfg))
+    if (
+      nearestPlanet &&
+      findTerrainImpactOnSegment(
+        muzzlePos,
+        target.pos,
+        nearestPlanet,
+        0,
+        cfgForPlanet?.(nearestPlanet.id) ?? cfg,
+      )
+    )
       return;
 
     const killed = applyDamage(target, owner, weapon.directDamage, cfg, weapon.id, recordKillEvent);
@@ -1126,7 +1140,8 @@ export function tryFireHitscan(
   let trailEnd = trailRayEnd;
   let trailPlanet: PlanetData | undefined;
   for (const planet of planets) {
-    const impactPos = findTerrainImpactOnSegment(muzzlePos, trailRayEnd, planet, 0, cfg);
+    const planetCfg = cfgForPlanet?.(planet.id) ?? cfg;
+    const impactPos = findTerrainImpactOnSegment(muzzlePos, trailRayEnd, planet, 0, planetCfg);
     if (impactPos) {
       trailEnd = impactPos;
       trailPlanet = planet;

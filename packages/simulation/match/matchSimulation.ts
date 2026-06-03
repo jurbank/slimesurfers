@@ -480,6 +480,8 @@ export class MatchSimulation {
       this.rails,
       this.blastPads,
       this.simState.blastPadStates,
+      undefined,
+      (id) => this.stepCfgs.get(id),
     );
     this.maybeStampRailCorridor(player, prevGrindId);
     if (wasPlanetHop && !isPlanetHopMovementState(player.movementState) && player.planetId !== "") {
@@ -516,6 +518,7 @@ export class MatchSimulation {
         this.planets,
         gameplayCfg,
         (event) => this.recordKillEvent(event),
+        (id) => this.getGameplayConfig(id),
       )) {
         this.recordSlimeStamp(stamp);
       }
@@ -527,6 +530,7 @@ export class MatchSimulation {
         this.planets,
         gameplayCfg,
         (event) => this.recordKillEvent(event),
+        (id) => this.getGameplayConfig(id),
       )) {
         this.recordSlimeStamp(stamp);
       }
@@ -624,6 +628,7 @@ export class MatchSimulation {
           this.simState.planetDefs,
         ),
       (event) => this.recordKillEvent(event),
+      (id) => this.getGameplayConfig(id),
     );
     for (const stamp of slimeStamps) {
       this.recordSlimeStamp(stamp);
