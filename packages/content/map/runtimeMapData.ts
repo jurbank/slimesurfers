@@ -99,11 +99,11 @@ export interface RuntimeBlastPad {
   planetId: string;
   normal: { x: number; y: number; z: number };
   tangent: { x: number; y: number; z: number };
-  targetPlanetId: string;
-  targetNormal: { x: number; y: number; z: number };
   radius: number;
   /** @deprecated Per-player cooldown was replaced by slime-charge ownership; ignored. */
   cooldownMs?: number;
+  /** Maximum launch speed at full charge. Phase E: launch speed scales from
+   *  cfg.movement.freeFlightLaunchSpeedMin (instant tap) up to this value. */
   launchSpeed: number;
   upwardBias: number;
   cameraProfile: "planetHop";
@@ -665,14 +665,15 @@ function validateBlastPad(
   if (typeof p.id !== "string" || p.id.trim() === "") {
     errors.push({ field: `${field}.id`, message: "must be a non-empty string" });
   }
-  for (const key of ["planetId", "targetPlanetId"] as const) {
-    if (typeof p[key] !== "string" || p[key].trim() === "") {
-      errors.push({ field: `${field}.${key}`, message: "must be a non-empty string" });
-    } else if (planetIds.size > 0 && !planetIds.has(p[key])) {
-      errors.push({ field: `${field}.${key}`, message: `references unknown planet "${p[key]}"` });
-    }
+  if (typeof p.planetId !== "string" || p.planetId.trim() === "") {
+    errors.push({ field: `${field}.planetId`, message: "must be a non-empty string" });
+  } else if (planetIds.size > 0 && !planetIds.has(p.planetId)) {
+    errors.push({
+      field: `${field}.planetId`,
+      message: `references unknown planet "${p.planetId}"`,
+    });
   }
-  for (const key of ["normal", "tangent", "targetNormal"] as const) {
+  for (const key of ["normal", "tangent"] as const) {
     const value = p[key];
     if (typeof value !== "object" || value === null) {
       errors.push({ field: `${field}.${key}`, message: "must be an object" });
@@ -828,8 +829,6 @@ export const DEV_MAP: RuntimeMapData = {
       planetId: "planet-0",
       normal: { x: 0.07, y: 0.998, z: 0 },
       tangent: { x: 0.998, y: -0.07, z: 0 },
-      targetPlanetId: "planet-1",
-      targetNormal: { x: -0.92, y: -0.12, z: -0.37 },
       radius: 5,
       cooldownMs: 1500,
       launchSpeed: 78,
@@ -844,8 +843,6 @@ export const DEV_MAP: RuntimeMapData = {
       // consistently above water (minH ~7 wu vs waterLevel -3).
       normal: { x: 0, y: 0.883, z: 0.469 },
       tangent: { x: 1, y: 0, z: 0 },
-      targetPlanetId: "planet-1",
-      targetNormal: { x: -0.92, y: -0.12, z: -0.37 },
       radius: 5,
       launchSpeed: 78,
       upwardBias: 0.45,
@@ -856,8 +853,6 @@ export const DEV_MAP: RuntimeMapData = {
       planetId: "planet-1",
       normal: { x: -0.329, y: 0.884, z: 0.332 },
       tangent: { x: -0.977, y: -0.2, z: -0.075 },
-      targetPlanetId: "planet-0",
-      targetNormal: { x: 1, y: 0, z: 0 },
       radius: 5,
       cooldownMs: 1500,
       launchSpeed: 78,

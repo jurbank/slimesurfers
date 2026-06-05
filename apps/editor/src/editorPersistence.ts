@@ -332,8 +332,6 @@ function normalizeEditorBlastPads(pads: unknown, planetIds: Set<string>): Editor
     const raw = pads[i] as Partial<EditorBlastPad> | undefined;
     if (!raw || typeof raw !== "object") continue;
     if (typeof raw.planetId !== "string" || !planetIds.has(raw.planetId)) continue;
-    if (typeof raw.targetPlanetId !== "string" || !planetIds.has(raw.targetPlanetId)) continue;
-    if (raw.planetId === raw.targetPlanetId) continue;
     const id =
       typeof raw.id === "string" && raw.id.trim() !== "" && !seenIds.has(raw.id)
         ? raw.id
@@ -342,10 +340,8 @@ function normalizeEditorBlastPads(pads: unknown, planetIds: Set<string>): Editor
     out.push({
       id,
       planetId: raw.planetId,
-      targetPlanetId: raw.targetPlanetId,
       normal: coerceUnitVec3(raw.normal, [0, 1, 0]),
       tangent: coerceUnitVec3(raw.tangent, [1, 0, 0]),
-      targetNormal: coerceUnitVec3(raw.targetNormal, [0, 1, 0]),
       radius: coerceFinitePositive(raw.radius, 5),
       launchSpeed: coerceFinitePositive(raw.launchSpeed, 78),
       upwardBias: Number.isFinite(raw.upwardBias) ? (raw.upwardBias as number) : 0.45,

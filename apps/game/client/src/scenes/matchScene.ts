@@ -45,6 +45,7 @@ import { PauseMenuOverlay } from "../ui/PauseMenuOverlay.ts";
 import { EmoteMenuOverlay } from "../ui/EmoteMenuOverlay.ts";
 import { HintToast } from "../ui/HintToast.ts";
 import { PlanetRenderer } from "./planetRenderer.ts";
+import { ArenaBoundaryRenderer } from "./arenaBoundaryRenderer.ts";
 
 import {
   appendSlimeStamp,
@@ -85,6 +86,7 @@ export class MatchScene {
   private readonly hintToast: HintToast;
   private readonly weaponAim: WeaponAimSystem;
   private readonly planetRenderer: PlanetRenderer;
+  private readonly arenaBoundary: ArenaBoundaryRenderer;
   private lastLeaderboard: LeaderboardMessage | null = null;
   private currentPhase: MatchPhase = MatchPhase.Lobby;
   private connectParams: {
@@ -109,7 +111,7 @@ export class MatchScene {
   private lastLocalHealth: number | null = null;
   private lastWasCarving = false;
   private lastWasAirborne = false;
-  private lastWasPlanetHop = false;
+  private lastWasFreeFlight = false;
   private portal: PortalSystem | null = null;
 
   private onDisconnectCb: (() => void) | null = null;
@@ -246,6 +248,7 @@ export class MatchScene {
     this.input = new InputSystem(this.render.renderer.domElement);
     this.slime = new SlimeSystem(this.render.renderer);
     this.planetRenderer = new PlanetRenderer(this.render.scene, this.slime);
+    this.arenaBoundary = new ArenaBoundaryRenderer(this.render.scene);
     this.clouds = new CloudSystem(this.render.scene);
     this.props = new PropSystem(this.render.scene);
     this.pickups = new PickupSystem(this.render.scene);
@@ -409,6 +412,9 @@ export class MatchScene {
     this.rails.setMapData(msg);
     this.blastPads.setMapData(msg);
     this.projectiles.setMapPlanets(msg.planets);
+    this.arenaBoundary.apply(msg.planets, {
+      arenaReturnDistance: GAME_CONFIG.movement.arenaReturnDistance,
+    });
 
     if (firstBuild) {
       for (const p of msg.planets) {
@@ -483,35 +489,19 @@ export class MatchScene {
     this.localPlayerPatternId = patternId;
   }
 
-  private readonly _hopCenter = new THREE.Vector3();
-  private readonly _hopAxis = new THREE.Vector3();
-  private readonly _hopRel = new THREE.Vector3();
-
   /**
-   * Up-vector reference center for the follow camera. During a planet hop this blends
-   * from the source planet center to the target along the route by progress, so the
-   * camera up eases from source-surface up to target-surface up instead of snapping to
-   * target up at launch. Outside a hop it resolves to the player's current planet.
+   * Up-vector reference center for the follow camera. Phase E: the player is
+   * always anchored to one planet at a time (surface, jumped, free flight) —
+   * resolve via gravityAnchorPlanetId / planetId / nearest. The old hop-route
+   * lerp blending source→target by progress is gone with the planet-hop flow.
    */
   private cameraUpReferenceCenter(
     state: RuntimePlayerState,
     playerPos: THREE.Vector3,
   ): THREE.Vector3 {
-    const target = this.weaponAim.planetCenter(state.planetHopTargetPlanetId);
-    const source = this.weaponAim.planetCenter(state.planetHopSourcePlanetId);
-    if (target && source) {
-      this._hopAxis.subVectors(target, source);
-      const totalSq = this._hopAxis.lengthSq();
-      if (totalSq > 1e-6) {
-        this._hopRel.subVectors(playerPos, source);
-        const progress = Math.min(1, Math.max(0, this._hopRel.dot(this._hopAxis) / totalSq));
-        return this._hopCenter.copy(source).lerp(target, progress);
-      }
-      return this._hopCenter.copy(target);
-    }
     return (
-      target ??
       this.weaponAim.planetCenter(state.planetId) ??
+      this.weaponAim.planetCenter(state.gravityAnchorPlanetId ?? "") ??
       this.weaponAim.nearestPlanetCenter(playerPos)
     );
   }
@@ -953,12 +943,9 @@ export class MatchScene {
 
       const predictedLocalState = this.runtime.getLocalPlayerState();
       if (predictedLocalState) {
-        const isPlanetHop =
-          predictedLocalState.movementState === PlayerMovementState.BlastLaunch ||
-          predictedLocalState.movementState === PlayerMovementState.PlanetHopFlight ||
-          predictedLocalState.movementState === PlayerMovementState.LandingApproach;
+        const isFreeFlight = predictedLocalState.movementState === PlayerMovementState.FreeFlight;
         const isNowAirborne =
-          predictedLocalState.movementState === PlayerMovementState.Airborne || isPlanetHop;
+          predictedLocalState.movementState === PlayerMovementState.Airborne || isFreeFlight;
         const isNowSurfing = predictedLocalState.surfState !== PlayerSurfState.None;
         this.input.setSubmergeActive(isNowSurfing);
 
@@ -974,20 +961,22 @@ export class MatchScene {
           this.localPlayer?.triggerSurfLaunch();
           this.sound.playSfx("surfLaunch");
         }
-        if (this.lastWasPlanetHop && !isPlanetHop && predictedLocalState.planetId !== "") {
+        // Squash when the player drops out of FreeFlight onto a surface — the
+        // landing impact is the visual cue for a successful pad-fired arc.
+        if (this.lastWasFreeFlight && !isFreeFlight && predictedLocalState.planetId !== "") {
           this.localPlayer?.triggerLandingSquash();
         }
         this.lastWasAirborne = isNowAirborne;
-        this.lastWasPlanetHop = isPlanetHop;
+        this.lastWasFreeFlight = isFreeFlight;
         this.lastWasCarving = isNowSurfing && predictedLocalState.isCarving && !isNowAirborne;
       }
       if (predictedLocalState && this.localPlayer) {
-        const isPlanetHop =
-          predictedLocalState.movementState === PlayerMovementState.BlastLaunch ||
-          predictedLocalState.movementState === PlayerMovementState.PlanetHopFlight ||
-          predictedLocalState.movementState === PlayerMovementState.LandingApproach;
+        const isFreeFlight = predictedLocalState.movementState === PlayerMovementState.FreeFlight;
+        const isPadLoaded = predictedLocalState.movementState === PlayerMovementState.PadLoaded;
         const isAirborneLike =
-          predictedLocalState.movementState === PlayerMovementState.Airborne || isPlanetHop;
+          predictedLocalState.movementState === PlayerMovementState.Airborne ||
+          isFreeFlight ||
+          isPadLoaded;
         const visualRotation = isAirborneLike ? this.input.getLocalRotation() : undefined;
         const predictedPlanetCenter = this.cameraUpReferenceCenter(predictedLocalState, playerPos);
         this.localPlayer.update(
@@ -1006,6 +995,19 @@ export class MatchScene {
           );
           this.localTrail.update(predictedLocalState, predictedPlanetCenter, visual.slimeColor);
         }
+        // FreeFlight pull-back intensity scales with distance from the nearest
+        // planet centre, normalised against a "far in space" reference (200 wu).
+        // Saturates at 1 once the player is well past the gravity envelope.
+        const freeFlightIntensity = isFreeFlight
+          ? Math.min(
+              1,
+              Math.hypot(
+                predictedLocalState.pos.x - predictedPlanetCenter.x,
+                predictedLocalState.pos.y - predictedPlanetCenter.y,
+                predictedLocalState.pos.z - predictedPlanetCenter.z,
+              ) / 200,
+            )
+          : 0;
         this.weaponAim.setLastAimDir(
           this.camera.update(
             predictedLocalState.pos,
@@ -1015,7 +1017,7 @@ export class MatchScene {
             predictedPlanetCenter,
             isAirborneLike,
             dt,
-            isPlanetHop,
+            freeFlightIntensity,
           ),
         );
       }

@@ -63,12 +63,23 @@ export interface PlayerPhysics {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
-  planetHopSourcePlanetId?: string;
-  planetHopTargetPlanetId?: string;
-  planetHopLandingNormal?: Vec3Data;
-  planetHopElapsedMs?: number;
   splatCooldownMs?: number;
   isOnFriendlySlime: boolean;
+  /** Hysteresis hint for the gravity picker — see getDominantGravityPlanet.
+   *  Tracks the planet whose gravity well the player is currently inside, so
+   *  that overlapping gravity zones don't yank the player to whichever planet's
+   *  zone they happen to be nominally closer to. Cleared by going out of every
+   *  planet's capture radius (recomputed each airborne tick). */
+  gravityAnchorPlanetId?: string;
+  /** Phase E: blast-pad load state. Set to the pad's id while loaded, "" otherwise. */
+  loadedPadId?: string;
+  /** Phase E: 0..1 wind-up progress while loaded; launch input ignored until 1. */
+  padLoadProgress?: number;
+  /** Phase E: 0..1 charge ramp while Anchor is held during PadLoaded. */
+  padChargeProgress?: number;
+  /** Phase E: release-gate for the movement-key cancel. False until movement
+   *  keys are released after loading; true once armed. See stepPadLoaded. */
+  padCancelArmed?: boolean;
 }
 
 /**
@@ -98,13 +109,15 @@ export interface StepConfig extends TerrainConfig {
     waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
     waterSkiLateralDrag: number;
-    planetHopLaunchDurationSeconds?: number;
-    planetHopSteeringDegrees?: number;
-    planetHopAssistAcceleration?: number;
-    planetHopMaxDurationSeconds?: number;
-    planetHopLandingCaptureDistance?: number;
-    planetHopLandingSpeedRetention?: number;
-    planetHopLandingSplatCooldownMs?: number;
+    freeFlightSteerAcceleration?: number;
+    freeFlightThrustAcceleration?: number;
+    freeFlightBrakeAcceleration?: number;
+    freeFlightMaxSpeed?: number;
+    freeFlightMinSpeed?: number;
+    freeFlightLandingCaptureDistance?: number;
+    freeFlightLoadDurationSeconds?: number;
+    freeFlightChargeDurationSeconds?: number;
+    freeFlightLaunchSpeedMin?: number;
   };
   rail: {
     snapDistance: number;
@@ -186,35 +199,16 @@ function getCaptureRadius(planet: PlanetData): number {
   return planet.captureRadius ?? planet.radius * 2.4;
 }
 
-function getPlanetHopLaunchDuration(cfg: StepConfig): number {
-  return cfg.movement.planetHopLaunchDurationSeconds ?? 0.35;
-}
-
-function getPlanetHopAssistAcceleration(cfg: StepConfig): number {
-  return cfg.movement.planetHopAssistAcceleration ?? 34;
-}
-
-function getPlanetHopMaxDuration(cfg: StepConfig): number {
-  return cfg.movement.planetHopMaxDurationSeconds ?? 6;
-}
-
-function getPlanetHopLandingCaptureDistance(cfg: StepConfig): number {
-  return cfg.movement.planetHopLandingCaptureDistance ?? 42;
-}
-
-function getPlanetHopLandingSplatCooldownMs(cfg: StepConfig): number {
-  return cfg.movement.planetHopLandingSplatCooldownMs ?? 500;
-}
-
-function getPlanetHopLandingSteerRate(target: PlanetData): number {
-  return 45 / Math.max(target.radius, 1);
-}
-
-function getPlanetHopCruiseAssist(state: PlayerPhysics): number {
-  return state.movementState === PlayerMovementState.LandingApproach ? 1.0 : 0.45;
-}
-
-function tryTriggerBlastPad(
+// Phase E: tries to load the player onto a charged blast pad whose footprint
+// they're currently overlapping. Does NOT consume the pad's charge — that
+// happens at launch time in stepPadLoaded. Returns true if the player was
+// loaded this tick (caller should not run any other on-surface logic after).
+//
+// Also implements the "stickiness" rule that prevents re-loading after a
+// cancel: state.loadedPadId is the pad you're currently sticking to (loaded
+// OR cancelled-but-still-on-it). When the player walks off the footprint we
+// clear it; the next fresh entry triggers a new load.
+function tryEnterLoadedPad(
   state: PlayerPhysics,
   planets: PlanetData[],
   cfg: StepConfig,
@@ -225,19 +219,27 @@ function tryTriggerBlastPad(
   if (state.planetId === "") return false;
   if (
     state.movementState === PlayerMovementState.Dead ||
-    state.movementState === PlayerMovementState.Grinding
+    state.movementState === PlayerMovementState.Grinding ||
+    state.movementState === PlayerMovementState.PadLoaded
   ) {
     return false;
   }
   const sourcePlanet = findPlanet(planets, state.planetId);
   if (!sourcePlanet) return false;
 
+  let footprintPadId = "";
   for (const pad of blastPads) {
     if (pad.planetId !== state.planetId) continue;
-    // Pad is charged only when its coverage is full AND the dominant owner is this
-    // player's slime group. Each stamp drips coverage in the painter's color; enemies
-    // drain it by painting over. Triggering consumes the charge fully — coverage and
-    // ownership reset, so the pad must be re-painted to charge again.
+
+    const normal = normalize(pad.normal);
+    const playerNormal = normalize(sub(state.pos, sourcePlanet.center));
+    const footprintDot = Math.max(-1, Math.min(1, dot(playerNormal, normal)));
+    const footprintDistance = Math.acos(footprintDot) * sourcePlanet.radius;
+    if (footprintDistance > pad.radius + cfg.movement.collisionRadius) continue;
+
+    footprintPadId = pad.id;
+
+    // Pad must be charged AND owned by this player's slime group.
     const padState = padStates.get(pad.id);
     if (!padState) continue;
     if (
@@ -247,62 +249,57 @@ function tryTriggerBlastPad(
     ) {
       continue;
     }
-    const targetPlanet = findPlanet(planets, pad.targetPlanetId);
-    if (!targetPlanet) continue;
+    // Stickiness: if loadedPadId already names this pad, the player has been
+    // here without leaving since the last cancel — don't re-load.
+    if ((state.loadedPadId ?? "") === pad.id) continue;
 
-    const normal = normalize(pad.normal);
-    const tangent = normalize(projectOntoPlane(pad.tangent, normal));
     const padSurfaceRadius =
       (terrainProvider?.getRadius(normal.x, normal.y, normal.z, cfg, sourcePlanet.id) ??
         getTerrainRadius(normal.x, normal.y, normal.z, cfg)) + cfg.movement.standingHeight;
     const padCenter = add(sourcePlanet.center, scale(normal, padSurfaceRadius));
-    const playerNormal = normalize(sub(state.pos, sourcePlanet.center));
-    const footprintDot = Math.max(-1, Math.min(1, dot(playerNormal, normal)));
-    const footprintDistance = Math.acos(footprintDot) * sourcePlanet.radius;
-    if (footprintDistance > pad.radius + cfg.movement.collisionRadius) continue;
 
-    const targetNormal = normalize(pad.targetNormal);
-    const targetSurfaceRadius =
-      (terrainProvider?.getRadius(
-        targetNormal.x,
-        targetNormal.y,
-        targetNormal.z,
-        cfg,
-        targetPlanet.id,
-      ) ?? getTerrainRadius(targetNormal.x, targetNormal.y, targetNormal.z, cfg)) +
-      cfg.movement.standingHeight;
-    const targetPoint = add(targetPlanet.center, scale(targetNormal, targetSurfaceRadius));
-    const toTarget = normalize(sub(targetPoint, state.pos));
-    const launchDir = normalize(
-      add(add(scale(normal, pad.upwardBias), scale(tangent, 0.65)), scale(toTarget, 1.35)),
-    );
-
-    assign(state.pos, add(padCenter, scale(normal, cfg.movement.surfaceSnapDistance + 0.75)));
-    assign(state.vel, scale(launchDir, pad.launchSpeed));
-    state.planetId = "";
-    state.movementState = PlayerMovementState.BlastLaunch;
+    assign(state.pos, padCenter);
+    assign(state.vel, { x: 0, y: 0, z: 0 });
+    state.loadedPadId = pad.id;
+    state.padLoadProgress = 0;
+    state.padChargeProgress = 0;
+    // Cancel disarmed at entry — if the player walked onto the pad with W
+    // (or any movement key) held, that hold must be released before it counts
+    // as a cancel input.
+    state.padCancelArmed = false;
+    state.movementState = PlayerMovementState.PadLoaded;
     state.surfState =
       state.surfState === PlayerSurfState.None ? PlayerSurfState.SurfingVisible : state.surfState;
     state.isCarving = false;
     state.grindRailId = -1;
-    state.planetHopSourcePlanetId = pad.planetId;
-    state.planetHopTargetPlanetId = pad.targetPlanetId;
-    state.planetHopLandingNormal = targetNormal;
-    state.planetHopElapsedMs = 0;
-    // Consume the charge: coverage drops to 0 and ownership clears, so the pad must
-    // be repainted from scratch before it can fire again.
-    padState.ownerSlimeGroupId = NO_SLIME_GROUP_ID;
-    padState.ownerColor = 0;
-    padState.coverageProgress = 0;
     return true;
   }
 
+  // Walked off the pad: release the sticky id so the next entry can re-load.
+  if (footprintPadId === "" && (state.loadedPadId ?? "") !== "") {
+    state.loadedPadId = "";
+  }
   return false;
 }
 
 // Prefer the planet whose gravity zone the player is inside (closest by normalized
-// distance). Used to pick which planet's gravity dominates when zones are defined.
-function getDominantGravityPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
+// distance). With hysteresis: if the player is already anchored to a planet, stay
+// anchored until they cross out of its (larger) capture radius. Without this, two
+// gravity zones that overlap will keep swapping authority as the player drifts —
+// the player gets yanked toward whichever neighbour is fractionally closer right
+// now, and you can never blast clean off the surface.
+function getDominantGravityPlanet(
+  pos: Vec3Data,
+  planets: PlanetData[],
+  anchorPlanetId: string,
+): PlanetData | null {
+  if (anchorPlanetId !== "") {
+    const anchor = planets.find((planet) => planet.id === anchorPlanetId);
+    if (anchor) {
+      const dist = vlen(sub(pos, anchor.center));
+      if (dist <= getCaptureRadius(anchor)) return anchor;
+    }
+  }
   let best: PlanetData | null = null;
   let bestNormalizedDistance = Infinity;
   for (const planet of planets) {
@@ -320,8 +317,8 @@ function getDominantGravityPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetD
 
 // Absolute nearest planet, always defined when any planet exists. Generic airborne
 // movement (jumps, rail launches) is always bound to a planet so the player never
-// drifts off into the force-free void — that void is reserved for guided planet hops,
-// which run through stepPlanetHop and never reach stepAirborne.
+// drifts off into the force-free void — that void is reserved for FreeFlight,
+// which runs through stepFreeFlight and never reaches stepAirborne.
 function getNearestPlanet(pos: Vec3Data, planets: PlanetData[]): PlanetData | null {
   let nearest: PlanetData | null = null;
   let nearestDist = Infinity;
@@ -374,6 +371,8 @@ function stepOnSurface(
     state.movementState = PlayerMovementState.Airborne;
     return;
   }
+  // Sticking to the surface implies the picker's anchor is this planet.
+  state.gravityAnchorPlanetId = planet.id;
 
   const oldNormal = normalize(sub(state.pos, planet.center));
   const slime = getSlimeAtPoint(state.pos, state.planetId, planetSlime, planets);
@@ -677,7 +676,12 @@ function stepAirborne(
   }
   state.isCarving = state.surfState !== PlayerSurfState.None && anchorPressed;
   const nearest =
-    getDominantGravityPlanet(state.pos, planets) ?? getNearestPlanet(state.pos, planets);
+    getDominantGravityPlanet(state.pos, planets, state.gravityAnchorPlanetId ?? "") ??
+    getNearestPlanet(state.pos, planets);
+  // Refresh the hysteresis anchor each tick so the picker stays sticky as the
+  // dominant planet changes. While airborne the anchor follows the picker; when
+  // surfaced it follows state.planetId (set by stepOnSurface / landing).
+  state.gravityAnchorPlanetId = nearest?.id ?? "";
 
   if (nearest !== null) {
     const toPlanet = sub(nearest.center, state.pos);
@@ -737,13 +741,56 @@ function stepAirborne(
         );
         assign(state.vel, sub(state.vel, scale(gravDir, velToward)));
         state.planetId = nearest.id;
+        state.gravityAnchorPlanetId = nearest.id;
         state.movementState = PlayerMovementState.Idle;
       }
     }
   }
 }
 
-function stepPlanetHop(
+// -- Free flight movement ----------------------------------------------------
+
+function getFreeFlightSteerAcceleration(cfg: StepConfig): number {
+  return cfg.movement.freeFlightSteerAcceleration ?? 30;
+}
+function getFreeFlightThrust(cfg: StepConfig): number {
+  return cfg.movement.freeFlightThrustAcceleration ?? 28;
+}
+function getFreeFlightBrake(cfg: StepConfig): number {
+  return cfg.movement.freeFlightBrakeAcceleration ?? 22;
+}
+function getFreeFlightMaxSpeed(cfg: StepConfig): number {
+  return cfg.movement.freeFlightMaxSpeed ?? 110;
+}
+function getFreeFlightMinSpeed(cfg: StepConfig): number {
+  return cfg.movement.freeFlightMinSpeed ?? 14;
+}
+function getFreeFlightLandingCaptureDistance(cfg: StepConfig): number {
+  return cfg.movement.freeFlightLandingCaptureDistance ?? 6;
+}
+function getFreeFlightLoadDuration(cfg: StepConfig): number {
+  return Math.max(1e-3, cfg.movement.freeFlightLoadDurationSeconds ?? 0.3);
+}
+function getFreeFlightChargeDuration(cfg: StepConfig): number {
+  return Math.max(1e-3, cfg.movement.freeFlightChargeDurationSeconds ?? 0.6);
+}
+function getFreeFlightLaunchSpeedMin(cfg: StepConfig): number {
+  return cfg.movement.freeFlightLaunchSpeedMin ?? 28;
+}
+
+/**
+ * Ballistic, steerable space flight. Single dominant planet's gravity pulls,
+ * the player's aim continuously biases the path (transverse force, not a
+ * SLERP-to-aim), and Forward/Backward thrust modifies speed along the current
+ * velocity. Landing fires when the player touches any planet's surface
+ * envelope.
+ *
+ * Single-planet — multi-body gravity sums were dropped (see
+ * DIRECTIONAL_TRAVERSAL_PLAN.md): once aim controls the launch direction, the
+ * player has already committed their trajectory; world-bending fights intent
+ * rather than serving it.
+ */
+function stepFreeFlight(
   state: PlayerPhysics,
   input: InputMessage,
   dt: number,
@@ -756,140 +803,233 @@ function stepPlanetHop(
   state.isCarving = false;
   state.skiJumpCharge = 0;
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
-  state.planetHopElapsedMs = (state.planetHopElapsedMs ?? 0) + dt * 1000;
 
-  const target = findPlanet(planets, state.planetHopTargetPlanetId ?? "");
-  if (!target) {
-    state.movementState = PlayerMovementState.Airborne;
-    stepAirborne(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
-    return;
-  }
-
-  if (
-    state.movementState === PlayerMovementState.BlastLaunch &&
-    (state.planetHopElapsedMs ?? 0) >= getPlanetHopLaunchDuration(cfg) * 1000
-  ) {
-    state.movementState = PlayerMovementState.PlanetHopFlight;
-  }
-
-  let landingNormal = normalize(
-    state.planetHopLandingNormal ?? normalize(sub(state.pos, target.center)),
-  );
-  const aimLen = vlen(input.aimDir);
-  const aimDir = aimLen > 1e-4 ? scale(input.aimDir, 1 / aimLen) : normalize(state.vel);
-  if (aimLen > 1e-4 && state.movementState !== PlayerMovementState.BlastLaunch) {
-    const landingSteer = projectOntoPlane(aimDir, landingNormal);
-    const landingSteerLen = vlen(landingSteer);
-    if (landingSteerLen > 1e-4) {
-      landingNormal = normalize(
-        add(
-          landingNormal,
-          scale(landingSteer, (getPlanetHopLandingSteerRate(target) * dt) / landingSteerLen),
-        ),
-      );
-      state.planetHopLandingNormal = landingNormal;
+  // 1. Single-planet gravity via the Phase B hysteresis picker.
+  const dominant =
+    getDominantGravityPlanet(state.pos, planets, state.gravityAnchorPlanetId ?? "") ??
+    getNearestPlanet(state.pos, planets);
+  state.gravityAnchorPlanetId = dominant?.id ?? "";
+  if (dominant !== null) {
+    const toPlanet = sub(dominant.center, state.pos);
+    const dist = vlen(toPlanet);
+    if (dist > 0.01) {
+      const gravDir = scale(toPlanet, 1 / dist);
+      assign(state.vel, add(state.vel, scale(gravDir, cfg.movement.gravityAcceleration * dt)));
     }
   }
 
-  const targetCfg = cfgForPlanet?.(target.id) ?? cfg;
-  const targetSurfaceRadius =
-    (terrainProvider?.getRadius(
-      landingNormal.x,
-      landingNormal.y,
-      landingNormal.z,
-      targetCfg,
-      target.id,
-    ) ?? getTerrainRadius(landingNormal.x, landingNormal.y, landingNormal.z, targetCfg)) +
-    cfg.movement.standingHeight;
-  const targetPoint = add(target.center, scale(landingNormal, targetSurfaceRadius));
-  const targetDir = normalize(sub(targetPoint, state.pos));
-
-  const speed = Math.max(vlen(state.vel), 1);
-  if (aimLen > 1e-4 && state.movementState !== PlayerMovementState.BlastLaunch) {
+  // 2. Continuous steering — transverse acceleration toward aim. With aim
+  //    aligned to velocity the lateral component is zero and steering does
+  //    nothing; the more aim drifts off, the stronger the corrective push.
+  const aimLen = vlen(input.aimDir);
+  const speed = vlen(state.vel);
+  if (aimLen > 1e-4 && speed > 1e-4) {
+    const aimDir = scale(input.aimDir, 1 / aimLen);
     const currentDir = scale(state.vel, 1 / speed);
-    const steeringDegrees = cfg.movement.planetHopSteeringDegrees ?? 45;
-    const steerStrength = Math.min(1, dt * (steeringDegrees / 12));
-    const freeFlightDir = normalize(add(scale(aimDir, 0.75), scale(targetDir, 0.25)));
-    const steeredDir = normalize(
-      add(scale(currentDir, 1 - steerStrength), scale(freeFlightDir, steerStrength)),
-    );
-    assign(state.vel, scale(steeredDir, speed));
+    const lateral = sub(aimDir, scale(currentDir, dot(aimDir, currentDir)));
+    assign(state.vel, add(state.vel, scale(lateral, getFreeFlightSteerAcceleration(cfg) * dt)));
   }
 
+  // 3. Thrust / brake.
   const forwardPressed = (input.keys & InputKey.Forward) !== 0;
   const backwardPressed = (input.keys & InputKey.Backward) !== 0;
   if (forwardPressed || backwardPressed) {
-    const speedDelta = cfg.movement.airBoostAcceleration * dt * (forwardPressed ? 1 : -0.65);
-    const nextSpeed = Math.max(cfg.movement.moveSpeed * 2, speed + speedDelta);
-    assign(state.vel, scale(normalize(state.vel), nextSpeed));
+    const dir = speed > 1e-4 ? scale(state.vel, 1 / speed) : { x: 0, y: 0, z: 1 };
+    const dv = forwardPressed ? getFreeFlightThrust(cfg) * dt : -getFreeFlightBrake(cfg) * dt;
+    assign(state.vel, add(state.vel, scale(dir, dv)));
   }
 
-  const elapsedSeconds = (state.planetHopElapsedMs ?? 0) / 1000;
-  const assistScale = elapsedSeconds > getPlanetHopMaxDuration(cfg) ? 1.6 : 1;
-  assign(
-    state.vel,
-    add(
-      state.vel,
-      scale(
-        targetDir,
-        getPlanetHopAssistAcceleration(cfg) * getPlanetHopCruiseAssist(state) * assistScale * dt,
-      ),
-    ),
-  );
+  // Clamp to [min, max] so the player can't stall out to a dead drift or
+  // chain a runaway speed.
+  const newSpeed = vlen(state.vel);
+  const minSpeed = getFreeFlightMinSpeed(cfg);
+  const maxSpeed = getFreeFlightMaxSpeed(cfg);
+  if (newSpeed > maxSpeed) {
+    assign(state.vel, scale(state.vel, maxSpeed / newSpeed));
+  } else if (newSpeed > 0 && newSpeed < minSpeed) {
+    assign(state.vel, scale(state.vel, minSpeed / newSpeed));
+  }
 
+  // Integrate.
   assign(state.pos, add(state.pos, scale(state.vel, dt)));
 
-  const up = normalize(sub(state.pos, target.center));
-  const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
-  assignQuat(state.rot, normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, up), state.rot)));
-
-  const toTargetCenter = sub(target.center, state.pos);
-  const distToCenter = vlen(toTargetCenter);
-  if (distToCenter < 0.01) return;
-  const gravDir = scale(toTargetCenter, 1 / distToCenter);
-  const upDir = scale(gravDir, -1);
-  const toLanding = sub(targetPoint, state.pos);
-  const landingPointDistance = vlen(toLanding);
-  const rawLandingRadius =
-    terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, targetCfg, target.id) ??
-    getTerrainRadius(upDir.x, upDir.y, upDir.z, targetCfg);
-  const waterRadius = target.radius + targetCfg.terrain.waterLevel;
-  const landingRadius = Math.max(rawLandingRadius, waterRadius);
-  const landingDistance = distToCenter - (landingRadius + cfg.movement.standingHeight);
-
-  const targetCaptureDistance = Math.max(0, getCaptureRadius(target) - landingRadius);
-  if (
-    landingPointDistance <= Math.min(getPlanetHopLandingCaptureDistance(cfg), targetCaptureDistance)
-  ) {
-    state.movementState = PlayerMovementState.LandingApproach;
-    const landingPull =
-      landingPointDistance > 1e-4 ? scale(toLanding, 1 / landingPointDistance) : gravDir;
-    const velToward = dot(state.vel, landingPull);
-    if (velToward > 0 || landingPointDistance > cfg.movement.surfaceSnapDistance) {
-      assign(state.vel, add(state.vel, scale(landingPull, cfg.movement.gravityAcceleration * dt)));
-    }
+  // Orient body "up" toward the dominant planet so visual rotation tracks
+  // the world's local up. Same pattern as stepAirborne.
+  if (dominant) {
+    const up = normalize(sub(state.pos, dominant.center));
+    const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+    assignQuat(
+      state.rot,
+      normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, up), state.rot)),
+    );
   }
 
-  if (landingDistance <= cfg.movement.surfaceSnapDistance) {
+  // Landing. Touch any planet's surface envelope to commit.
+  for (const planet of planets) {
+    const toPlanet = sub(planet.center, state.pos);
+    const dist = vlen(toPlanet);
+    if (dist < 0.01) continue;
+    const gravDir = scale(toPlanet, 1 / dist);
+    const upDir = scale(gravDir, -1);
+    const planetCfg = cfgForPlanet?.(planet.id) ?? cfg;
+    const rawLandingRadius =
+      terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, planetCfg, planet.id) ??
+      getTerrainRadius(upDir.x, upDir.y, upDir.z, planetCfg);
+    const waterRadius = planetCfg.planet.radius + planetCfg.terrain.waterLevel;
+    const landingRadius = Math.max(rawLandingRadius, waterRadius);
+    const surfaceGap = dist - (landingRadius + cfg.movement.standingHeight);
+    if (surfaceGap > getFreeFlightLandingCaptureDistance(cfg)) continue;
     const velToward = dot(state.vel, gravDir);
-    if (velToward > 0) {
-      // Hard-stop on splat impact: velocity goes to zero and the player is pinned at
-      // the landing point for the splat cooldown (see stepPlayer). The squash visual
-      // plays during this window, then the player pops back up under normal control.
-      assign(
-        state.pos,
-        add(target.center, scale(upDir, landingRadius + cfg.movement.standingHeight)),
-      );
-      assign(state.vel, { x: 0, y: 0, z: 0 });
-      state.planetId = target.id;
-      state.planetHopSourcePlanetId = "";
-      state.planetHopTargetPlanetId = "";
-      state.planetHopLandingNormal = upDir;
-      state.planetHopElapsedMs = 0;
-      state.splatCooldownMs = getPlanetHopLandingSplatCooldownMs(cfg);
-      state.movementState = PlayerMovementState.Idle;
-    }
+    if (velToward <= 0) continue;
+    assign(
+      state.pos,
+      add(planet.center, scale(upDir, landingRadius + cfg.movement.standingHeight)),
+    );
+    assign(state.vel, sub(state.vel, scale(gravDir, velToward)));
+    state.planetId = planet.id;
+    state.gravityAnchorPlanetId = planet.id;
+    state.movementState = PlayerMovementState.Idle;
+    return;
   }
+}
+
+// -- Pad-loaded (Phase E) ----------------------------------------------------
+
+/**
+ * Player is locked onto a charged blast pad, aiming freely. Three sub-phases
+ * per tick:
+ *   1. Cancel check — any movement key steps the player off the pad. Charge
+ *      stays on the pad (the pad's coverage isn't touched here).
+ *   2. Wind-up — `padLoadProgress` ramps 0 → 1 over `freeFlightLoadDurationSeconds`.
+ *      Launch input is ignored during this window so an accidental Anchor tap
+ *      on contact doesn't immediately fire.
+ *   3. Charge / launch — once wound up, `padChargeProgress` ramps 0 → 1 while
+ *      Anchor is held. Release with any charge fires the player in the aim
+ *      direction at lerp(launchSpeedMin, pad.launchSpeed, padChargeProgress).
+ *
+ * On launch the player transitions to FreeFlight, the pad's coverage is
+ * consumed, and the position is nudged a small distance along aim so the
+ * launcher doesn't immediately re-trigger.
+ */
+function stepPadLoaded(
+  state: PlayerPhysics,
+  input: InputMessage,
+  dt: number,
+  planets: PlanetData[],
+  cfg: StepConfig,
+  blastPads: readonly RuntimeBlastPad[],
+  padStates: Map<string, SimBlastPadState>,
+  terrainProvider?: TerrainSurfaceProvider,
+): void {
+  state.isOnFriendlySlime = false;
+  state.isCarving = false;
+  state.skiJumpCharge = 0;
+  state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
+
+  const pad = blastPads.find((p) => p.id === state.loadedPadId);
+  const sourcePlanet = pad ? findPlanet(planets, pad.planetId) : undefined;
+  if (!pad || !sourcePlanet) {
+    // Pad disappeared from the map or planet missing — bail to a sane state.
+    state.movementState = PlayerMovementState.Idle;
+    state.loadedPadId = "";
+    state.padLoadProgress = 0;
+    state.padChargeProgress = 0;
+    return;
+  }
+
+  // Pad surface center — the player is pinned here for the whole loaded window.
+  const normal = normalize(pad.normal);
+  const padSurfaceRadius =
+    (terrainProvider?.getRadius(normal.x, normal.y, normal.z, cfg, sourcePlanet.id) ??
+      getTerrainRadius(normal.x, normal.y, normal.z, cfg)) + cfg.movement.standingHeight;
+  const padCenter = add(sourcePlanet.center, scale(normal, padSurfaceRadius));
+
+  // 1. Cancel via movement. The cancel is gated by `padCancelArmed`:
+  //     - On entry the flag is false (we may have loaded with W still held).
+  //     - It flips to true as soon as a tick passes with no movement keys.
+  //     - After that, any movement-key press cancels.
+  //    This prevents "walk onto pad with W held → instantly cancel" while
+  //    still letting an intentional W tap after loading step the player off.
+  const movementMask = InputKey.Forward | InputKey.Backward | InputKey.Left | InputKey.Right;
+  const movementPressed = (input.keys & movementMask) !== 0;
+  if (!movementPressed) {
+    state.padCancelArmed = true;
+  } else if (state.padCancelArmed) {
+    // Step off — preserve loadedPadId so we don't re-load while still in the
+    // footprint (Phase E "stickiness" rule). Player goes back to surface
+    // movement; the next on-surface tick + tryEnterLoadedPad will clear
+    // loadedPadId once the footprint check no longer hits this pad.
+    state.movementState = PlayerMovementState.Idle;
+    state.padLoadProgress = 0;
+    state.padChargeProgress = 0;
+    state.padCancelArmed = false;
+    return;
+  }
+
+  // Lock to pad center, zero velocity.
+  assign(state.pos, padCenter);
+  state.vel.x = 0;
+  state.vel.y = 0;
+  state.vel.z = 0;
+
+  // Orient body up along the pad normal so the player visibly stands on it.
+  const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
+  assignQuat(
+    state.rot,
+    normalizeQuat(quatMultiply(quatFromUnitVectors(currentUp, normal), state.rot)),
+  );
+
+  // 2. Wind-up.
+  state.padLoadProgress = Math.min(
+    1,
+    (state.padLoadProgress ?? 0) + dt / getFreeFlightLoadDuration(cfg),
+  );
+  if ((state.padLoadProgress ?? 0) < 1) {
+    return;
+  }
+
+  // 3. Charge / launch.
+  const anchorHeld = (input.keys & InputKey.Anchor) !== 0;
+  if (anchorHeld) {
+    state.padChargeProgress = Math.min(
+      1,
+      (state.padChargeProgress ?? 0) + dt / getFreeFlightChargeDuration(cfg),
+    );
+    return;
+  }
+
+  // Anchor released. If no charge was built, just wait — the player can still
+  // press Anchor to charge, or step off to cancel.
+  if ((state.padChargeProgress ?? 0) <= 0) {
+    return;
+  }
+
+  // LAUNCH.
+  const padState = padStates.get(pad.id);
+  if (padState) {
+    padState.ownerSlimeGroupId = NO_SLIME_GROUP_ID;
+    padState.ownerColor = 0;
+    padState.coverageProgress = 0;
+  }
+
+  const aimLen = vlen(input.aimDir);
+  const aimDir = aimLen > 1e-4 ? scale(input.aimDir, 1 / aimLen) : normal;
+  const minSpeed = getFreeFlightLaunchSpeedMin(cfg);
+  const speed = minSpeed + (pad.launchSpeed - minSpeed) * (state.padChargeProgress ?? 0);
+
+  // Nudge launch start a touch along aim so the surface-snap envelope of the
+  // source planet doesn't immediately register as a landing.
+  const launchOffset = cfg.movement.surfaceSnapDistance + cfg.movement.collisionRadius + 0.75;
+  assign(state.pos, add(padCenter, scale(aimDir, launchOffset)));
+  assign(state.vel, scale(aimDir, speed));
+  state.planetId = "";
+  state.gravityAnchorPlanetId = sourcePlanet.id;
+  state.movementState = PlayerMovementState.FreeFlight;
+  state.loadedPadId = "";
+  state.padLoadProgress = 0;
+  state.padChargeProgress = 0;
+  state.surfState =
+    state.surfState === PlayerSurfState.None ? PlayerSurfState.SurfingVisible : state.surfState;
 }
 
 // -- Public entry point ------------------------------------------------------
@@ -923,12 +1063,12 @@ export function stepPlayer(
     stepGrinding(state, input, rails, dt, cfg);
     return;
   }
-  if (
-    state.movementState === PlayerMovementState.BlastLaunch ||
-    state.movementState === PlayerMovementState.PlanetHopFlight ||
-    state.movementState === PlayerMovementState.LandingApproach
-  ) {
-    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
+  if (state.movementState === PlayerMovementState.FreeFlight) {
+    stepFreeFlight(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
+    return;
+  }
+  if (state.movementState === PlayerMovementState.PadLoaded) {
+    stepPadLoaded(state, input, dt, planets, cfg, blastPads, padStates, terrainProvider);
     return;
   }
   // Splat freeze: after a blast-pad landing the player is pinned at impact (zero vel,
@@ -944,15 +1084,14 @@ export function stepPlayer(
     state.surfState = PlayerSurfState.None;
     return;
   }
-  if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
-    stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
+  // Entering a charged pad transitions to PadLoaded; next tick dispatches to
+  // stepPadLoaded for the wind-up/charge/launch cycle.
+  if (tryEnterLoadedPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
     return;
   }
   if (state.planetId !== "") {
     stepOnSurface(state, input, dt, planets, cfg, planetSlime, terrainProvider);
-    if (tryTriggerBlastPad(state, planets, cfg, blastPads, padStates, terrainProvider)) {
-      stepPlanetHop(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
-    }
+    tryEnterLoadedPad(state, planets, cfg, blastPads, padStates, terrainProvider);
   } else {
     stepAirborne(state, input, dt, planets, cfg, terrainProvider, cfgForPlanet);
     // After airborne integration, check if the player is close enough to a rail to snap.

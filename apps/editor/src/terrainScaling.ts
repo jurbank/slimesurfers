@@ -9,10 +9,7 @@ import type { EditorPlanet, EditorTerrainFeature } from "./types.ts";
  * Bank angles, smoothing factors (0..1), and `seed`/`octaves`/`lacunarity` are
  * shape parameters that don't scale with size, so they're passed through.
  */
-export function scalePlanetForRadius(
-  planet: EditorPlanet,
-  scale: number,
-): EditorPlanet {
+export function scalePlanetForRadius(planet: EditorPlanet, scale: number): EditorPlanet {
   if (!Number.isFinite(scale) || scale <= 0 || scale === 1) return planet;
   return {
     ...planet,
@@ -28,10 +25,7 @@ export function scalePlanetForRadius(
   };
 }
 
-function scaleTerrainFeature(
-  feature: EditorTerrainFeature,
-  scale: number,
-): EditorTerrainFeature {
+function scaleTerrainFeature(feature: EditorTerrainFeature, scale: number): EditorTerrainFeature {
   if (feature.kind === "jump") {
     return {
       ...feature,

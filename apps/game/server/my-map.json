@@ -310,12 +310,6 @@
         "y": 0,
         "z": 0
       },
-      "targetPlanetId": "planet-1",
-      "targetNormal": {
-        "x": -0.9891929635653334,
-        "y": -0.14661951040988142,
-        "z": 0
-      },
       "radius": 5,
       "launchSpeed": 78,
       "upwardBias": 0.45,
@@ -333,12 +327,6 @@
         "x": -0.9455185755993167,
         "y": 0,
         "z": -0.32556815445715703
-      },
-      "targetPlanetId": "planet-0",
-      "targetNormal": {
-        "x": 0.9331077616825828,
-        "y": 0.35959686468004676,
-        "z": 0
       },
       "radius": 5,
       "launchSpeed": 44,
@@ -358,12 +346,6 @@
         "y": 1,
         "z": 0
       },
-      "targetPlanetId": "planet-2",
-      "targetNormal": {
-        "x": -1,
-        "y": 0,
-        "z": 0
-      },
       "radius": 5,
       "launchSpeed": 110,
       "upwardBias": 0.45,
@@ -380,12 +362,6 @@
       "tangent": {
         "x": 0,
         "y": 1,
-        "z": 0
-      },
-      "targetPlanetId": "planet-0",
-      "targetNormal": {
-        "x": 1,
-        "y": 0,
         "z": 0
       },
       "radius": 5,

@@ -195,26 +195,22 @@ describe("editorStateToRuntimeMap rail export", () => {
 });
 
 describe("editorStateToRuntimeMap blast pad export", () => {
-  test("exports authored blast pads with cameraProfile and dropped self-targeting pads", () => {
+  test("exports authored blast pads with cameraProfile and drops pads with unknown source planet", () => {
     const config = defaultEditorConfig();
     config.planets = [
       defaultEditorPlanet("planet-0"),
       defaultEditorPlanet("planet-1", { x: 400, y: 0, z: 0 }),
     ];
-    const validPad = defaultEditorBlastPad("pad-1", "planet-0", "planet-1");
+    const validPad = defaultEditorBlastPad("pad-1", "planet-0");
     validPad.normal = [0, 1, 0];
     validPad.tangent = [1, 0, 0];
-    validPad.targetNormal = [-1, 0, 0];
     validPad.radius = 6;
     validPad.launchSpeed = 95;
     validPad.upwardBias = 0.6;
-    const selfTargeting: EditorBlastPad = {
-      ...defaultEditorBlastPad("pad-self", "planet-0", "planet-0"),
+    const unknownSource: EditorBlastPad = {
+      ...defaultEditorBlastPad("pad-unknown", "planet-99"),
     };
-    const unknownTarget: EditorBlastPad = {
-      ...defaultEditorBlastPad("pad-unknown", "planet-0", "planet-99"),
-    };
-    config.blastPads = [validPad, selfTargeting, unknownTarget];
+    config.blastPads = [validPad, unknownSource];
 
     const map = editorStateToRuntimeMap(
       config,
@@ -229,8 +225,6 @@ describe("editorStateToRuntimeMap blast pad export", () => {
         planetId: "planet-0",
         normal: { x: 0, y: 1, z: 0 },
         tangent: { x: 1, y: 0, z: 0 },
-        targetPlanetId: "planet-1",
-        targetNormal: { x: -1, y: 0, z: 0 },
         radius: 6,
         launchSpeed: 95,
         upwardBias: 0.6,

@@ -109,18 +109,21 @@ export const PlayerMovementState = {
   Airborne: 2,
   Dead: 3,
   Grinding: 4,
-  BlastLaunch: 5,
-  PlanetHopFlight: 6,
-  LandingApproach: 7,
+  /** Phase C of DIRECTIONAL_TRAVERSAL_PLAN — ballistic, single-planet gravity,
+   *  continuous steering, Forward/Backward thrust/brake. Entered when the
+   *  player launches off a loaded blast pad. */
+  FreeFlight: 8,
+  /** Phase E of DIRECTIONAL_TRAVERSAL_PLAN — player is locked to a charged
+   *  blast pad, aiming freely. Hold Anchor to charge launch speed; release to
+   *  fire into FreeFlight. Move keys step off without launching. */
+  PadLoaded: 9,
 } as const;
 export type PlayerMovementState = (typeof PlayerMovementState)[keyof typeof PlayerMovementState];
 
-export function isPlanetHopMovementState(movementState: number): boolean {
-  return (
-    movementState === PlayerMovementState.BlastLaunch ||
-    movementState === PlayerMovementState.PlanetHopFlight ||
-    movementState === PlayerMovementState.LandingApproach
-  );
+/** Ballistic space traversal — not surfaced. Currently just FreeFlight (Airborne
+ *  stays its own bucket since it's always bound to a single nearest planet). */
+export function isFreeFlightMovementState(movementState: number): boolean {
+  return movementState === PlayerMovementState.FreeFlight;
 }
 
 export const PlayerSurfState = {
@@ -169,12 +172,20 @@ export interface SimPlayerState {
   lastGrindT: number; // arc-length parameter from the previous tick
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
-  planetHopSourcePlanetId: string;
-  planetHopTargetPlanetId: string;
-  planetHopLandingNormal: SimVec3;
-  planetHopElapsedMs: number;
   splatCooldownMs: number;
   isOnFriendlySlime: boolean;
+  /** Hysteresis hint for the gravity picker — see PlayerPhysics.gravityAnchorPlanetId. */
+  gravityAnchorPlanetId: string;
+  /** ID of the blast pad the player is currently loaded onto. "" when not loaded. */
+  loadedPadId: string;
+  /** 0..1 ramp during the pad's load-in wind-up. Launch input is ignored until 1. */
+  padLoadProgress: number;
+  /** 0..1 ramp while Anchor is held during PadLoaded. Maps to launch speed at release. */
+  padChargeProgress: number;
+  /** False until the player has released all movement keys after loading. Cancel
+   *  requires this true — prevents walking onto a pad with W held from instantly
+   *  stepping off again. */
+  padCancelArmed: boolean;
   inputSeq: number;
   airTrickCombo: number;
   airTrickAirTimeMs: number;

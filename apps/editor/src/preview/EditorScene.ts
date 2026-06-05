@@ -152,9 +152,6 @@ export class EditorScene {
     private readonly onPlanetSelected: ((id: string) => void) | null = null,
     private readonly onBlastPadsChange: ((pads: EditorBlastPad[]) => void) | null = null,
     private readonly onBlastPadSelectionChange: ((padId: string | null) => void) | null = null,
-    private readonly onBlastPadPickTargetComplete:
-      | ((padId: string, targetPlanetId: string) => void)
-      | null = null,
   ) {
     this.canvas = canvas;
     this.currentConfig = config;
@@ -316,7 +313,6 @@ export class EditorScene {
       scene: this.scene,
       getPlanetMesh: (id) => this.planetRenders.get(id)?.terrainMesh ?? null,
       getPlanet: (id) => this.currentConfig.planets.find((p) => p.id === id) ?? null,
-      getKnownPlanetIds: () => new Set(this.currentConfig.planets.map((p) => p.id)),
       shouldOrbit: () => this.isSpaceHeld || this.isPreviewActive,
       onPadsChange: (pads) => {
         this.blastPadPreviewVisuals.setPads(pads);
@@ -325,9 +321,6 @@ export class EditorScene {
       onSelectionChange: (padId) => {
         this.blastPadPreviewVisuals.setSelectedPadId(padId);
         this.onBlastPadSelectionChange?.(padId);
-      },
-      onPickTargetComplete: (padId, targetPlanetId) => {
-        this.onBlastPadPickTargetComplete?.(padId, targetPlanetId);
       },
     });
 
@@ -383,7 +376,7 @@ export class EditorScene {
       this.hasBlastPadMode = false;
       return;
     }
-    this.hasBlastPadMode = !!state && (state.mode != null || state.pickTargetForPadId != null);
+    this.hasBlastPadMode = !!state && state.mode != null;
     this.blastPadPreviewVisuals.setSelectedPadId(state?.selectedPadId ?? null);
     this.blastPadTool.setToolState(state);
   }

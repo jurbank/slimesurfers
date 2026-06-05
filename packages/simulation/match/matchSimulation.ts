@@ -21,7 +21,6 @@ import type {
   TrickEventMessage,
 } from "@splat/protocol/network/serverMessages.ts";
 import {
-  applyPlanetHopLandingImpact,
   rechargePlayerSlime,
   tickProjectiles,
   tryFireHitscan,
@@ -42,7 +41,7 @@ import {
   processAirTricks,
   settleAirTricksOnLanding,
 } from "../tricks/airTricks.ts";
-import { isPlanetHopMovementState, type SimMatchState, type SimPlayerState } from "./simState.ts";
+import { type SimMatchState, type SimPlayerState } from "./simState.ts";
 import { selectSpawnSurface } from "./spawnSelection.ts";
 import { sanitizeInputMessage } from "./inputSanitizer.ts";
 import {
@@ -468,7 +467,6 @@ export class MatchSimulation {
     nowMs: number,
   ): void {
     const wasTrickActive = isTrickMovementState(player.movementState);
-    const wasPlanetHop = isPlanetHopMovementState(player.movementState);
     const prevGrindId = player.grindRailId;
     stepPlayer(
       player,
@@ -484,16 +482,6 @@ export class MatchSimulation {
       (id) => this.stepCfgs.get(id),
     );
     this.maybeStampRailCorridor(player, prevGrindId);
-    if (wasPlanetHop && !isPlanetHopMovementState(player.movementState) && player.planetId !== "") {
-      const stamps = applyPlanetHopLandingImpact(
-        this.simState,
-        player,
-        this.planets,
-        this.getGameplayConfig(player.planetId),
-        (event) => this.recordKillEvent(event),
-      );
-      for (const stamp of stamps) this.recordSlimeStamp(stamp);
-    }
     if (isTrickMovementState(player.movementState)) {
       const tricks = processAirTricks(this.simState, player, input, dtSec * 1000, nowMs);
       this.pendingTrickEvents.push(...tricks.trickEvents);

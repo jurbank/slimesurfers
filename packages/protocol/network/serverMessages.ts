@@ -30,11 +30,15 @@ export interface PlayerSnapshot {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
-  planetHopSourcePlanetId?: string;
-  planetHopTargetPlanetId?: string;
-  planetHopLandingNormal?: Vec3Data;
-  planetHopElapsedMs?: number;
   splatCooldownMs?: number;
+  /** Hysteresis hint for the gravity picker (see simulatedMovement.ts). Optional
+   *  for backwards compatibility with older snapshots — clients tolerate absence. */
+  gravityAnchorPlanetId?: string;
+  /** Phase E loaded-pad state. Optional for back-compat. */
+  loadedPadId?: string;
+  padLoadProgress?: number;
+  padChargeProgress?: number;
+  padCancelArmed?: boolean;
   isShooting: boolean;
   equippedWeaponId: WeaponId;
   disposableShotsRemaining: number;
@@ -311,8 +315,6 @@ export interface MapDataMessage {
     planetId: string;
     normal: { x: number; y: number; z: number };
     tangent: { x: number; y: number; z: number };
-    targetPlanetId: string;
-    targetNormal: { x: number; y: number; z: number };
     radius: number;
     cooldownMs?: number;
     launchSpeed: number;

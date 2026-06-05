@@ -3,6 +3,10 @@ import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { DEFAULT_RUNTIME_PLANET_TERRAIN, DEV_MAP } from "@splat/content/map/runtimeMapData.ts";
 import { createPlanetMaterial } from "@splat/client-runtime/materials/planetMaterial.ts";
 import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosphereMaterial.ts";
+import {
+  createGravityRingMaterial,
+  resolveGravityRadius,
+} from "@splat/client-runtime/materials/gravityRingMaterial.ts";
 import { createWaterMaterial } from "@splat/client-runtime/materials/waterMaterial.ts";
 import { createOutlineMaterial } from "@splat/client-runtime/materials/outlineMaterial.ts";
 import {
@@ -43,6 +47,8 @@ export class PlanetRenderer {
   private readonly planetMeshes: THREE.Mesh[] = [];
   private readonly planetOutlines: THREE.Mesh[] = [];
   private readonly atmosphereMaterials: (THREE.ShaderMaterial | null)[] = [];
+  private readonly gravityRingMeshes: THREE.Mesh[] = [];
+  private readonly gravityRingMaterials: THREE.ShaderMaterial[] = [];
   private readonly waterMaterials: (THREE.ShaderMaterial | null)[] = [];
   private readonly waterMeshes: (THREE.Mesh | null)[] = [];
 
@@ -98,6 +104,9 @@ export class PlanetRenderer {
 
       const atmosphere = this.atmosphereMaterials[i];
       if (atmosphere) this.applyAtmosphereMaterialConfig(atmosphere, mapPlanet);
+
+      const gravityRing = this.gravityRingMeshes[i];
+      if (gravityRing) gravityRing.scale.setScalar(resolveGravityRadius(mapPlanet));
 
       this.registerSlimeHeightMap(mapPlanet, planetCfg);
     }
@@ -168,6 +177,15 @@ export class PlanetRenderer {
       } else {
         this.atmosphereMaterials.push(null);
       }
+
+      const gravityRingMat = createGravityRingMaterial();
+      const gravityRingMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), gravityRingMat);
+      gravityRingMesh.scale.setScalar(resolveGravityRadius(p));
+      gravityRingMesh.position.set(x, y, z);
+      gravityRingMesh.renderOrder = 3;
+      this.scene.add(gravityRingMesh);
+      this.gravityRingMeshes.push(gravityRingMesh);
+      this.gravityRingMaterials.push(gravityRingMat);
 
       if (p.hasWater) {
         const waterMat = createWaterMaterial({

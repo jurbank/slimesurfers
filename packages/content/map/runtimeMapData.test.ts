@@ -278,21 +278,6 @@ describe("validateRuntimeMapData", () => {
     expect(result.errors.some((e) => e.field === "spawns.dev.anchor.planetId")).toBe(true);
   });
 
-  test("rejects blast pad referencing unknown target planet", () => {
-    const result = validateRuntimeMapData({
-      ...DEV_MAP,
-      blastPads: [
-        {
-          ...DEV_MAP.blastPads![0]!,
-          targetPlanetId: "planet-99",
-        },
-      ],
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "blastPads[0].targetPlanetId")).toBe(true);
-  });
-
   test("rejects unknown spawn policy kind", () => {
     const result = validateRuntimeMapData({
       ...DEV_MAP,

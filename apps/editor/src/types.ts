@@ -181,9 +181,10 @@ export interface EditorBlastPad {
   planetId: string;
   normal: [number, number, number];
   tangent: [number, number, number];
-  targetPlanetId: string;
-  targetNormal: [number, number, number];
   radius: number;
+  /** Maximum launch speed at full hold-to-charge. See Phase E in
+   *  DIRECTIONAL_TRAVERSAL_PLAN.md — the player aims at launch time, so the
+   *  pad just supplies a magnitude. */
   launchSpeed: number;
   upwardBias: number;
 }
@@ -316,18 +317,12 @@ export function defaultEditorPlanet(id: string, center = { x: 0, y: 0, z: 0 }): 
 
 /** Default authoring values mirror the hand-tuned DEV_MAP pads so a freshly-placed
  *  pad in the editor flies like the existing ones in `apps/game/server/my-map.json`. */
-export function defaultEditorBlastPad(
-  id: string,
-  sourcePlanetId: string,
-  targetPlanetId: string,
-): EditorBlastPad {
+export function defaultEditorBlastPad(id: string, sourcePlanetId: string): EditorBlastPad {
   return {
     id,
     planetId: sourcePlanetId,
     normal: [0, 1, 0],
     tangent: [1, 0, 0],
-    targetPlanetId,
-    targetNormal: [0, 1, 0],
     radius: 5,
     launchSpeed: 78,
     upwardBias: 0.45,

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GAME_CONFIG } from "@splat/content/config/gameConfig.ts";
 import { RENDER_CONFIG } from "@splat/content/config/renderConfig.ts";
-import { isPlanetHopMovementState } from "@splat/simulation/match/simState.ts";
+import { PlayerMovementState } from "@splat/simulation/match/simState.ts";
 import { HealthBar } from "./healthBar.ts";
 import { Nameplate, type TeamRelation } from "./nameplate.ts";
 import {
@@ -58,10 +58,10 @@ export class RemotePlayer {
     this.visual.updateAlivePose(state, dt);
     this.visual.updateWeapon(state.equippedWeaponId);
 
+    // Squash visual when a remote player drops out of FreeFlight onto a surface.
     if (
-      this.prevMovementState !== -1 &&
-      isPlanetHopMovementState(this.prevMovementState) &&
-      !isPlanetHopMovementState(state.movementState) &&
+      this.prevMovementState === PlayerMovementState.FreeFlight &&
+      state.movementState !== PlayerMovementState.FreeFlight &&
       state.planetId !== ""
     ) {
       this.landingSquashTimer = LANDING_SQUASH_DURATION;

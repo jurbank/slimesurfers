@@ -141,7 +141,8 @@ export class BlastPadSystem {
         const color = state.ownerColor;
         const t = coverage;
         const emissiveIntensity =
-          NEUTRAL_EMISSIVE_INTENSITY + t * (CHARGED_EMISSIVE_INTENSITY - NEUTRAL_EMISSIVE_INTENSITY);
+          NEUTRAL_EMISSIVE_INTENSITY +
+          t * (CHARGED_EMISSIVE_INTENSITY - NEUTRAL_EMISSIVE_INTENSITY);
         entry.platformMaterial.color.setHex(0x2a1a22);
         entry.platformMaterial.emissive.setHex(color);
         entry.platformMaterial.emissiveIntensity = emissiveIntensity;

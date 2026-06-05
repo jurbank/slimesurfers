@@ -11,28 +11,26 @@ export interface BlastPadConnectOptions {
   scene: THREE.Scene;
   getPlanetMesh: (planetId: string) => THREE.Mesh | null;
   getPlanet: (planetId: string) => EditorPlanet | null;
-  getKnownPlanetIds: () => Set<string>;
   shouldOrbit: () => boolean;
   onPadsChange: (pads: EditorBlastPad[]) => void;
   onSelectionChange: (padId: string | null) => void;
-  onPickTargetComplete: (padId: string, targetPlanetId: string) => void;
 }
 
-/** Pointer-driven blast-pad authoring tool. Picks against the active source planet
- *  for placement/move/delete, and against any *other* planet during a target-pick
- *  one-shot. Renders selectable spheres above each pad on the active planet only —
- *  the cosmetic pad/arrow/arc rendering lives in BlastPadPreviewVisuals. */
+/** Pointer-driven blast-pad authoring tool. Picks against the active source
+ *  planet for placement/move/delete. Phase E: there are no targets — pads are
+ *  aim-and-fire launchers — so the previous target-pick mode and the related
+ *  raycast against "other" planets are gone. Renders selectable spheres above
+ *  each pad on the active planet only; the pad footprint visuals live in
+ *  BlastPadPreviewVisuals. */
 export class BlastPadTool {
   private canvas: HTMLCanvasElement | null = null;
   private camera: THREE.Camera | null = null;
   private scene: THREE.Scene | null = null;
   private getPlanetMesh: ((planetId: string) => THREE.Mesh | null) | null = null;
   private getPlanet: ((planetId: string) => EditorPlanet | null) | null = null;
-  private knownPlanetIds: (() => Set<string>) | null = null;
   private shouldOrbit: (() => boolean) | null = null;
   private onPadsChange: ((pads: EditorBlastPad[]) => void) | null = null;
   private onSelectionChange: ((padId: string | null) => void) | null = null;
-  private onPickTargetComplete: ((padId: string, targetPlanetId: string) => void) | null = null;
 
   private readonly raycaster = new THREE.Raycaster();
   private readonly group = new THREE.Group();
@@ -56,11 +54,9 @@ export class BlastPadTool {
     this.scene = options.scene;
     this.getPlanetMesh = options.getPlanetMesh;
     this.getPlanet = options.getPlanet;
-    this.knownPlanetIds = options.getKnownPlanetIds;
     this.shouldOrbit = options.shouldOrbit;
     this.onPadsChange = options.onPadsChange;
     this.onSelectionChange = options.onSelectionChange;
-    this.onPickTargetComplete = options.onPickTargetComplete;
 
     this.group.add(this.handlesGroup);
     this.scene.add(this.group);
@@ -74,9 +70,7 @@ export class BlastPadTool {
   setToolState(state: BlastPadToolState | null): void {
     this.state = state;
     if (this.canvas) {
-      if (state?.pickTargetForPadId) this.canvas.style.cursor = "crosshair";
-      else if (state?.mode) this.canvas.style.cursor = "crosshair";
-      else this.canvas.style.cursor = "";
+      this.canvas.style.cursor = state?.mode ? "crosshair" : "";
     }
     this.updateHandles();
   }
@@ -140,31 +134,6 @@ export class BlastPadTool {
 
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (!this.state || e.button !== 0 || this.shouldOrbit?.()) return;
-
-    // Target-pick is a one-shot — it runs regardless of mode/cursor and consumes
-    // the click so the active-planet selection handler does not also fire.
-    if (this.state.pickTargetForPadId) {
-      const padId = this.state.pickTargetForPadId;
-      const pad = this.state.pads.find((p) => p.id === padId);
-      if (!pad) return;
-      const hit = this.raycastOtherPlanets(e, pad.planetId);
-      if (!hit) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const planet = this.getPlanet?.(hit.planetId);
-      if (!planet) return;
-      const center = new THREE.Vector3(planet.center.x, planet.center.y, planet.center.z);
-      const normal = hit.point.clone().sub(center).normalize();
-      const nextPad: EditorBlastPad = {
-        ...pad,
-        targetPlanetId: hit.planetId,
-        targetNormal: [normal.x, normal.y, normal.z],
-      };
-      this.commitPadChange(nextPad);
-      this.onPickTargetComplete?.(padId, hit.planetId);
-      return;
-    }
-
     if (!this.state.mode) return;
 
     const handle = this.raycastHandle(e);
@@ -204,9 +173,8 @@ export class BlastPadTool {
   private readonly onPointerMove = (e: PointerEvent): void => {
     if (!this.canvas || !this.state) return;
 
-    // Hover cursor hint only — orbit, place, delete cursors stay set in setToolState.
     if (!this.isDraggingPad) {
-      if (this.state.mode || this.state.pickTargetForPadId) {
+      if (this.state.mode) {
         const handle = this.raycastHandle(e);
         this.canvas.style.cursor = handle ? "pointer" : "crosshair";
       }
@@ -246,45 +214,19 @@ export class BlastPadTool {
     const source = this.getPlanet?.(sourceId);
     if (!source) return null;
 
-    // Default target = first other planet authored in the editor.
-    // Caller (App.tsx) already prevents [+New] when only one planet exists.
     const existingIds = new Set(this.state.pads.map((p) => p.id));
     const id = nextPadId(existingIds);
-    const targetCandidate = this.findFallbackTargetPlanetId(sourceId);
-    if (!targetCandidate) return null;
-
-    const target = this.getPlanet?.(targetCandidate);
-    const tangent = target
-      ? autoTangent(source, normal, target)
-      : projectTangent(new THREE.Vector3(1, 0, 0), normal);
-    const targetNormalVec = target
-      ? landingNormalTowardSource(source, normal, target)
-      : new THREE.Vector3(0, 1, 0);
+    const tangent = projectTangent(new THREE.Vector3(1, 0, 0), normal);
 
     return {
       id,
       planetId: sourceId,
       normal: [normal.x, normal.y, normal.z],
       tangent: [tangent.x, tangent.y, tangent.z],
-      targetPlanetId: targetCandidate,
-      targetNormal: [targetNormalVec.x, targetNormalVec.y, targetNormalVec.z],
       radius: 5,
       launchSpeed: 78,
       upwardBias: 0.45,
     };
-  }
-
-  private findFallbackTargetPlanetId(sourceId: string): string | null {
-    if (!this.state) return null;
-    const seen = new Set<string>();
-    for (const pad of this.state.pads) {
-      seen.add(pad.planetId);
-      seen.add(pad.targetPlanetId);
-    }
-    for (const id of seen) {
-      if (id !== sourceId && this.getPlanet?.(id)) return id;
-    }
-    return null;
   }
 
   private commitPadChange(nextPad: EditorBlastPad): void {
@@ -300,33 +242,6 @@ export class BlastPadTool {
     const ndc = this.toNdc(e);
     this.raycaster.setFromCamera(ndc, this.camera);
     return this.raycaster.intersectObject(mesh)[0] ?? null;
-  }
-
-  private raycastOtherPlanets(
-    e: PointerEvent,
-    excludePlanetId: string,
-  ): { planetId: string; point: THREE.Vector3 } | null {
-    if (!this.canvas || !this.camera || !this.state) return null;
-    const ndc = this.toNdc(e);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    let nearest: { planetId: string; point: THREE.Vector3; dist: number } | null = null;
-    // EditorScene injects the full planet roster via getKnownPlanetIds at connect.
-    const candidates = this.knownPlanetIds ? this.knownPlanetIds() : new Set<string>();
-    for (const pad of this.state.pads) {
-      candidates.add(pad.planetId);
-      candidates.add(pad.targetPlanetId);
-    }
-    for (const id of candidates) {
-      if (id === excludePlanetId) continue;
-      const mesh = this.getPlanetMesh?.(id);
-      if (!mesh) continue;
-      const hit = this.raycaster.intersectObject(mesh)[0];
-      if (!hit) continue;
-      if (!nearest || hit.distance < nearest.dist) {
-        nearest = { planetId: id, point: hit.point.clone(), dist: hit.distance };
-      }
-    }
-    return nearest ? { planetId: nearest.planetId, point: nearest.point } : null;
   }
 
   private raycastHandle(e: PointerEvent): { id: string } | null {
@@ -351,47 +266,10 @@ export class BlastPadTool {
 function projectTangent(candidate: THREE.Vector3, normal: THREE.Vector3): THREE.Vector3 {
   const projected = candidate.clone().projectOnPlane(normal);
   if (projected.lengthSq() < 1e-6) {
-    // Candidate was parallel to the new normal — fall back to a stable axis.
     const ref = Math.abs(normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
     return ref.projectOnPlane(normal).normalize();
   }
   return projected.normalize();
-}
-
-function autoTangent(
-  sourcePlanet: EditorPlanet,
-  normal: THREE.Vector3,
-  targetPlanet: EditorPlanet,
-): THREE.Vector3 {
-  const padWorld = new THREE.Vector3(
-    sourcePlanet.center.x,
-    sourcePlanet.center.y,
-    sourcePlanet.center.z,
-  ).addScaledVector(normal, sourcePlanet.radius);
-  const towardTarget = new THREE.Vector3(
-    targetPlanet.center.x,
-    targetPlanet.center.y,
-    targetPlanet.center.z,
-  ).sub(padWorld);
-  return projectTangent(towardTarget, normal);
-}
-
-function landingNormalTowardSource(
-  sourcePlanet: EditorPlanet,
-  sourceNormal: THREE.Vector3,
-  targetPlanet: EditorPlanet,
-): THREE.Vector3 {
-  const padWorld = new THREE.Vector3(
-    sourcePlanet.center.x,
-    sourcePlanet.center.y,
-    sourcePlanet.center.z,
-  ).addScaledVector(sourceNormal, sourcePlanet.radius);
-  const targetCenter = new THREE.Vector3(
-    targetPlanet.center.x,
-    targetPlanet.center.y,
-    targetPlanet.center.z,
-  );
-  return padWorld.sub(targetCenter).normalize();
 }
 
 function nextPadId(existing: ReadonlySet<string>): string {

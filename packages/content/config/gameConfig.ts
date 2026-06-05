@@ -214,18 +214,37 @@ export const GAME_CONFIG = {
     waterSkiAccelerationMultiplier: 1.5,
     waterSkiFriction: 0.9,
     waterSkiLateralDrag: 4.0,
-    planetHopLaunchDurationSeconds: 0.35,
-    planetHopSteeringDegrees: 45,
-    planetHopAssistAcceleration: 34,
-    planetHopMaxDurationSeconds: 6,
-    planetHopLandingCaptureDistance: 42,
-    planetHopLandingSpeedRetention: 0.68,
-    /** Radius (world units) around a planet-hop landing that splats nearby enemies. */
-    planetHopLandingKillRadius: 14,
-    /** Player is pinned at the landing point (no input movement, zero vel) for this long
-     *  after a planet-hop splat — lines up with the landing squash animation so the
-     *  player visibly compresses into the surface before popping back up. */
-    planetHopLandingSplatCooldownMs: 500,
+    // -- Free flight (Phase C) ----------------------------------------------
+    /** Mario-Galaxy-style continuous steering: a transverse acceleration
+     *  (wu/s²) applied perpendicular to the velocity, in the aim direction.
+     *  This is a *force*, not a setpoint — it bends the path but does not
+     *  override gravity perturbations the way a SLERP-to-aim would. */
+    freeFlightSteerAcceleration: 30,
+    /** Forward-thrust acceleration applied while Forward is held in FreeFlight. */
+    freeFlightThrustAcceleration: 28,
+    /** Backward-brake acceleration applied while Backward is held in FreeFlight. */
+    freeFlightBrakeAcceleration: 22,
+    /** Hard speed cap in FreeFlight. Prevents runaway speed when chaining
+     *  thrust with a gravity assist. */
+    freeFlightMaxSpeed: 110,
+    /** Floor on speed in FreeFlight so the player can't fully stall in deep
+     *  space (which would strand them with no gravity to fall on). */
+    freeFlightMinSpeed: 14,
+    /** Distance from a planet's surface inside which FreeFlight auto-lands.
+     *  Smaller than the planet-hop capture so casual scrapes don't commit you. */
+    freeFlightLandingCaptureDistance: 6,
+    // -- Loaded pad (Phase E) -----------------------------------------------
+    /** Duration of the load-in wind-up on a charged pad. Launch input is
+     *  ignored during this window so the player can't accidentally launch
+     *  by tapping Anchor immediately on contact. */
+    freeFlightLoadDurationSeconds: 0.3,
+    /** Duration of the full charge ramp on a loaded pad. Holding Anchor for
+     *  this long maps to the pad's full launchSpeed; releasing earlier maps
+     *  proportionally between launchSpeedMin and pad.launchSpeed. */
+    freeFlightChargeDurationSeconds: 0.6,
+    /** Floor speed when launching off a pad even at zero charge. Keeps an
+     *  instant-tap launch from leaving the player drifting in place. */
+    freeFlightLaunchSpeedMin: 28,
   },
 
   // -- Terrain ---------------------------------------------------------------

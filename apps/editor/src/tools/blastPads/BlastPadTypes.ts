@@ -3,14 +3,12 @@ import type { EditorBlastPad } from "../../types.ts";
 export type BlastPadEditMode = "place" | "move" | "delete";
 
 /** State the right-sidebar panel hands to the 3D tool every time it changes.
- *  `pickTargetForPadId` opts the tool into a one-shot "click any other planet
- *  to set this pad's landing point" interaction. */
+ *  Phase E: pads have no target planet — they're aim-and-fire launchers. */
 export interface BlastPadToolState {
   mode: BlastPadEditMode | null;
   sourcePlanetId: string;
   pads: EditorBlastPad[];
   selectedPadId: string | null;
-  pickTargetForPadId: string | null;
 }
 
 export function createBlastPadId(existing: ReadonlySet<string>): string {

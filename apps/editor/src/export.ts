@@ -13,12 +13,6 @@ function toRuntimeBlastPad(pad: EditorBlastPad): RuntimeBlastPad {
     planetId: pad.planetId,
     normal: { x: pad.normal[0], y: pad.normal[1], z: pad.normal[2] },
     tangent: { x: pad.tangent[0], y: pad.tangent[1], z: pad.tangent[2] },
-    targetPlanetId: pad.targetPlanetId,
-    targetNormal: {
-      x: pad.targetNormal[0],
-      y: pad.targetNormal[1],
-      z: pad.targetNormal[2],
-    },
     radius: pad.radius,
     launchSpeed: pad.launchSpeed,
     upwardBias: pad.upwardBias,
@@ -68,12 +62,7 @@ export function editorStateToRuntimeMap(
     });
 
   const runtimeBlastPads = (config.blastPads ?? [])
-    .filter(
-      (pad) =>
-        pad.planetId !== pad.targetPlanetId &&
-        planetIds.has(pad.planetId) &&
-        planetIds.has(pad.targetPlanetId),
-    )
+    .filter((pad) => planetIds.has(pad.planetId))
     .map(toRuntimeBlastPad);
 
   return {

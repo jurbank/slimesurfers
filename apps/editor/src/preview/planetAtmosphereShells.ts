@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { createPuffyCloudGeometry } from "@splat/client-runtime/geometry/puffyCloudGeometry.ts";
 import { createAtmosphereMaterial } from "@splat/client-runtime/materials/atmosphereMaterial.ts";
 import {
+  createGravityRingMaterial,
+  DEFAULT_GRAVITY_RADIUS_MULTIPLIER,
+} from "@splat/client-runtime/materials/gravityRingMaterial.ts";
+import {
   createPuffyCloudMaterial,
   createWispyCloudMaterial,
 } from "@splat/client-runtime/materials/cloudMaterial.ts";
@@ -11,9 +15,11 @@ export interface PlanetAtmosphereShells {
   atmosphereMesh: THREE.Mesh | null;
   cloudMesh: THREE.Mesh | null;
   puffyCloudMesh: THREE.Points | null;
+  gravityRingMesh: THREE.Mesh | null;
   atmosphereMaterial: THREE.ShaderMaterial | null;
   cloudMaterial: THREE.ShaderMaterial | null;
   puffyCloudMaterial: THREE.ShaderMaterial | null;
+  gravityRingMaterial: THREE.ShaderMaterial | null;
 }
 
 function toThreeBlending(mode: ShaderBlendMode): THREE.Blending {
@@ -58,9 +64,11 @@ export function createPlanetAtmosphereShells(
     atmosphereMesh: null,
     cloudMesh: null,
     puffyCloudMesh: null,
+    gravityRingMesh: null,
     atmosphereMaterial: null,
     cloudMaterial: null,
     puffyCloudMaterial: null,
+    gravityRingMaterial: null,
   };
 
   syncPlanetAtmosphereShells(group, planet, shells);
@@ -74,6 +82,8 @@ export function disposePlanetAtmosphereShells(shells: PlanetAtmosphereShells): v
   shells.cloudMaterial?.dispose();
   shells.puffyCloudMesh?.geometry.dispose();
   shells.puffyCloudMaterial?.dispose();
+  shells.gravityRingMesh?.geometry.dispose();
+  shells.gravityRingMaterial?.dispose();
 }
 
 export function syncPlanetAtmosphereShells(
@@ -135,6 +145,22 @@ export function syncPlanetAtmosphereShells(
   if (shells.puffyCloudMesh) {
     shells.puffyCloudMesh.scale.setScalar(planet.radius + planet.atmosphere.clouds.puffs.height);
   }
+
+  // Gravity ring — shows the radius at which the planet's gravity starts pulling
+  // a player. Always on so editors can spot overlap problems while authoring.
+  // EditorPlanet has no per-planet override yet, so we use the simulation default
+  // (radius * DEFAULT_GRAVITY_RADIUS_MULTIPLIER).
+  if (!shells.gravityRingMesh) {
+    const gravityRingMaterial = createGravityRingMaterial();
+    shells.gravityRingMaterial = gravityRingMaterial;
+    shells.gravityRingMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 48, 48),
+      gravityRingMaterial,
+    );
+    shells.gravityRingMesh.renderOrder = 3;
+    group.add(shells.gravityRingMesh);
+  }
+  shells.gravityRingMesh.scale.setScalar(planet.radius * DEFAULT_GRAVITY_RADIUS_MULTIPLIER);
 }
 
 export function updatePlanetAtmosphereUniforms(
