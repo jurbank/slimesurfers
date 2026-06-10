@@ -25,6 +25,11 @@ const FLIGHT_BACK = 26; // distance behind the dart along its travel direction
 const FLIGHT_HEIGHT = 6.5; // lift above the dart along the stable flight-up
 const FLIGHT_LOOKAHEAD = 30; // how far ahead of the dart the camera looks
 const FLIGHT_LOOK_LIFT = 2.5; // raise the look target so the dart sits lower in frame
+// Bank-into-turn feel: the camera rolls when the heading swings sideways.
+const FLIGHT_BANK_GAIN = 0.34; // roll radians per rad/s of horizontal turn
+const MAX_FLIGHT_BANK = 0.5; // cap on the bank roll (~29°)
+const FLIGHT_BANK_LERP = 5; // how fast the bank eases in/out
+const FLIGHT_BANK_FOV_GAIN = 9; // extra FOV (deg) at full bank, for intensity
 
 interface CameraSystemOptions {
   camera?: THREE.PerspectiveCamera;
@@ -50,6 +55,9 @@ export class CameraSystem {
   private readonly _flightLookAt = new THREE.Vector3();
   private readonly _velDir = new THREE.Vector3();
   private readonly _flightUp = new THREE.Vector3();
+  private readonly _flightUpBanked = new THREE.Vector3();
+  private readonly _flightRight = new THREE.Vector3();
+  private readonly _prevFlightDir = new THREE.Vector3();
   private readonly _blendUp = new THREE.Vector3();
 
   private _smoothSpeed = 0;
@@ -59,6 +67,7 @@ export class CameraSystem {
   private _fovScale = 1.0;
   private _freeFlightBlend = 0;
   private _wasInFlight = false;
+  private _smoothFlightBank = 0;
 
   constructor(options: CameraSystemOptions = {}) {
     this.camera = options.camera ?? this.createDefaultCamera();
@@ -145,7 +154,10 @@ export class CameraSystem {
     const targetFov =
       (BASE_FOV +
         Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN) +
-        blend * FREE_FLIGHT_FOV_GAIN) *
+        blend * FREE_FLIGHT_FOV_GAIN +
+        // Slight FOV push while banking hard — sells the turn. (One-frame-lagged
+        // off _smoothFlightBank, which is updated in the flight pose below.)
+        (Math.abs(this._smoothFlightBank) / MAX_FLIGHT_BANK) * FLIGHT_BANK_FOV_GAIN) *
       this._fovScale;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
     this.camera.updateProjectionMatrix();
@@ -220,6 +232,28 @@ export class CameraSystem {
         this._flightUp.addScaledVector(this._velDir, -proj).normalize();
       }
     }
+
+    // Bank into turns: roll the camera by how fast the heading swings sideways.
+    // The turn rate is the per-frame change of the heading projected onto the
+    // right axis. Eased so banks come in and settle smoothly.
+    this._flightRight.crossVectors(this._flightUp, this._velDir).normalize();
+    if (this._prevFlightDir.lengthSq() < 0.01 || !inFlight) {
+      this._prevFlightDir.copy(this._velDir);
+    }
+    const sideTurn =
+      (this._velDir.x - this._prevFlightDir.x) * this._flightRight.x +
+      (this._velDir.y - this._prevFlightDir.y) * this._flightRight.y +
+      (this._velDir.z - this._prevFlightDir.z) * this._flightRight.z;
+    this._prevFlightDir.copy(this._velDir);
+    const targetBank = inFlight
+      ? Math.max(
+          -MAX_FLIGHT_BANK,
+          Math.min(MAX_FLIGHT_BANK, (dt > 1e-4 ? sideTurn / dt : 0) * FLIGHT_BANK_GAIN),
+        )
+      : 0;
+    this._smoothFlightBank +=
+      (targetBank - this._smoothFlightBank) * Math.min(1, dt * FLIGHT_BANK_LERP);
+
     this._flightPos
       .copy(this._playerPos)
       .addScaledVector(this._velDir, -FLIGHT_BACK)
@@ -232,10 +266,17 @@ export class CameraSystem {
     // ---- Blend the two poses and apply. ----
     this.camera.position.lerpVectors(this._surfacePos, this._flightPos, blend);
 
-    this._blendUp.copy(this._playerUp).lerp(this._flightUp, blend);
+    // Roll the flight-up into the turn (around the heading), leaving the carried
+    // _flightUp itself un-rolled so the bank doesn't accumulate frame to frame.
+    this._flightUpBanked.copy(this._flightUp);
+    if (Math.abs(this._smoothFlightBank) > 0.0005) {
+      this._flightUpBanked.applyAxisAngle(this._velDir, this._smoothFlightBank);
+    }
+    this._blendUp.copy(this._playerUp).lerp(this._flightUpBanked, blend);
     if (this._blendUp.lengthSq() < 1e-4) this._blendUp.copy(this._playerUp);
     this._blendUp.normalize();
-    // Bank only on the surface cam; scale it out as the flight cam takes over.
+    // Surface bank, scaled out as the flight cam takes over (flight bank is baked
+    // into _flightUpBanked above).
     const bankAngle =
       -Math.max(-1, Math.min(1, this._smoothLateral / BANK_SPEED_NORM)) *
       MAX_BANK_ANGLE *

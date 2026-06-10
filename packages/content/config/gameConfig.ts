@@ -241,11 +241,12 @@ export const GAME_CONFIG = {
     /** Hard speed cap in FreeFlight. A ballistic dart never accelerates past its
      *  launch speed, but this guards against any future launch tuning. */
     freeFlightMaxSpeed: 200,
-    /** Fortnite-style glide steering: max rate (radians/sec) the dart's heading
-     *  can turn toward the player's aimed direction. Capped so it's a weighty
-     *  guide, not an instant snap — and so the server bounds a cheating client.
-     *  ~1.5 rad/s ≈ 86°/s: enough to guide your landing, not enough to hairpin. */
-    freeFlightTurnRate: 1.5,
+    /** Server-side backstop on how fast a free-flight dart's heading may turn
+     *  toward input.aimDir (radians/sec). The actual glide feel — turn momentum,
+     *  ramp-in/coast-out — lives client-side in computeGlideAim (STEER_TAU /
+     *  STEER_MAX_RATE); this cap sits above that so the server follows the client
+     *  smoothing for legit play while still bounding a cheating client. */
+    freeFlightTurnRate: 2.5,
     /** Distance from a planet's surface inside which FreeFlight commits to a
      *  smash landing. Tested swept against the per-tick integration segment. */
     freeFlightLandingCaptureDistance: 6,

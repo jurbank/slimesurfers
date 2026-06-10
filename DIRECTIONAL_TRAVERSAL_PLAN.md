@@ -87,7 +87,9 @@ Files: `packages/client-runtime/{shaders,materials}/gravityRing*`, `packages/cli
    - **Control aim** (`matchScene.computeGlideAim`): the steer target is the **current heading rotated by this frame's mouse look** — yaw around a velocity-perpendicular up, pitch around the right axis, using the surface aim's sign conventions. Raw look deltas come from a new `inputSystem.consumeLookDelta()` (not the terrain-snapped combat aim, and not `computeAimDir`'s divergent ray — the two sources that caused the down-arc and the ground-splat). Because the aim is offset from the heading by only the current frame's input, **releasing the mouse stops the turn** — that's the drift-free property.
    - **Camera**: unchanged. It already follows velocity, so the heading curves and the camera banks with it; you watch yourself steer toward the landing you want.
 
-   `freeFlightTurnRate` is the feel dial — lower it for a heavier commit, raise it for looser guidance.
+   `freeFlightTurnRate` is now a server-side **backstop** (2.5 rad/s); the actual feel lives client-side.
+
+   **Turn momentum (2026-06-09).** Instantaneous steering felt too precise/twitchy. The mouse now drives an **angular velocity** (`_steerOmegaYaw/Pitch`) that ramps in and damps out over `STEER_TAU` rather than tracking the look 1:1 — a turn eases in, and releasing the mouse lets the heading coast a beat before settling. Standard flight/glide "steering inertia." Impulse-plus-damp (`omega = omega*damp + look/TAU`) so the steady-state turn rate equals the mouse rate (familiar sensitivity) but with ramp-in/coast-out; clamped to `STEER_MAX_RATE` (1.5, under the sim backstop so the server follows the smoothing). Dials: `STEER_TAU` (higher = floatier/more delayed) and `STEER_MAX_RATE` in `matchScene.ts`.
 
 3. **Drop the `freeFlightMinSpeed` floor.** Without gravity there's nothing to stall against; steering is transverse so |v| stays ≈ launch speed on its own. Keep the `freeFlightMaxSpeed` clamp purely as a runaway guard. Remove `getFreeFlightMinSpeed` and the `freeFlightMinSpeed` config knob.
 4. **Visual up only.** Still orient the body toward the nearest planet for rotation, and still set `gravityAnchorPlanetId = nearestPlanet.id` so the camera's up-reference (`cameraUpReferenceCenter` in `matchScene.ts`, which falls back to `gravityAnchorPlanetId`) has something to track. This is cosmetic — no force is derived from it.
@@ -218,6 +220,8 @@ The kill boundary is what gives a missed dart a clean consequence now that gravi
 - Look-pitch and banking **scale out** with the blend (flight cam ignores both). The free-flight signal from `matchScene` is now a clean **`isFreeFlight ? 1 : 0`** flag (was distance/200), so the chase cam engages identically regardless of planet size or range.
 - `triggerLandingSquash()` still fires on the `FreeFlight → surface` transition; the blend unwinds the flight pose back to the surface cam (relevelled on the landed planet) over ~0.5 s.
 - Constants (`FLIGHT_BACK/HEIGHT/LOOKAHEAD/LOOK_LIFT`, `FREE_FLIGHT_FOV_GAIN`) are the tunable feel dials.
+
+**Bank-into-turn feel (2026-06-09).** With glide steering added, the level chase cam felt floaty, so the camera now **rolls into turns** like a glider/aircraft. The turn rate is read from the per-frame change of the heading projected onto the right axis; an eased `_smoothFlightBank` rolls the (un-accumulated) flight-up around the heading, and a small FOV push sells it. Purely visual — no effect on the trajectory. Dials: `FLIGHT_BANK_GAIN` (negate to flip roll direction), `MAX_FLIGHT_BANK`, `FLIGHT_BANK_LERP`, `FLIGHT_BANK_FOV_GAIN`.
 
 ### Phase G — Slingshot / glide tuning ❌ dropped
 

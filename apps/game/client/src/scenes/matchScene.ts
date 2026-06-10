@@ -58,6 +58,13 @@ import {
   type SimPlanetSlimeState,
 } from "@splat/simulation/match/simState.ts";
 
+// Free-flight glide steering momentum (see MatchScene.computeGlideAim).
+// STEER_TAU: turn-rate ramp-in / coast-out time constant (s) — higher = floatier,
+// more delayed. STEER_MAX_RATE: heading turn-rate cap (rad/s), kept below the
+// sim's freeFlightTurnRate backstop so the server follows the client smoothing.
+const STEER_TAU = 0.18;
+const STEER_MAX_RATE = 1.5;
+
 export class MatchScene {
   private readonly render: RenderSystem;
   private readonly camera: CameraSystem;
@@ -114,6 +121,8 @@ export class MatchScene {
   private lastWasFreeFlight = false;
   // Free-flight glide steering scratch (see computeGlideAim).
   private _steerActive = false;
+  private _steerOmegaYaw = 0;
+  private _steerOmegaPitch = 0;
   private readonly _steerVel = new THREE.Vector3();
   private readonly _steerUp = new THREE.Vector3(0, 1, 0);
   private readonly _steerRight = new THREE.Vector3();
@@ -501,16 +510,18 @@ export class MatchScene {
    * resolve via gravityAnchorPlanetId / planetId / nearest. The old hop-route
    * lerp blending source→target by progress is gone with the planet-hop flow.
    */
-  // Fortnite-style glide steering. Returns the heading the player is aiming the
-  // dart toward = the current velocity direction rotated by this frame's mouse
-  // look (yaw around a velocity-perpendicular up, pitch around the right axis,
-  // matching the surface aim's sign conventions). The sim turns the velocity
-  // toward this at a capped rate. Because the aim is only offset by the current
-  // frame's input, releasing the mouse stops the turn — no drift.
+  // Fortnite-style glide steering with turn momentum. The mouse drives an
+  // angular velocity (yaw/pitch rate) that ramps in and damps out over
+  // STEER_TAU rather than tracking the look 1:1 — so a turn eases in, and
+  // releasing the mouse lets the heading coast a beat before settling, instead
+  // of stopping dead. Returns the heading = current velocity rotated by this
+  // frame's accumulated turn. The sim turns the velocity toward it (capped as a
+  // backstop); the feel lives here.
   private computeGlideAim(
     state: RuntimePlayerState,
     playerPos: THREE.Vector3,
     planetCenter: THREE.Vector3,
+    dt: number,
   ): { x: number; y: number; z: number } {
     const speed = Math.hypot(state.vel.x, state.vel.y, state.vel.z);
     if (speed > 1e-4) {
@@ -519,10 +530,12 @@ export class MatchScene {
       this._steerVel.set(0, 0, 1);
     }
 
-    // Seed a velocity-perpendicular "up" on entry from the planet radial, then
-    // keep it perpendicular to the (turning) heading each frame.
+    // Seed a velocity-perpendicular "up" on entry from the planet radial (and
+    // reset the turn momentum), then keep it perpendicular to the heading.
     if (!this._steerActive) {
       this._steerUp.subVectors(playerPos, planetCenter).normalize();
+      this._steerOmegaYaw = 0;
+      this._steerOmegaPitch = 0;
       this._steerActive = true;
     }
     this._steerUp.addScaledVector(this._steerVel, -this._steerUp.dot(this._steerVel));
@@ -535,12 +548,26 @@ export class MatchScene {
     this._steerUp.normalize();
     this._steerRight.crossVectors(this._steerUp, this._steerVel).normalize();
 
+    // Mouse adds to the turn rates (impulse); the rates damp toward zero over
+    // STEER_TAU. With the 1/TAU impulse gain, a steady mouse settles at a turn
+    // rate equal to the mouse's rate (familiar sensitivity), but with a ramp in
+    // and a coast out. Clamp keeps the heading within the sim's turn backstop.
     const { yaw, pitch } = this.input.consumeLookDelta();
+    const damp = Math.max(0, 1 - dt / STEER_TAU);
+    this._steerOmegaYaw = this._steerOmegaYaw * damp + yaw / STEER_TAU;
+    this._steerOmegaPitch = this._steerOmegaPitch * damp + pitch / STEER_TAU;
+    this._steerOmegaYaw = Math.max(-STEER_MAX_RATE, Math.min(STEER_MAX_RATE, this._steerOmegaYaw));
+    this._steerOmegaPitch = Math.max(
+      -STEER_MAX_RATE,
+      Math.min(STEER_MAX_RATE, this._steerOmegaPitch),
+    );
+
+    const yawAngle = this._steerOmegaYaw * dt;
+    const pitchAngle = this._steerOmegaPitch * dt;
     this._steerAim.copy(this._steerVel);
-    if (yaw !== 0) this._steerAim.applyAxisAngle(this._steerUp, yaw);
-    // Negated: pitch up on the mouse should guide the dart up. (The right axis
-    // is cross(up, heading), so a raw +pitch rotates the heading the wrong way.)
-    if (pitch !== 0) this._steerAim.applyAxisAngle(this._steerRight, -pitch);
+    if (yawAngle !== 0) this._steerAim.applyAxisAngle(this._steerUp, yawAngle);
+    // Negated: pitch up on the mouse guides the dart up (right = cross(up, heading)).
+    if (pitchAngle !== 0) this._steerAim.applyAxisAngle(this._steerRight, -pitchAngle);
     this._steerAim.normalize();
     return { x: this._steerAim.x, y: this._steerAim.y, z: this._steerAim.z };
   }
@@ -964,7 +991,7 @@ export class MatchScene {
       const inFreeFlight = localState.movementState === PlayerMovementState.FreeFlight;
       let glideAim: { x: number; y: number; z: number } | null = null;
       if (inFreeFlight) {
-        glideAim = this.computeGlideAim(localState, playerPos, activePlanetCenter);
+        glideAim = this.computeGlideAim(localState, playerPos, activePlanetCenter, dt);
       } else {
         this.input.computeAimDir(playerPos, activePlanetCenter);
         this._steerActive = false;
