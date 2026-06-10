@@ -242,7 +242,6 @@ export function createSimPlayer(
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    splatCooldownMs: 0,
     isOnFriendlySlime: false,
     gravityAnchorPlanetId: planetPos.id,
     loadedPadId: "",

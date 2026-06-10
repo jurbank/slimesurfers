@@ -411,6 +411,17 @@ export class InputSystem {
    * Computes aim direction by incrementally rotating a persistent basis.
    * This is robust against any orientation because it uses parallel transport.
    */
+  /** Consume the accumulated mouse look delta (radians) without touching the
+   *  surface orientation. Used by free-flight glide steering, which turns the
+   *  dart's heading directly rather than aiming the surface reticle. */
+  consumeLookDelta(): { yaw: number; pitch: number } {
+    const yaw = this.mouseX;
+    const pitch = this.mouseY;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    return { yaw, pitch };
+  }
+
   computeAimDir(
     playerPos: THREE.Vector3,
     nearestPlanetCenter: THREE.Vector3,

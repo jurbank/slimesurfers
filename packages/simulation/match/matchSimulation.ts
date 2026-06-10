@@ -31,9 +31,11 @@ import { collectWeaponPickup, tickWeaponPickups } from "../combat/weaponPickups.
 import { collectHealthPickup, tickHealthPickups } from "../combat/healthPickups.ts";
 import { stepPlayer, type PlanetData, type StepConfig } from "../movement/simulatedMovement.ts";
 import { type ComputedRail, sampleRailAt } from "../movement/railSpline.ts";
+import { add, sub, scale, cross, normalize, clamp } from "../math/vec3.ts";
 import { createStampBuckets } from "../slime/slimeDetection.ts";
 import { applySlimeImpact } from "../slime/stampSlime.ts";
 import { createTerritoryCells } from "../slime/territoryGrid.ts";
+import { getTerrainRadius } from "../terrain/planetTerrain.ts";
 import { generateBotInput, removeBotState } from "../ai/botController.ts";
 import { NO_SLIME_GROUP_ID, RAIL_SLIME_NODES } from "@splat/protocol/schemas/slimedState.ts";
 import {
@@ -41,7 +43,12 @@ import {
   processAirTricks,
   settleAirTricksOnLanding,
 } from "../tricks/airTricks.ts";
-import { type SimMatchState, type SimPlayerState } from "./simState.ts";
+import {
+  PlayerMovementState,
+  PlayerSurfState,
+  type SimMatchState,
+  type SimPlayerState,
+} from "./simState.ts";
 import { selectSpawnSurface } from "./spawnSelection.ts";
 import { sanitizeInputMessage } from "./inputSanitizer.ts";
 import {
@@ -99,6 +106,14 @@ export interface MatchSimulationOptions {
 export class MatchSimulation {
   readonly mode: GameModeDefinition;
   private readonly planets: PlanetData[];
+  /** Centroid of all planet centres. Fixed for the match (planets don't move).
+   *  The free-flight kill boundary (Phase F) is a sphere around this point. */
+  private readonly arenaCenter: { x: number; y: number; z: number };
+  /** Radius of the Phase F kill sphere: the farthest planet-surface point from
+   *  arenaCenter plus arenaKillMargin. Sized to contain the whole system so a
+   *  launch never starts outside it; only a dart sailing clear of every planet
+   *  reaches it. */
+  private readonly arenaKillRadius: number;
   private readonly blastPads: readonly RuntimeBlastPad[];
   private readonly rails: ComputedRail[];
   private readonly stepCfg: StepConfig;
@@ -122,6 +137,27 @@ export class MatchSimulation {
   ) {
     this.mode = mode;
     this.planets = buildPlanets(map);
+    this.arenaCenter =
+      this.planets.length > 0
+        ? this.planets.reduce(
+            (acc, p) => ({
+              x: acc.x + p.center.x / this.planets.length,
+              y: acc.y + p.center.y / this.planets.length,
+              z: acc.z + p.center.z / this.planets.length,
+            }),
+            { x: 0, y: 0, z: 0 },
+          )
+        : { x: 0, y: 0, z: 0 };
+    const farthestSurface = this.planets.reduce((max, p) => {
+      const surfaceDist =
+        Math.hypot(
+          p.center.x - this.arenaCenter.x,
+          p.center.y - this.arenaCenter.y,
+          p.center.z - this.arenaCenter.z,
+        ) + p.radius;
+      return Math.max(max, surfaceDist);
+    }, 0);
+    this.arenaKillRadius = farthestSurface + GAME_CONFIG.movement.arenaKillMargin;
     this.blastPads = map.blastPads ?? [];
     this.stepCfg = buildStepConfig(map);
     this.stepCfgs = new Map(map.planets.map((planet) => [planet.id, buildStepConfig(map, planet)]));
@@ -460,6 +496,89 @@ export class MatchSimulation {
     }
   }
 
+  // Resolve what happened to a player who was in FreeFlight at the start of the
+  // tick: either they smashed into a planet (Phase H — splat + tank drain), or
+  // they sailed past the kill boundary into the void (Phase F — die + respawn).
+  // `impactSpeed` is the dart's speed captured before stepPlayer zeroed it.
+  private handleFreeFlightOutcome(player: SimPlayerState, impactSpeed: number): void {
+    // Smash landing: stepFreeFlight dropped the dart onto a planet surface.
+    if (player.movementState !== PlayerMovementState.FreeFlight && player.planetId !== "") {
+      this.applySmashLanding(player, impactSpeed);
+      return;
+    }
+    // Still free-flying: kill it if it has crossed the arena boundary.
+    if (player.movementState === PlayerMovementState.FreeFlight) {
+      const dist = Math.hypot(
+        player.pos.x - this.arenaCenter.x,
+        player.pos.y - this.arenaCenter.y,
+        player.pos.z - this.arenaCenter.z,
+      );
+      if (dist > this.arenaKillRadius) {
+        this.killPlayerInVoid(player);
+      }
+    }
+  }
+
+  // Phase H: paint a speed-scaled ring of the player's own slime at the contact
+  // point and drain their tank — the "squish." Mirrors the death-burst ring in
+  // projectiles.ts. Bigger impact speed → bigger splat (up to the max).
+  private applySmashLanding(player: SimPlayerState, impactSpeed: number): void {
+    const planet = this.planets.find((p) => p.id === player.planetId);
+    const planetState = this.simState.planets.get(player.planetId);
+    const cfg = this.getGameplayConfig(player.planetId);
+    if (!planet || !planetState) return;
+
+    const speedFactor = clamp(impactSpeed / cfg.slimeStamp.smashSpeedForFullSplat, 0, 1);
+    const radiusMultiplier =
+      cfg.slimeStamp.smashMinSplatMultiplier +
+      (cfg.slimeStamp.smashMaxSplatMultiplier - cfg.slimeStamp.smashMinSplatMultiplier) *
+        speedFactor;
+
+    const normal = normalize(sub(player.pos, planet.center));
+    const tangentSeed = Math.abs(normal.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+    const tangentA = normalize(cross(tangentSeed, normal));
+    const tangentB = normalize(cross(normal, tangentA));
+    const count = Math.max(1, Math.floor(cfg.slimeStamp.smashStampCount));
+
+    for (let i = 0; i < count; i++) {
+      const isCenter = i === 0;
+      const angle = (i / Math.max(1, count - 1)) * Math.PI * 2;
+      const spread = isCenter ? 0 : cfg.slimeStamp.smashSpreadRadius;
+      const surfaceDir = normalize(
+        add(
+          normal,
+          scale(
+            add(scale(tangentA, Math.cos(angle)), scale(tangentB, Math.sin(angle))),
+            spread / planet.radius,
+          ),
+        ),
+      );
+      const surfaceRadius = getTerrainRadius(surfaceDir.x, surfaceDir.y, surfaceDir.z, cfg);
+      const stamp = applySlimeImpact(this.simState, planetState, {
+        planetId: planet.id,
+        pos: add(planet.center, scale(surfaceDir, surfaceRadius)),
+        slimeGroupId: player.slimeGroupId,
+        slimeColor: player.slimeColor,
+        patternId: player.patternId,
+        radiusMultiplier,
+      });
+      if (stamp) this.recordSlimeStamp(stamp);
+    }
+
+    player.slimeLevel = Math.max(0, player.slimeLevel - cfg.slime.smashSlimeCost);
+  }
+
+  // Phase F: a dart that missed every planet and crossed the kill boundary dies
+  // and respawns. Same death bookkeeping as a projectile kill (projectiles.ts),
+  // minus the kill-credit event — this is a self-inflicted void death.
+  private killPlayerInVoid(player: SimPlayerState): void {
+    player.surfState = PlayerSurfState.None;
+    player.isCarving = false;
+    player.movementState = PlayerMovementState.Dead;
+    player.respawnTimer = GAME_CONFIG.respawn.durationSeconds;
+    player.deathCount++;
+  }
+
   private stepPlayerForInput(
     player: SimPlayerState,
     input: InputMessage,
@@ -468,6 +587,10 @@ export class MatchSimulation {
   ): void {
     const wasTrickActive = isTrickMovementState(player.movementState);
     const prevGrindId = player.grindRailId;
+    // Capture pre-step free-flight state. stepFreeFlight zeroes inward velocity
+    // on landing, so the impact speed must be read before the step.
+    const wasFreeFlight = player.movementState === PlayerMovementState.FreeFlight;
+    const preStepSpeed = wasFreeFlight ? Math.hypot(player.vel.x, player.vel.y, player.vel.z) : 0;
     stepPlayer(
       player,
       input,
@@ -482,6 +605,9 @@ export class MatchSimulation {
       (id) => this.stepCfgs.get(id),
     );
     this.maybeStampRailCorridor(player, prevGrindId);
+    if (wasFreeFlight) {
+      this.handleFreeFlightOutcome(player, preStepSpeed);
+    }
     if (isTrickMovementState(player.movementState)) {
       const tricks = processAirTricks(this.simState, player, input, dtSec * 1000, nowMs);
       this.pendingTrickEvents.push(...tricks.trickEvents);

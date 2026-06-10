@@ -49,12 +49,18 @@ export interface CombatConfig extends TerrainConfig {
     friendlySlimeRechargePerSecond: number;
     submergedRechargePerSecond: number;
     rechargeDelayMs: number;
+    smashSlimeCost: number;
   };
   slimeStamp: {
     impactStampSurfaceRadius: number;
     deathBurstStampCount: number;
     deathBurstSpreadRadius: number;
     deathBurstRadiusMultiplier: number;
+    smashStampCount: number;
+    smashSpreadRadius: number;
+    smashMinSplatMultiplier: number;
+    smashMaxSplatMultiplier: number;
+    smashSpeedForFullSplat: number;
   };
   respawn: {
     durationSeconds: number;
@@ -639,7 +645,6 @@ function respawnPlayer(
   player.health = cfg.player.maxHealth;
   player.slimeLevel = cfg.slime.maxLevel;
   player.respawnTimer = 0;
-  player.splatCooldownMs = 0;
   player.movementState = PlayerMovementState.Idle;
   player.surfState = PlayerSurfState.SurfingVisible;
   player.isCarving = false;

@@ -102,6 +102,7 @@ function createPlayer(): PlayerPhysics {
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: "",
     slimeGroupId: 1,
+    slimeLevel: 100,
     movementState: PlayerMovementState.Airborne,
     surfState: PlayerSurfState.None,
     isCarving: false,

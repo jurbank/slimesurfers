@@ -39,7 +39,6 @@ function createPlayer(sessionId: string, slimeGroupId: number, slimeColor: numbe
     lastGrindT: 0,
     grindSpeed: 0,
     grindCooldownMs: 0,
-    splatCooldownMs: 0,
     isOnFriendlySlime: false,
     gravityAnchorPlanetId: "planet-0",
     loadedPadId: "",

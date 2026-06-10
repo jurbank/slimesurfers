@@ -112,6 +112,12 @@ export class MatchScene {
   private lastWasCarving = false;
   private lastWasAirborne = false;
   private lastWasFreeFlight = false;
+  // Free-flight glide steering scratch (see computeGlideAim).
+  private _steerActive = false;
+  private readonly _steerVel = new THREE.Vector3();
+  private readonly _steerUp = new THREE.Vector3(0, 1, 0);
+  private readonly _steerRight = new THREE.Vector3();
+  private readonly _steerAim = new THREE.Vector3();
   private portal: PortalSystem | null = null;
 
   private onDisconnectCb: (() => void) | null = null;
@@ -495,6 +501,50 @@ export class MatchScene {
    * resolve via gravityAnchorPlanetId / planetId / nearest. The old hop-route
    * lerp blending source→target by progress is gone with the planet-hop flow.
    */
+  // Fortnite-style glide steering. Returns the heading the player is aiming the
+  // dart toward = the current velocity direction rotated by this frame's mouse
+  // look (yaw around a velocity-perpendicular up, pitch around the right axis,
+  // matching the surface aim's sign conventions). The sim turns the velocity
+  // toward this at a capped rate. Because the aim is only offset by the current
+  // frame's input, releasing the mouse stops the turn — no drift.
+  private computeGlideAim(
+    state: RuntimePlayerState,
+    playerPos: THREE.Vector3,
+    planetCenter: THREE.Vector3,
+  ): { x: number; y: number; z: number } {
+    const speed = Math.hypot(state.vel.x, state.vel.y, state.vel.z);
+    if (speed > 1e-4) {
+      this._steerVel.set(state.vel.x, state.vel.y, state.vel.z).multiplyScalar(1 / speed);
+    } else if (this._steerVel.lengthSq() < 0.01) {
+      this._steerVel.set(0, 0, 1);
+    }
+
+    // Seed a velocity-perpendicular "up" on entry from the planet radial, then
+    // keep it perpendicular to the (turning) heading each frame.
+    if (!this._steerActive) {
+      this._steerUp.subVectors(playerPos, planetCenter).normalize();
+      this._steerActive = true;
+    }
+    this._steerUp.addScaledVector(this._steerVel, -this._steerUp.dot(this._steerVel));
+    if (this._steerUp.lengthSq() < 1e-4) {
+      this._steerUp.set(0, 1, 0).addScaledVector(this._steerVel, -this._steerVel.y);
+      if (this._steerUp.lengthSq() < 1e-4) {
+        this._steerUp.set(1, 0, 0).addScaledVector(this._steerVel, -this._steerVel.x);
+      }
+    }
+    this._steerUp.normalize();
+    this._steerRight.crossVectors(this._steerUp, this._steerVel).normalize();
+
+    const { yaw, pitch } = this.input.consumeLookDelta();
+    this._steerAim.copy(this._steerVel);
+    if (yaw !== 0) this._steerAim.applyAxisAngle(this._steerUp, yaw);
+    // Negated: pitch up on the mouse should guide the dart up. (The right axis
+    // is cross(up, heading), so a raw +pitch rotates the heading the wrong way.)
+    if (pitch !== 0) this._steerAim.applyAxisAngle(this._steerRight, -pitch);
+    this._steerAim.normalize();
+    return { x: this._steerAim.x, y: this._steerAim.y, z: this._steerAim.z };
+  }
+
   private cameraUpReferenceCenter(
     state: RuntimePlayerState,
     playerPos: THREE.Vector3,
@@ -908,8 +958,17 @@ export class MatchScene {
       playerPos.set(localState.pos.x, localState.pos.y, localState.pos.z);
       const activePlanetCenter = this.cameraUpReferenceCenter(localState, playerPos);
 
-      // Update orientation (parallel transport + yaw); return value unused here.
-      this.input.computeAimDir(playerPos, activePlanetCenter);
+      // In free flight, the mouse glide-steers the dart (see computeGlideAim);
+      // the surface aim/parallel-transport is bypassed so the heading isn't
+      // disturbed. Otherwise update the surface orientation normally.
+      const inFreeFlight = localState.movementState === PlayerMovementState.FreeFlight;
+      let glideAim: { x: number; y: number; z: number } | null = null;
+      if (inFreeFlight) {
+        glideAim = this.computeGlideAim(localState, playerPos, activePlanetCenter);
+      } else {
+        this.input.computeAimDir(playerPos, activePlanetCenter);
+        this._steerActive = false;
+      }
       const yawForward = this.input.getYawForward();
 
       // aimDir for this frame comes from the previous frame's camera position.
@@ -931,7 +990,7 @@ export class MatchScene {
         seq: ++inputSeq,
         keys: fireOutput.keyBits,
         pressedKeys,
-        aimDir: fireOutput.aimDir,
+        aimDir: glideAim ?? fireOutput.aimDir,
         aimPoint: fireOutput.aimPoint,
         dt,
         lockedTargetId: fireOutput.lockedTargetId,
@@ -995,19 +1054,9 @@ export class MatchScene {
           );
           this.localTrail.update(predictedLocalState, predictedPlanetCenter, visual.slimeColor);
         }
-        // FreeFlight pull-back intensity scales with distance from the nearest
-        // planet centre, normalised against a "far in space" reference (200 wu).
-        // Saturates at 1 once the player is well past the gravity envelope.
-        const freeFlightIntensity = isFreeFlight
-          ? Math.min(
-              1,
-              Math.hypot(
-                predictedLocalState.pos.x - predictedPlanetCenter.x,
-                predictedLocalState.pos.y - predictedPlanetCenter.y,
-                predictedLocalState.pos.z - predictedPlanetCenter.z,
-              ) / 200,
-            )
-          : 0;
+        // Free-flight is a state flag (1 while ballistically flying); the camera
+        // smooths it to blend into the velocity-chase pose. Distance no longer
+        // drives it — the chase cam frames the dart consistently at any range.
         this.weaponAim.setLastAimDir(
           this.camera.update(
             predictedLocalState.pos,
@@ -1017,12 +1066,19 @@ export class MatchScene {
             predictedPlanetCenter,
             isAirborneLike,
             dt,
-            freeFlightIntensity,
+            isFreeFlight ? 1 : 0,
           ),
         );
       }
 
       if (predictedLocalState) {
+        // Push the local loaded-pad state to the blast-pad system so the
+        // charge ring tint reflects the slime burn live (not just on snapshots).
+        this.blastPads.setLocalLoadedPad(
+          predictedLocalState.loadedPadId ?? "",
+          predictedLocalState.padChargeProgress ?? 0,
+          predictedLocalState.slimeColor,
+        );
         if (this.lastLocalHealth !== null && predictedLocalState.health < this.lastLocalHealth) {
           this.combatHud.flashDamage();
         }

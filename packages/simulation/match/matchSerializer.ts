@@ -30,7 +30,6 @@ export function buildSnapshotMessage(simState: SimMatchState, tickCount: number)
       lastGrindT: player.lastGrindT,
       grindSpeed: player.grindSpeed,
       grindCooldownMs: player.grindCooldownMs,
-      splatCooldownMs: player.splatCooldownMs,
       gravityAnchorPlanetId: player.gravityAnchorPlanetId,
       loadedPadId: player.loadedPadId,
       padLoadProgress: player.padLoadProgress,

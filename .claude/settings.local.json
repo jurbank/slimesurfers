@@ -59,7 +59,11 @@
       "Bash(awk '$4 == \"cwd\" { print $NF }')",
       "Bash(ps -p 55564 -o pid,user,command)",
       "Bash(vp dlx *)",
-      "Bash(awk -F: '{print $1, $2}')"
+      "Bash(awk -F: '{print $1, $2}')",
+      "Bash(sed -n '485,500p' packages/simulation/combat/projectiles.ts)",
+      "Bash(sed -n '50,70p' packages/simulation/combat/projectiles.ts)",
+      "Bash(sed -n '30,55p' packages/simulation/combat/projectiles.ts)",
+      "Bash(sed -n '100,135p' packages/content/config/gameConfig.ts)"
     ]
   },
   "enableAllProjectMcpServers": true,

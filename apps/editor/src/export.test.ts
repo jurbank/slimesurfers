@@ -195,7 +195,7 @@ describe("editorStateToRuntimeMap rail export", () => {
 });
 
 describe("editorStateToRuntimeMap blast pad export", () => {
-  test("exports authored blast pads with cameraProfile and drops pads with unknown source planet", () => {
+  test("exports authored blast pads and drops pads with unknown source planet", () => {
     const config = defaultEditorConfig();
     config.planets = [
       defaultEditorPlanet("planet-0"),
@@ -228,7 +228,6 @@ describe("editorStateToRuntimeMap blast pad export", () => {
         radius: 6,
         launchSpeed: 95,
         upwardBias: 0.6,
-        cameraProfile: "planetHop",
       },
     ]);
     expect(validateRuntimeMapData(map).valid).toBe(true);

@@ -312,8 +312,7 @@
       },
       "radius": 5,
       "launchSpeed": 78,
-      "upwardBias": 0.45,
-      "cameraProfile": "planetHop"
+      "upwardBias": 0.45
     },
     {
       "id": "blast-pad-2",
@@ -330,8 +329,7 @@
       },
       "radius": 5,
       "launchSpeed": 44,
-      "upwardBias": 0.45,
-      "cameraProfile": "planetHop"
+      "upwardBias": 0.45
     },
     {
       "id": "blast-pad-3",
@@ -348,8 +346,7 @@
       },
       "radius": 5,
       "launchSpeed": 110,
-      "upwardBias": 0.45,
-      "cameraProfile": "planetHop"
+      "upwardBias": 0.45
     },
     {
       "id": "blast-pad-4",
@@ -366,8 +363,7 @@
       },
       "radius": 5,
       "launchSpeed": 110,
-      "upwardBias": 0.45,
-      "cameraProfile": "planetHop"
+      "upwardBias": 0.45
     }
   ],
   "spawns": {

@@ -95,6 +95,7 @@ function createPlayer(): PlayerPhysics {
     rot: { x: 0, y: 0, z: 0, w: 1 },
     planetId: "planet-0",
     slimeGroupId: 1,
+    slimeLevel: 100,
     movementState: PlayerMovementState.Idle,
     surfState: PlayerSurfState.None,
     isCarving: false,
@@ -718,7 +719,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const padStates = new Map([
       [
@@ -761,7 +761,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const neutralStates = new Map([
       ["test-pad", { ownerSlimeGroupId: NO_SLIME_GROUP_ID, ownerColor: 0, coverageProgress: 0 }],
@@ -820,7 +819,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const partialStates = new Map([
       [
@@ -858,7 +856,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const padStates = new Map([
       [
@@ -954,7 +951,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const padStates = new Map([
       [
@@ -1011,6 +1007,173 @@ describe("stepPlayer", () => {
     expect(player.loadedPadId).toBe("test-pad");
   });
 
+  it("charging on a loaded pad drains slime; release fires at the charge level", () => {
+    const player = createPlayer();
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+    };
+    const padStates = new Map([
+      [
+        "test-pad",
+        { ownerSlimeGroupId: player.slimeGroupId, ownerColor: 0xff00ff, coverageProgress: 1 },
+      ],
+    ]);
+
+    // Load + wind-up.
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+    for (let i = 0; i < 8; i++) {
+      stepPlayer(
+        player,
+        { ...createInput(0), seq: i + 2 },
+        0.05,
+        blastPlanets,
+        TEST_CONFIG,
+        EMPTY_SLIME,
+        [],
+        [pad],
+        padStates,
+      );
+    }
+    expect(player.padLoadProgress).toBe(1);
+    const slimeBeforeCharge = player.slimeLevel;
+
+    // Charge for 3 ticks (0.15s) at the configured drain rate.
+    for (let i = 0; i < 3; i++) {
+      stepPlayer(
+        player,
+        { ...createInput(InputKey.Anchor), seq: i + 20 },
+        0.05,
+        blastPlanets,
+        TEST_CONFIG,
+        EMPTY_SLIME,
+        [],
+        [pad],
+        padStates,
+      );
+    }
+    // Slime tank should have dropped.
+    expect(player.slimeLevel).toBeLessThan(slimeBeforeCharge);
+    expect(player.padChargeProgress ?? 0).toBeGreaterThan(0);
+
+    // Release Anchor — fires.
+    stepPlayer(
+      player,
+      { ...createInput(0), seq: 100, aimDir: { x: 0, y: 1, z: 0 } },
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+    expect(player.movementState).toBe(PlayerMovementState.FreeFlight);
+  });
+
+  it("holding Anchor with zero slime accrues no charge and prevents launch", () => {
+    const player = createPlayer();
+    player.slimeLevel = 0;
+    const blastPlanets: PlanetData[] = [
+      ...TEST_PLANETS,
+      { id: "planet-1", center: { x: 180, y: 0, z: 0 }, radius: 50 },
+    ];
+    const pad = {
+      id: "test-pad",
+      planetId: "planet-0",
+      normal: { x: 0, y: 1, z: 0 },
+      tangent: { x: 1, y: 0, z: 0 },
+      radius: 8,
+      launchSpeed: 70,
+      upwardBias: 0.35,
+    };
+    const padStates = new Map([
+      [
+        "test-pad",
+        { ownerSlimeGroupId: player.slimeGroupId, ownerColor: 0xff00ff, coverageProgress: 1 },
+      ],
+    ]);
+
+    // Load + wind-up.
+    stepPlayer(
+      player,
+      createInput(0),
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+    for (let i = 0; i < 8; i++) {
+      stepPlayer(
+        player,
+        { ...createInput(0), seq: i + 2 },
+        0.05,
+        blastPlanets,
+        TEST_CONFIG,
+        EMPTY_SLIME,
+        [],
+        [pad],
+        padStates,
+      );
+    }
+    expect(player.padLoadProgress).toBe(1);
+
+    // Hold Anchor across several ticks with no slime — no charge accrues.
+    for (let i = 0; i < 5; i++) {
+      stepPlayer(
+        player,
+        { ...createInput(InputKey.Anchor), seq: i + 20 },
+        0.05,
+        blastPlanets,
+        TEST_CONFIG,
+        EMPTY_SLIME,
+        [],
+        [pad],
+        padStates,
+      );
+    }
+    expect(player.padChargeProgress ?? 0).toBe(0);
+    expect(player.movementState).toBe(PlayerMovementState.PadLoaded);
+
+    // Release Anchor — nothing fires because charge stayed at 0.
+    stepPlayer(
+      player,
+      { ...createInput(0), seq: 100 },
+      0.05,
+      blastPlanets,
+      TEST_CONFIG,
+      EMPTY_SLIME,
+      [],
+      [pad],
+      padStates,
+    );
+    expect(player.movementState).toBe(PlayerMovementState.PadLoaded);
+    // Pad's charge is preserved — we never spent it.
+    expect(padStates.get("test-pad")?.coverageProgress).toBe(1);
+  });
+
   it("walking onto a charged pad with W held does not instantly cancel out", () => {
     // Repro for "I immediately pop back out" — the player presses W to step
     // onto the pad and the same W press shouldn't be re-interpreted as a
@@ -1028,7 +1191,6 @@ describe("stepPlayer", () => {
       radius: 8,
       launchSpeed: 70,
       upwardBias: 0.35,
-      cameraProfile: "planetHop" as const,
     };
     const padStates = new Map([
       [
@@ -1164,19 +1326,13 @@ describe("stepPlayer", () => {
     expect(player.vel.x).toBeGreaterThan(0);
   });
 
-  it("FreeFlight applies single-planet gravity via the hysteresis picker", () => {
-    // Two planets in range; only the dominant one (by Phase B picker) should
-    // pull. Place the player closer to planetA so the picker chooses it.
+  it("FreeFlight applies no gravity — a dart aimed along its velocity flies straight", () => {
+    // Pure ballistic dart: even with a planet in range, gravity must NOT bend
+    // the path. With aim aligned to velocity, steering is a no-op too, so the
+    // velocity is unchanged and the player travels in a straight line.
     const planetA: PlanetData = {
       id: "planet-a",
       center: { x: -100, y: 0, z: 0 },
-      radius: 50,
-      gravityRadius: 250,
-      captureRadius: 350,
-    };
-    const planetB: PlanetData = {
-      id: "planet-b",
-      center: { x: 400, y: 0, z: 0 },
       radius: 50,
       gravityRadius: 250,
       captureRadius: 350,
@@ -1189,14 +1345,17 @@ describe("stepPlayer", () => {
     player.vel = { x: 0, y: 0, z: 30 };
     const input: InputMessage = { ...createInput(0), aimDir: { x: 0, y: 0, z: 1 } };
 
-    stepPlayer(player, input, 0.1, [planetA, planetB], TEST_CONFIG, EMPTY_SLIME);
+    stepPlayer(player, input, 0.1, [planetA], TEST_CONFIG, EMPTY_SLIME);
 
-    // Picker chose planetA (closer by normalized distance). Gravity pulls -x.
+    // No pull toward the planet (-x): velocity is untouched.
+    expect(player.vel.x).toBeCloseTo(0, 5);
+    expect(player.vel.y).toBeCloseTo(0, 5);
+    expect(player.vel.z).toBeCloseTo(30, 5);
+    // Anchor still tracks the nearest planet for the camera's up-reference.
     expect(player.gravityAnchorPlanetId).toBe("planet-a");
-    expect(player.vel.x).toBeLessThan(0);
   });
 
-  it("FreeFlight steering curves velocity toward the aim direction", () => {
+  it("FreeFlight glide-steers the heading toward aim at a capped rate, preserving speed", () => {
     const planet: PlanetData = {
       id: "planet-0",
       center: { x: 0, y: 0, z: 0 },
@@ -1211,16 +1370,26 @@ describe("stepPlayer", () => {
     player.pos = { x: 0, y: 0, z: 1000 };
     player.vel = { x: 0, y: 0, z: 50 };
 
-    // Aim 90° off to +x. Continuous steering applies a transverse acceleration
-    // toward +x; the velocity gains an x component while keeping its z bulk.
+    // Aim 90° off to +x. The heading turns toward +x but is capped to
+    // turnRate*dt this tick (not the full 90°), and speed is preserved.
+    const dt = 0.1;
     const input: InputMessage = { ...createInput(0), aimDir: { x: 1, y: 0, z: 0 } };
-    stepPlayer(player, input, 0.1, [planet], TEST_CONFIG, EMPTY_SLIME);
+    stepPlayer(player, input, dt, [planet], TEST_CONFIG, EMPTY_SLIME);
 
-    expect(player.vel.x).toBeGreaterThan(0);
-    expect(player.vel.z).toBeGreaterThan(0);
+    // TEST_CONFIG doesn't set freeFlightTurnRate, so the sim uses its 1.5 default.
+    const maxTurn = 1.5 * dt; // radians this tick
+    expect(player.vel.x).toBeGreaterThan(0); // turned toward +x
+    expect(player.vel.z).toBeGreaterThan(0); // but mostly still +z
+    // Capped: the heading moved by ~maxTurn, far short of the full 90°.
+    expect(player.vel.x).toBeLessThan(50 * Math.sin(maxTurn) + 1);
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(50, 4);
   });
 
-  it("FreeFlight thrust accelerates along current direction; brake decelerates", () => {
+  it("FreeFlight ignores Forward/Backward thrust input (launch energy is committed)", () => {
+    // Holding W/S during FreeFlight should NOT change velocity beyond what
+    // steering produces. Launch energy is whatever the pad-charge paid for;
+    // no in-flight thrust. Compare a Forward-held step against a no-input step
+    // from identical state — they must produce identical vel.
     const planet: PlanetData = {
       id: "planet-0",
       center: { x: 0, y: 0, z: 0 },
@@ -1228,31 +1397,78 @@ describe("stepPlayer", () => {
       gravityRadius: 80,
       captureRadius: 100,
     };
-    const accelPlayer = createPlayer();
-    accelPlayer.planetId = "";
-    accelPlayer.gravityAnchorPlanetId = "";
-    accelPlayer.movementState = PlayerMovementState.FreeFlight;
-    accelPlayer.pos = { x: 0, y: 0, z: 1000 };
-    accelPlayer.vel = { x: 0, y: 0, z: 30 };
-    const inputForward: InputMessage = {
-      ...createInput(InputKey.Forward),
-      aimDir: { x: 0, y: 0, z: 1 },
+    const setupPlayer = (): PlayerPhysics => {
+      const p = createPlayer();
+      p.planetId = "";
+      p.gravityAnchorPlanetId = "";
+      p.movementState = PlayerMovementState.FreeFlight;
+      p.pos = { x: 0, y: 0, z: 1000 };
+      p.vel = { x: 0, y: 0, z: 30 };
+      return p;
     };
-    stepPlayer(accelPlayer, inputForward, 0.1, [planet], TEST_CONFIG, EMPTY_SLIME);
-    expect(accelPlayer.vel.z).toBeGreaterThan(30);
 
-    const brakePlayer = createPlayer();
-    brakePlayer.planetId = "";
-    brakePlayer.gravityAnchorPlanetId = "";
-    brakePlayer.movementState = PlayerMovementState.FreeFlight;
-    brakePlayer.pos = { x: 0, y: 0, z: 1000 };
-    brakePlayer.vel = { x: 0, y: 0, z: 60 };
-    const inputBack: InputMessage = {
-      ...createInput(InputKey.Backward),
-      aimDir: { x: 0, y: 0, z: 1 },
+    const idlePlayer = setupPlayer();
+    stepPlayer(
+      idlePlayer,
+      { ...createInput(0), aimDir: { x: 0, y: 0, z: 1 } },
+      0.1,
+      [planet],
+      TEST_CONFIG,
+      EMPTY_SLIME,
+    );
+
+    const thrustPlayer = setupPlayer();
+    stepPlayer(
+      thrustPlayer,
+      { ...createInput(InputKey.Forward), aimDir: { x: 0, y: 0, z: 1 } },
+      0.1,
+      [planet],
+      TEST_CONFIG,
+      EMPTY_SLIME,
+    );
+
+    expect(thrustPlayer.vel.x).toBeCloseTo(idlePlayer.vel.x, 5);
+    expect(thrustPlayer.vel.y).toBeCloseTo(idlePlayer.vel.y, 5);
+    expect(thrustPlayer.vel.z).toBeCloseTo(idlePlayer.vel.z, 5);
+  });
+
+  it("FreeFlight keeps the gravity anchor frozen to the launch planet when passing a nearer world", () => {
+    // The anchor drives the camera's up-reference. Repointing it at whatever
+    // planet is momentarily nearest flips the camera (and, via aim-steering,
+    // curves the dart into a fake orbit). It must stay pinned to the launch
+    // planet for the whole flight.
+    const launch: PlanetData = {
+      id: "planet-a",
+      center: { x: 0, y: 0, z: 0 },
+      radius: 50,
+      gravityRadius: 80,
+      captureRadius: 120,
     };
-    stepPlayer(brakePlayer, inputBack, 0.1, [planet], TEST_CONFIG, EMPTY_SLIME);
-    expect(brakePlayer.vel.z).toBeLessThan(60);
+    const passing: PlanetData = {
+      id: "planet-b",
+      center: { x: 0, y: 0, z: 200 },
+      radius: 20,
+      gravityRadius: 80,
+      captureRadius: 120,
+    };
+    const player = createPlayer();
+    player.planetId = "";
+    player.gravityAnchorPlanetId = "planet-a"; // launched from A
+    player.movementState = PlayerMovementState.FreeFlight;
+    // Nearer to B (100 from its centre vs 224 from A's) but well clear of its
+    // surface, skimming tangentially so it doesn't land.
+    player.pos = { x: 100, y: 0, z: 200 };
+    player.vel = { x: 0, y: 0, z: 40 };
+    const input: InputMessage = { ...createInput(0), aimDir: { x: 0, y: 0, z: 1 } };
+
+    stepPlayer(player, input, 0.1, [launch, passing], TEST_CONFIG, EMPTY_SLIME);
+
+    // Anchor stays A even though B is the nearer planet.
+    expect(player.gravityAnchorPlanetId).toBe("planet-a");
+    expect(player.movementState).toBe(PlayerMovementState.FreeFlight);
+    // No gravity from B (or anyone): the dart keeps flying straight.
+    expect(player.vel.x).toBeCloseTo(0, 5);
+    expect(player.vel.z).toBeCloseTo(40, 5);
   });
 
   it("FreeFlight commits to a landing when crossing a planet's surface envelope", () => {
@@ -1268,9 +1484,11 @@ describe("stepPlayer", () => {
     player.planetId = "";
     player.gravityAnchorPlanetId = "";
     player.movementState = PlayerMovementState.FreeFlight;
-    // Just above the surface, diving in.
+    // Surfing through the flight (as the pad launch leaves it) and diving in at
+    // a glancing angle so there's tangential momentum to shed.
+    player.surfState = PlayerSurfState.SurfingVisible;
     player.pos = { x: 0, y: surfaceRadius + TEST_CONFIG.movement.standingHeight + 2, z: 0 };
-    player.vel = { x: 0, y: -40, z: 0 };
+    player.vel = { x: 25, y: -40, z: 0 };
     const input: InputMessage = { ...createInput(0), aimDir: { x: 0, y: -1, z: 0 } };
 
     stepPlayer(player, input, 0.1, [planet], TEST_CONFIG, EMPTY_SLIME);
@@ -1278,5 +1496,8 @@ describe("stepPlayer", () => {
     expect(player.planetId).toBe("planet-0");
     expect(player.movementState).toBe(PlayerMovementState.Idle);
     expect(player.gravityAnchorPlanetId).toBe("planet-0");
+    // Smash lands grounded (not surfing) and dead-stopped — no skid/bounce.
+    expect(player.surfState).toBe(PlayerSurfState.None);
+    expect(Math.hypot(player.vel.x, player.vel.y, player.vel.z)).toBeCloseTo(0, 5);
   });
 });

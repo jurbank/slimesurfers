@@ -172,7 +172,6 @@ export interface SimPlayerState {
   lastGrindT: number; // arc-length parameter from the previous tick
   grindSpeed: number; // signed wu/s along rail tangent
   grindCooldownMs: number; // ms remaining before tryEnterGrind is eligible again
-  splatCooldownMs: number;
   isOnFriendlySlime: boolean;
   /** Hysteresis hint for the gravity picker — see PlayerPhysics.gravityAnchorPlanetId. */
   gravityAnchorPlanetId: string;

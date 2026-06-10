@@ -15,6 +15,16 @@ const MAX_BANK_ANGLE = 0.09;
 const BANK_SPEED_NORM = 18;
 const LANDING_DIP_MAX = 2.0;
 const LANDING_DIP_SPEED_SCALE = 0.07;
+const FREE_FLIGHT_FOV_GAIN = 16;
+
+// -- Free-flight chase camera --------------------------------------------------
+// A ballistic dart flies a straight line at constant velocity, so a camera that
+// sits behind it along that velocity has a fixed orientation for the whole
+// flight (only its position translates) — rock-stable, no flips. These frame it.
+const FLIGHT_BACK = 26; // distance behind the dart along its travel direction
+const FLIGHT_HEIGHT = 6.5; // lift above the dart along the stable flight-up
+const FLIGHT_LOOKAHEAD = 30; // how far ahead of the dart the camera looks
+const FLIGHT_LOOK_LIFT = 2.5; // raise the look target so the dart sits lower in frame
 
 interface CameraSystemOptions {
   camera?: THREE.PerspectiveCamera;
@@ -33,6 +43,14 @@ export class CameraSystem {
   private readonly _lookAt = new THREE.Vector3();
   private readonly _cameraWorldForward = new THREE.Vector3();
   private readonly _aimPoint = new THREE.Vector3();
+  // Free-flight chase-cam scratch: surface vs flight poses, blended each frame.
+  private readonly _surfacePos = new THREE.Vector3();
+  private readonly _surfaceLookAt = new THREE.Vector3();
+  private readonly _flightPos = new THREE.Vector3();
+  private readonly _flightLookAt = new THREE.Vector3();
+  private readonly _velDir = new THREE.Vector3();
+  private readonly _flightUp = new THREE.Vector3();
+  private readonly _blendUp = new THREE.Vector3();
 
   private _smoothSpeed = 0;
   private _smoothLateral = 0;
@@ -40,6 +58,7 @@ export class CameraSystem {
   private _wasAirborne = false;
   private _fovScale = 1.0;
   private _freeFlightBlend = 0;
+  private _wasInFlight = false;
 
   constructor(options: CameraSystemOptions = {}) {
     this.camera = options.camera ?? this.createDefaultCamera();
@@ -72,25 +91,33 @@ export class CameraSystem {
     nearestPlanetCenter: THREE.Vector3,
     isAirborne: boolean,
     dt: number,
-    /** 0..1 free-flight intensity — typically the player's distance from the
-     *  nearest planet centre, normalised against that planet's captureRadius.
-     *  Larger values pull the camera further back so distant planets stay framed. */
+    /** 0..1 flag: 1 while the player is in ballistic free flight, 0 otherwise.
+     *  Smoothed internally to blend between the surface cam and the flight
+     *  chase cam. (Not a distance — see _freeFlightBlend.) */
     freeFlight = 0,
   ): { x: number; y: number; z: number } {
     this._playerPos.set(playerPos.x, playerPos.y, playerPos.z);
-    this._targetPlayerUp.subVectors(this._playerPos, nearestPlanetCenter).normalize();
-    if (this._playerUp.lengthSq() < 0.01) {
-      this._playerUp.copy(this._targetPlayerUp);
-    } else {
-      const upLerp = freeFlight > 0.1 ? 2.2 : 10;
-      this._playerUp.lerp(this._targetPlayerUp, Math.min(1, dt * upLerp)).normalize();
-    }
 
     this._camForward.set(yawForward.x, yawForward.y, yawForward.z).normalize();
     if (this._camForward.lengthSq() < 0.01) {
       this._camForward.set(0, 0, 1);
     }
 
+    // Smoothed blend: 0 = surface cam, 1 = free-flight chase cam.
+    const freeFlightTarget = Math.max(0, Math.min(1, freeFlight));
+    this._freeFlightBlend +=
+      (freeFlightTarget - this._freeFlightBlend) *
+      Math.min(1, dt * (freeFlightTarget > this._freeFlightBlend ? 3.5 : 2));
+    const blend = this._freeFlightBlend;
+
+    // Surface "up": lerp toward the planet radial. Only feeds the surface pose,
+    // which is blended out in flight, so it's fine that it sweeps out there.
+    this._targetPlayerUp.subVectors(this._playerPos, nearestPlanetCenter).normalize();
+    if (this._playerUp.lengthSq() < 0.01) {
+      this._playerUp.copy(this._targetPlayerUp);
+    } else {
+      this._playerUp.lerp(this._targetPlayerUp, Math.min(1, dt * 10)).normalize();
+    }
     this._right.crossVectors(this._playerUp, this._camForward).normalize();
 
     const forwardSpeed = Math.max(
@@ -99,7 +126,6 @@ export class CameraSystem {
         playerVel.y * this._camForward.y +
         playerVel.z * this._camForward.z,
     );
-
     const speedLerpRate = forwardSpeed > this._smoothSpeed ? 8 : 4;
     this._smoothSpeed += (forwardSpeed - this._smoothSpeed) * Math.min(1, dt * speedLerpRate);
 
@@ -116,78 +142,110 @@ export class CameraSystem {
     this._wasAirborne = isAirborne;
     this._landingDip *= Math.max(0, 1 - dt * 9);
 
-    const freeFlightTarget = Math.max(0, Math.min(1, freeFlight));
-    this._freeFlightBlend +=
-      (freeFlightTarget - this._freeFlightBlend) *
-      Math.min(1, dt * (freeFlightTarget > this._freeFlightBlend ? 3.5 : 2));
-
     const targetFov =
       (BASE_FOV +
         Math.min(this._smoothSpeed * SPEED_FOV_RATE, MAX_FOV_GAIN) +
-        this._freeFlightBlend * 18) *
+        blend * FREE_FLIGHT_FOV_GAIN) *
       this._fovScale;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 5);
     this.camera.updateProjectionMatrix();
 
-    const dynamicBack =
-      CAMERA_BACK + this._smoothSpeed * PULL_BACK_RATE + this._freeFlightBlend * 38;
-    const dynamicUp = CAMERA_UP - this._landingDip + this._freeFlightBlend * 6;
-
+    // ---- Surface pose: behind the player's look direction, planet-collided. ----
+    const dynamicBack = CAMERA_BACK + this._smoothSpeed * PULL_BACK_RATE;
+    const dynamicUp = CAMERA_UP - this._landingDip;
     this._arm
       .copy(this._camForward)
       .multiplyScalar(-dynamicBack)
       .addScaledVector(this._playerUp, dynamicUp)
       .addScaledVector(this._right, CAMERA_SIDE);
     this._arm.applyAxisAngle(this._right, -pitch);
-
+    this._surfacePos.copy(this._playerPos).add(this._arm);
     const armLen = this._arm.length();
     if (armLen > 0.001) {
       const invLen = 1 / armLen;
       const dX = this._arm.x * invLen;
       const dY = this._arm.y * invLen;
       const dZ = this._arm.z * invLen;
-
       const oX = this._playerPos.x - nearestPlanetCenter.x;
       const oY = this._playerPos.y - nearestPlanetCenter.y;
       const oZ = this._playerPos.z - nearestPlanetCenter.z;
-
       const bHalf = oX * dX + oY * dY + oZ * dZ;
       const oLenSq = oX * oX + oY * oY + oZ * oZ;
-
       const playerDist = Math.sqrt(oLenSq);
       const testRadius = playerDist - COLLISION_RADIUS + SURFACE_GAP;
       const cTerm = oLenSq - testRadius * testRadius;
       const disc = bHalf * bHalf - cTerm;
-
       if (disc >= 0) {
         const tHit = -bHalf - Math.sqrt(disc);
         if (tHit > 0 && tHit < armLen) {
-          this.camera.position.set(
+          this._surfacePos.set(
             this._playerPos.x + dX * tHit,
             this._playerPos.y + dY * tHit,
             this._playerPos.z + dZ * tHit,
           );
-        } else {
-          this.camera.position.copy(this._playerPos).add(this._arm);
         }
-      } else {
-        this.camera.position.copy(this._playerPos).add(this._arm);
       }
-    } else {
-      this.camera.position.copy(this._playerPos).add(this._arm);
     }
+    this._surfaceLookAt.copy(this._playerPos).addScaledVector(this._playerUp, 3);
 
+    // ---- Flight pose: behind the dart along its (constant) velocity. ----
+    if (totalSpeed > 1e-4) {
+      this._velDir.set(playerVel.x, playerVel.y, playerVel.z).multiplyScalar(1 / totalSpeed);
+    } else if (this._velDir.lengthSq() < 0.01) {
+      this._velDir.copy(this._camForward);
+    } // else: keep the last travel direction (e.g. velocity zeroed on the smash)
+
+    const inFlight = blend > 0.05;
+    if (inFlight && !this._wasInFlight) {
+      // Seed a stable flight-up once, from the planet radial projected
+      // perpendicular to travel. Fall back to a world axis if you launched
+      // straight along the radial (up ∥ velocity).
+      this._flightUp.copy(this._targetPlayerUp);
+      this._flightUp.addScaledVector(this._velDir, -this._flightUp.dot(this._velDir));
+      if (this._flightUp.lengthSq() < 1e-4) {
+        this._flightUp.set(0, 1, 0).addScaledVector(this._velDir, -this._velDir.y);
+        if (this._flightUp.lengthSq() < 1e-4) {
+          this._flightUp.set(1, 0, 0).addScaledVector(this._velDir, -this._velDir.x);
+        }
+      }
+      this._flightUp.normalize();
+    }
+    this._wasInFlight = inFlight;
+    if (this._flightUp.lengthSq() < 0.01) {
+      this._flightUp.copy(this._playerUp); // never been in flight yet
+    } else {
+      // Keep perpendicular to travel (velocity is ~constant, so this barely moves).
+      const proj = this._flightUp.dot(this._velDir);
+      if (Math.abs(proj) < 0.999) {
+        this._flightUp.addScaledVector(this._velDir, -proj).normalize();
+      }
+    }
+    this._flightPos
+      .copy(this._playerPos)
+      .addScaledVector(this._velDir, -FLIGHT_BACK)
+      .addScaledVector(this._flightUp, FLIGHT_HEIGHT);
+    this._flightLookAt
+      .copy(this._playerPos)
+      .addScaledVector(this._velDir, FLIGHT_LOOKAHEAD)
+      .addScaledVector(this._flightUp, FLIGHT_LOOK_LIFT);
+
+    // ---- Blend the two poses and apply. ----
+    this.camera.position.lerpVectors(this._surfacePos, this._flightPos, blend);
+
+    this._blendUp.copy(this._playerUp).lerp(this._flightUp, blend);
+    if (this._blendUp.lengthSq() < 1e-4) this._blendUp.copy(this._playerUp);
+    this._blendUp.normalize();
+    // Bank only on the surface cam; scale it out as the flight cam takes over.
     const bankAngle =
-      -Math.max(-1, Math.min(1, this._smoothLateral / BANK_SPEED_NORM)) * MAX_BANK_ANGLE;
-    this.camera.up.copy(this._playerUp);
+      -Math.max(-1, Math.min(1, this._smoothLateral / BANK_SPEED_NORM)) *
+      MAX_BANK_ANGLE *
+      (1 - blend);
+    this.camera.up.copy(this._blendUp);
     if (Math.abs(bankAngle) > 0.0005) {
       this.camera.up.applyAxisAngle(this._camForward, bankAngle);
     }
 
-    this._lookAt
-      .copy(this._playerPos)
-      .addScaledVector(this._playerUp, 3 + this._freeFlightBlend * 5)
-      .addScaledVector(this._camForward, this._freeFlightBlend * 18);
+    this._lookAt.lerpVectors(this._surfaceLookAt, this._flightLookAt, blend);
     this.camera.lookAt(this._lookAt);
 
     this._cameraWorldForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);

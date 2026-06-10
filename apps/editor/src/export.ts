@@ -16,7 +16,6 @@ function toRuntimeBlastPad(pad: EditorBlastPad): RuntimeBlastPad {
     radius: pad.radius,
     launchSpeed: pad.launchSpeed,
     upwardBias: pad.upwardBias,
-    cameraProfile: "planetHop",
   };
 }
 

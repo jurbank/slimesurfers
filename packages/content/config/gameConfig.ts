@@ -90,6 +90,10 @@ export const GAME_CONFIG = {
     friendlySlimeRechargePerSecond: 30,
     submergedRechargePerSecond: 55,
     rechargeDelayMs: 180,
+    /** Tank slime drained on a free-flight smash landing — the cost of the
+     *  squish. ≈ freeFlightChargeSlimeCostMax, so a cross-system trip is a real
+     *  economic commitment: you arrive depleted and recharge into the next move. */
+    smashSlimeCost: 50,
   },
 
   // -- Pickups ---------------------------------------------------------------
@@ -111,6 +115,19 @@ export const GAME_CONFIG = {
     deathBurstStampCount: 9,
     deathBurstSpreadRadius: 1.4,
     deathBurstRadiusMultiplier: 3.4,
+    // -- Free-flight smash landing (Phase H) --------------------------------
+    /** Ring of stamps painted at the contact point when a ballistic dart smashes
+     *  into a planet. The slime literally squishes out on impact. */
+    smashStampCount: 9,
+    smashSpreadRadius: 2.0,
+    /** Splat radius vs. a normal stamp, lerped by impact speed across
+     *  [0, smashSpeedForFullSplat]. A slow scrape barely marks; a full-power
+     *  dart leaves a huge splat. */
+    smashMinSplatMultiplier: 2.5,
+    smashMaxSplatMultiplier: 6.0,
+    /** Impact speed (wu/s) at which the splat reaches smashMaxSplatMultiplier.
+     *  ~0.6 * freeFlightMaxSpeed. */
+    smashSpeedForFullSplat: 120,
     /** Charge added to a blast pad's coverage per well-centered stamp landing inside
      *  the pad footprint. ~3 hits charge a pad fully; edge hits contribute less. */
     blastPadChargePerStamp: 0.34,
@@ -195,6 +212,12 @@ export const GAME_CONFIG = {
     surfaceSnapDistance: 0.6,
     arenaReturnDistance: 90,
     arenaReturnAcceleration: 15,
+    /** Phase F: how far past the outermost planet surface a free-flight dart may
+     *  travel before the void kills it. The kill sphere is sized from the map at
+     *  match start — (farthest planet-surface point from the arena centroid) +
+     *  this margin — so only a genuine miss sailing clear of the whole system
+     *  trips it, regardless of how spread out the planets are. */
+    arenaKillMargin: 250,
     moveSpeed: 10,
     jumpImpulse: 18,
     boostAcceleration: 15,
@@ -215,33 +238,29 @@ export const GAME_CONFIG = {
     waterSkiFriction: 0.9,
     waterSkiLateralDrag: 4.0,
     // -- Free flight (Phase C) ----------------------------------------------
-    /** Mario-Galaxy-style continuous steering: a transverse acceleration
-     *  (wu/s²) applied perpendicular to the velocity, in the aim direction.
-     *  This is a *force*, not a setpoint — it bends the path but does not
-     *  override gravity perturbations the way a SLERP-to-aim would. */
-    freeFlightSteerAcceleration: 30,
-    /** Forward-thrust acceleration applied while Forward is held in FreeFlight. */
-    freeFlightThrustAcceleration: 28,
-    /** Backward-brake acceleration applied while Backward is held in FreeFlight. */
-    freeFlightBrakeAcceleration: 22,
-    /** Hard speed cap in FreeFlight. Prevents runaway speed when chaining
-     *  thrust with a gravity assist. */
-    freeFlightMaxSpeed: 110,
-    /** Floor on speed in FreeFlight so the player can't fully stall in deep
-     *  space (which would strand them with no gravity to fall on). */
-    freeFlightMinSpeed: 14,
-    /** Distance from a planet's surface inside which FreeFlight auto-lands.
-     *  Smaller than the planet-hop capture so casual scrapes don't commit you. */
+    /** Hard speed cap in FreeFlight. A ballistic dart never accelerates past its
+     *  launch speed, but this guards against any future launch tuning. */
+    freeFlightMaxSpeed: 200,
+    /** Fortnite-style glide steering: max rate (radians/sec) the dart's heading
+     *  can turn toward the player's aimed direction. Capped so it's a weighty
+     *  guide, not an instant snap — and so the server bounds a cheating client.
+     *  ~1.5 rad/s ≈ 86°/s: enough to guide your landing, not enough to hairpin. */
+    freeFlightTurnRate: 1.5,
+    /** Distance from a planet's surface inside which FreeFlight commits to a
+     *  smash landing. Tested swept against the per-tick integration segment. */
     freeFlightLandingCaptureDistance: 6,
     // -- Loaded pad (Phase E) -----------------------------------------------
     /** Duration of the load-in wind-up on a charged pad. Launch input is
      *  ignored during this window so the player can't accidentally launch
      *  by tapping Anchor immediately on contact. */
     freeFlightLoadDurationSeconds: 0.3,
-    /** Duration of the full charge ramp on a loaded pad. Holding Anchor for
-     *  this long maps to the pad's full launchSpeed; releasing earlier maps
-     *  proportionally between launchSpeedMin and pad.launchSpeed. */
-    freeFlightChargeDurationSeconds: 0.6,
+    /** Slime burn rate while Anchor is held on a loaded pad. Drives both the
+     *  player's tank drain and the charge ramp (see freeFlightChargeSlimeCostMax). */
+    freeFlightChargeSlimeCostPerSecond: 83,
+    /** Total slime spent for a full-power launch. padChargeProgress accrues
+     *  by (slime spent / this value), so charging stops at 1 once you've burned
+     *  this much. Out-of-slime mid-charge halts the ramp at whatever was bought. */
+    freeFlightChargeSlimeCostMax: 50,
     /** Floor speed when launching off a pad even at zero charge. Keeps an
      *  instant-tap launch from leaving the player drifting in place. */
     freeFlightLaunchSpeedMin: 28,
@@ -359,33 +378,33 @@ export const GAME_CONFIG = {
     },
     // Authored bots with stable names and hand-tuned behavior.
     namedBots: [
-      {
-        name: "SlimeMaster",
-        prefersSurfBias: 0.2,
-        prefersAttackBias: 0.35,
-        prefersTerritoryBias: 1.0,
-        aggression: 2,
-        emoteTemperament: "proud",
-        emoteFrequency: 0.35,
-      },
-      {
-        name: "N00bHunter",
-        prefersSurfBias: 0.15,
-        prefersAttackBias: 0.5,
-        prefersTerritoryBias: 0.2,
-        aggression: 3,
-        emoteTemperament: "taunting",
-        emoteFrequency: 0.25,
-      },
-      {
-        name: "Slip360",
-        prefersSurfBias: 1.0,
-        prefersAttackBias: 0.2,
-        prefersTerritoryBias: 0.35,
-        aggression: 1,
-        emoteTemperament: "playful",
-        emoteFrequency: 0.5,
-      },
+      // {
+      //   name: "SlimeMaster",
+      //   prefersSurfBias: 0.2,
+      //   prefersAttackBias: 0.35,
+      //   prefersTerritoryBias: 1.0,
+      //   aggression: 2,
+      //   emoteTemperament: "proud",
+      //   emoteFrequency: 0.35,
+      // },
+      // {
+      //   name: "N00bHunter",
+      //   prefersSurfBias: 0.15,
+      //   prefersAttackBias: 0.5,
+      //   prefersTerritoryBias: 0.2,
+      //   aggression: 3,
+      //   emoteTemperament: "taunting",
+      //   emoteFrequency: 0.25,
+      // },
+      // {
+      //   name: "Slip360",
+      //   prefersSurfBias: 1.0,
+      //   prefersAttackBias: 0.2,
+      //   prefersTerritoryBias: 0.35,
+      //   aggression: 1,
+      //   emoteTemperament: "playful",
+      //   emoteFrequency: 0.5,
+      // },
     ] as BotConfigEntry[],
     // Procedurally generated bots sampled from a weighted mix of behavior profiles.
     generatedBots: {

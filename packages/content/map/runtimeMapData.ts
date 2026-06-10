@@ -106,7 +106,6 @@ export interface RuntimeBlastPad {
    *  cfg.movement.freeFlightLaunchSpeedMin (instant tap) up to this value. */
   launchSpeed: number;
   upwardBias: number;
-  cameraProfile: "planetHop";
 }
 
 export interface RuntimeMapCel {
@@ -693,9 +692,6 @@ function validateBlastPad(
   }
   validatePositiveNumber(p.launchSpeed, `${field}.launchSpeed`, errors);
   validateFiniteNumber(p.upwardBias, `${field}.upwardBias`, errors);
-  if (p.cameraProfile !== "planetHop") {
-    errors.push({ field: `${field}.cameraProfile`, message: 'must be "planetHop"' });
-  }
 }
 
 function validateSpawnAnchor(
@@ -833,7 +829,6 @@ export const DEV_MAP: RuntimeMapData = {
       cooldownMs: 1500,
       launchSpeed: 78,
       upwardBias: 0.45,
-      cameraProfile: "planetHop",
     },
     {
       id: "dev-blast-pad-ffa-ring",
@@ -846,7 +841,6 @@ export const DEV_MAP: RuntimeMapData = {
       radius: 5,
       launchSpeed: 78,
       upwardBias: 0.45,
-      cameraProfile: "planetHop",
     },
     {
       id: "dev-blast-pad-autojoin-human",
@@ -857,7 +851,6 @@ export const DEV_MAP: RuntimeMapData = {
       cooldownMs: 1500,
       launchSpeed: 78,
       upwardBias: 0.45,
-      cameraProfile: "planetHop",
     },
   ],
   spawns: {

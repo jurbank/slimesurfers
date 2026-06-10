@@ -54,6 +54,9 @@ export interface PlayerPhysics {
   rot: QuatData;
   planetId: string;
   slimeGroupId: number;
+  /** Ammo / fuel tank. Drained by the pad-charge ramp in stepPadLoaded; mirrors
+   *  SimPlayerState.slimeLevel / RuntimePlayerState.slimeLevel. */
+  slimeLevel: number;
   movementState: number;
   surfState: number;
   isCarving: boolean;
@@ -63,7 +66,6 @@ export interface PlayerPhysics {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
-  splatCooldownMs?: number;
   isOnFriendlySlime: boolean;
   /** Hysteresis hint for the gravity picker — see getDominantGravityPlanet.
    *  Tracks the planet whose gravity well the player is currently inside, so
@@ -109,14 +111,12 @@ export interface StepConfig extends TerrainConfig {
     waterSkiAccelerationMultiplier: number;
     waterSkiFriction: number;
     waterSkiLateralDrag: number;
-    freeFlightSteerAcceleration?: number;
-    freeFlightThrustAcceleration?: number;
-    freeFlightBrakeAcceleration?: number;
     freeFlightMaxSpeed?: number;
-    freeFlightMinSpeed?: number;
+    freeFlightTurnRate?: number;
     freeFlightLandingCaptureDistance?: number;
     freeFlightLoadDurationSeconds?: number;
-    freeFlightChargeDurationSeconds?: number;
+    freeFlightChargeSlimeCostPerSecond?: number;
+    freeFlightChargeSlimeCostMax?: number;
     freeFlightLaunchSpeedMin?: number;
   };
   rail: {
@@ -750,20 +750,11 @@ function stepAirborne(
 
 // -- Free flight movement ----------------------------------------------------
 
-function getFreeFlightSteerAcceleration(cfg: StepConfig): number {
-  return cfg.movement.freeFlightSteerAcceleration ?? 30;
-}
-function getFreeFlightThrust(cfg: StepConfig): number {
-  return cfg.movement.freeFlightThrustAcceleration ?? 28;
-}
-function getFreeFlightBrake(cfg: StepConfig): number {
-  return cfg.movement.freeFlightBrakeAcceleration ?? 22;
-}
 function getFreeFlightMaxSpeed(cfg: StepConfig): number {
   return cfg.movement.freeFlightMaxSpeed ?? 110;
 }
-function getFreeFlightMinSpeed(cfg: StepConfig): number {
-  return cfg.movement.freeFlightMinSpeed ?? 14;
+function getFreeFlightTurnRate(cfg: StepConfig): number {
+  return Math.max(0, cfg.movement.freeFlightTurnRate ?? 1.5);
 }
 function getFreeFlightLandingCaptureDistance(cfg: StepConfig): number {
   return cfg.movement.freeFlightLandingCaptureDistance ?? 6;
@@ -771,24 +762,31 @@ function getFreeFlightLandingCaptureDistance(cfg: StepConfig): number {
 function getFreeFlightLoadDuration(cfg: StepConfig): number {
   return Math.max(1e-3, cfg.movement.freeFlightLoadDurationSeconds ?? 0.3);
 }
-function getFreeFlightChargeDuration(cfg: StepConfig): number {
-  return Math.max(1e-3, cfg.movement.freeFlightChargeDurationSeconds ?? 0.6);
+function getFreeFlightChargeSlimeCostPerSecond(cfg: StepConfig): number {
+  return Math.max(0, cfg.movement.freeFlightChargeSlimeCostPerSecond ?? 83);
+}
+function getFreeFlightChargeSlimeCostMax(cfg: StepConfig): number {
+  return Math.max(1e-3, cfg.movement.freeFlightChargeSlimeCostMax ?? 50);
 }
 function getFreeFlightLaunchSpeedMin(cfg: StepConfig): number {
   return cfg.movement.freeFlightLaunchSpeedMin ?? 28;
 }
 
 /**
- * Ballistic, steerable space flight. Single dominant planet's gravity pulls,
- * the player's aim continuously biases the path (transverse force, not a
- * SLERP-to-aim), and Forward/Backward thrust modifies speed along the current
- * velocity. Landing fires when the player touches any planet's surface
- * envelope.
+ * Pure ballistic dart. No gravity at all — the launch velocity plus the
+ * player's aim-steering (transverse force, not a SLERP-to-aim) are the ONLY
+ * things that shape the path, so "smash straight into the planet I'm pointing
+ * at" is literally true. A clean miss sails out in a straight line and is
+ * killed by the arena boundary (Phase F, in matchSimulation) rather than being
+ * recaptured by a planet's pull.
  *
- * Single-planet — multi-body gravity sums were dropped (see
- * DIRECTIONAL_TRAVERSAL_PLAN.md): once aim controls the launch direction, the
- * player has already committed their trajectory; world-bending fights intent
- * rather than serving it.
+ * Launch energy is committed at pad-release (see stepPadLoaded): NO thrust or
+ * brake, speed is fixed. The only control is glide steering — the heading turns
+ * toward input.aimDir at a capped rate (freeFlightTurnRate), so the player can
+ * guide their landing without re-flying the cannonball. Landing fires when the
+ * dart crosses any planet's surface envelope (swept against the integration
+ * segment so fast darts can't tunnel through small worlds); the smash splat +
+ * tank drain are applied in matchSimulation on the FreeFlight→surface transition.
  */
 function stepFreeFlight(
   state: PlayerPhysics,
@@ -804,59 +802,56 @@ function stepFreeFlight(
   state.skiJumpCharge = 0;
   state.grindCooldownMs = Math.max(0, state.grindCooldownMs - dt * 1000);
 
-  // 1. Single-planet gravity via the Phase B hysteresis picker.
-  const dominant =
-    getDominantGravityPlanet(state.pos, planets, state.gravityAnchorPlanetId ?? "") ??
-    getNearestPlanet(state.pos, planets);
-  state.gravityAnchorPlanetId = dominant?.id ?? "";
-  if (dominant !== null) {
-    const toPlanet = sub(dominant.center, state.pos);
-    const dist = vlen(toPlanet);
-    if (dist > 0.01) {
-      const gravDir = scale(toPlanet, 1 / dist);
-      assign(state.vel, add(state.vel, scale(gravDir, cfg.movement.gravityAcceleration * dt)));
+  const prevPos = { x: state.pos.x, y: state.pos.y, z: state.pos.z };
+
+  // Glide steering: rotate the heading toward the aimed direction, capped at
+  // freeFlightTurnRate per second. Drift-free — when aim ∥ velocity the turn is
+  // zero — and bounded so a fast flick (or a cheating client) can't snap the
+  // heading. Speed is preserved; only direction changes.
+  const speed = vlen(state.vel);
+  const aimLen = vlen(input.aimDir);
+  if (speed > 1e-4 && aimLen > 1e-4) {
+    const aimDir = scale(input.aimDir, 1 / aimLen);
+    const curDir = scale(state.vel, 1 / speed);
+    const angle = Math.acos(Math.max(-1, Math.min(1, dot(curDir, aimDir))));
+    const maxTurn = getFreeFlightTurnRate(cfg) * dt;
+    if (angle > 1e-4 && maxTurn > 0) {
+      const t = Math.min(1, maxTurn / angle);
+      const turned = add(scale(curDir, 1 - t), scale(aimDir, t));
+      const len = vlen(turned);
+      if (len > 1e-6) {
+        assign(state.vel, scale(turned, speed / len));
+      }
     }
   }
 
-  // 2. Continuous steering — transverse acceleration toward aim. With aim
-  //    aligned to velocity the lateral component is zero and steering does
-  //    nothing; the more aim drifts off, the stronger the corrective push.
-  const aimLen = vlen(input.aimDir);
-  const speed = vlen(state.vel);
-  if (aimLen > 1e-4 && speed > 1e-4) {
-    const aimDir = scale(input.aimDir, 1 / aimLen);
-    const currentDir = scale(state.vel, 1 / speed);
-    const lateral = sub(aimDir, scale(currentDir, dot(aimDir, currentDir)));
-    assign(state.vel, add(state.vel, scale(lateral, getFreeFlightSteerAcceleration(cfg) * dt)));
-  }
-
-  // 3. Thrust / brake.
-  const forwardPressed = (input.keys & InputKey.Forward) !== 0;
-  const backwardPressed = (input.keys & InputKey.Backward) !== 0;
-  if (forwardPressed || backwardPressed) {
-    const dir = speed > 1e-4 ? scale(state.vel, 1 / speed) : { x: 0, y: 0, z: 1 };
-    const dv = forwardPressed ? getFreeFlightThrust(cfg) * dt : -getFreeFlightBrake(cfg) * dt;
-    assign(state.vel, add(state.vel, scale(dir, dv)));
-  }
-
-  // Clamp to [min, max] so the player can't stall out to a dead drift or
-  // chain a runaway speed.
+  // Cap speed purely as a runaway guard.
   const newSpeed = vlen(state.vel);
-  const minSpeed = getFreeFlightMinSpeed(cfg);
   const maxSpeed = getFreeFlightMaxSpeed(cfg);
   if (newSpeed > maxSpeed) {
     assign(state.vel, scale(state.vel, maxSpeed / newSpeed));
-  } else if (newSpeed > 0 && newSpeed < minSpeed) {
-    assign(state.vel, scale(state.vel, minSpeed / newSpeed));
   }
 
   // Integrate.
   assign(state.pos, add(state.pos, scale(state.vel, dt)));
 
-  // Orient body "up" toward the dominant planet so visual rotation tracks
-  // the world's local up. Same pattern as stepAirborne.
-  if (dominant) {
-    const up = normalize(sub(state.pos, dominant.center));
+  // Keep the gravity anchor FROZEN at the launch planet for the whole flight.
+  // It drives the camera's up-reference; if we repointed it at the nearest
+  // planet each tick, passing near another world would switch the reference and
+  // flip the camera ~180° (that world's radial up is roughly opposite the flight
+  // direction). Because the player's aim is read off the camera, that flip swings
+  // the aim, and the aim-steering below then curves the dart into a fake orbit.
+  // Freezing the anchor keeps the camera stable so the dart flies where aimed.
+  // (Only seed it if somehow unset; normal entry via stepPadLoaded sets it.)
+  let anchor = planets.find((p) => p.id === state.gravityAnchorPlanetId);
+  if (!anchor) {
+    anchor = getNearestPlanet(state.pos, planets) ?? undefined;
+    state.gravityAnchorPlanetId = anchor?.id ?? "";
+  }
+  // Orient body "up" toward that frozen anchor so visual rotation stays stable
+  // (no spin as the dart passes other worlds). Cosmetic only — no force here.
+  if (anchor) {
+    const up = normalize(sub(state.pos, anchor.center));
     const currentUp = applyQuat({ x: 0, y: 1, z: 0 }, state.rot);
     assignQuat(
       state.rot,
@@ -864,30 +859,55 @@ function stepFreeFlight(
     );
   }
 
-  // Landing. Touch any planet's surface envelope to commit.
+  // Landing. Swept against the integration segment [prevPos, pos] so a fast
+  // dart crossing a thin surface band in one tick still commits instead of
+  // tunneling through. For each planet, find the segment's closest approach to
+  // the centre; if it dips inside the surface envelope (+ capture tolerance)
+  // while heading inward, snap to the surface at that point and drop to Idle.
+  const captureDistance = getFreeFlightLandingCaptureDistance(cfg);
   for (const planet of planets) {
-    const toPlanet = sub(planet.center, state.pos);
-    const dist = vlen(toPlanet);
-    if (dist < 0.01) continue;
-    const gravDir = scale(toPlanet, 1 / dist);
-    const upDir = scale(gravDir, -1);
+    const seg = sub(state.pos, prevPos);
+    const segLenSq = dot(seg, seg);
+    const fromStart = sub(prevPos, planet.center);
+    const t = segLenSq > 1e-9 ? Math.max(0, Math.min(1, -dot(fromStart, seg) / segLenSq)) : 0;
+    const closest = add(prevPos, scale(seg, t));
+    const toClosest = sub(closest, planet.center);
+    const closestDist = vlen(toClosest);
+    if (closestDist < 0.01) continue;
+    const upDir = scale(toClosest, 1 / closestDist);
     const planetCfg = cfgForPlanet?.(planet.id) ?? cfg;
     const rawLandingRadius =
       terrainProvider?.getRadius(upDir.x, upDir.y, upDir.z, planetCfg, planet.id) ??
       getTerrainRadius(upDir.x, upDir.y, upDir.z, planetCfg);
     const waterRadius = planetCfg.planet.radius + planetCfg.terrain.waterLevel;
     const landingRadius = Math.max(rawLandingRadius, waterRadius);
-    const surfaceGap = dist - (landingRadius + cfg.movement.standingHeight);
-    if (surfaceGap > getFreeFlightLandingCaptureDistance(cfg)) continue;
+    const hitRadius = landingRadius + cfg.movement.standingHeight;
+    if (closestDist > hitRadius + captureDistance) continue;
+    // Must be travelling inward (toward the planet) to commit — prevents a
+    // grazing pass that's already moving away from re-triggering.
+    const inward = sub(planet.center, state.pos);
+    const inwardLen = vlen(inward);
+    if (inwardLen < 0.01) continue;
+    const gravDir = scale(inward, 1 / inwardLen);
     const velToward = dot(state.vel, gravDir);
     if (velToward <= 0) continue;
-    assign(
-      state.pos,
-      add(planet.center, scale(upDir, landingRadius + cfg.movement.standingHeight)),
-    );
-    assign(state.vel, sub(state.vel, scale(gravDir, velToward)));
+    assign(state.pos, add(planet.center, scale(upDir, hitRadius)));
+    // Smash, not a scrape: kill all momentum so the dart slams to a dead stop
+    // (the slime squishes out in matchSimulation). Keeping tangential velocity
+    // here let fast glancing entries skid, bounce, or tunnel on the next
+    // surface tick.
+    state.vel.x = 0;
+    state.vel.y = 0;
+    state.vel.z = 0;
     state.planetId = planet.id;
     state.gravityAnchorPlanetId = planet.id;
+    // Land grounded, never in surf/ski mode. The launch flagged surfState as
+    // Surfing for the flight; carrying that into stepOnSurface makes the landing
+    // ski-active (water-ski/surf physics), which is what caused the bounce and
+    // through-surface clipping. Clear it so the player smashes in on their feet.
+    state.surfState = PlayerSurfState.None;
+    state.isCarving = false;
+    state.skiJumpCharge = 0;
     state.movementState = PlayerMovementState.Idle;
     return;
   }
@@ -903,9 +923,12 @@ function stepFreeFlight(
  *   2. Wind-up — `padLoadProgress` ramps 0 → 1 over `freeFlightLoadDurationSeconds`.
  *      Launch input is ignored during this window so an accidental Anchor tap
  *      on contact doesn't immediately fire.
- *   3. Charge / launch — once wound up, `padChargeProgress` ramps 0 → 1 while
- *      Anchor is held. Release with any charge fires the player in the aim
- *      direction at lerp(launchSpeedMin, pad.launchSpeed, padChargeProgress).
+ *   3. Charge / launch — once wound up, holding Anchor drains the player's
+ *      slime tank at `freeFlightChargeSlimeCostPerSecond`. `padChargeProgress`
+ *      accrues from slime spent (slimeSpent / `freeFlightChargeSlimeCostMax`),
+ *      so out-of-slime mid-charge halts the ramp at whatever was bought.
+ *      Release with any charge fires the player in the aim direction at
+ *      lerp(launchSpeedMin, pad.launchSpeed, padChargeProgress).
  *
  * On launch the player transitions to FreeFlight, the pad's coverage is
  * consumed, and the position is nudged a small distance along aim so the
@@ -988,13 +1011,22 @@ function stepPadLoaded(
     return;
   }
 
-  // 3. Charge / launch.
+  // 3. Charge / launch. The ramp is funded by the player's slime tank:
+  //    holding Anchor drains slime at a fixed rate, and padChargeProgress
+  //    accrues by (slime spent / costMax). Running out of slime mid-charge
+  //    halts the ramp at whatever was bought; releasing still fires.
   const anchorHeld = (input.keys & InputKey.Anchor) !== 0;
   if (anchorHeld) {
-    state.padChargeProgress = Math.min(
-      1,
-      (state.padChargeProgress ?? 0) + dt / getFreeFlightChargeDuration(cfg),
-    );
+    const drainRate = getFreeFlightChargeSlimeCostPerSecond(cfg);
+    const desiredDrain = drainRate * dt;
+    const available = Math.max(0, state.slimeLevel);
+    const actualDrain = Math.min(desiredDrain, available);
+    if (actualDrain > 0) {
+      state.slimeLevel = Math.max(0, state.slimeLevel - actualDrain);
+      const costMax = getFreeFlightChargeSlimeCostMax(cfg);
+      state.padChargeProgress = Math.min(1, (state.padChargeProgress ?? 0) + actualDrain / costMax);
+    }
+    // Out of slime or fully charged — keep holding silently, no launch yet.
     return;
   }
 
@@ -1058,7 +1090,6 @@ export function stepPlayer(
     state.isOnFriendlySlime = false;
     return;
   }
-  state.splatCooldownMs = Math.max(0, (state.splatCooldownMs ?? 0) - dt * 1000);
   if (state.movementState === PlayerMovementState.Grinding) {
     stepGrinding(state, input, rails, dt, cfg);
     return;
@@ -1069,19 +1100,6 @@ export function stepPlayer(
   }
   if (state.movementState === PlayerMovementState.PadLoaded) {
     stepPadLoaded(state, input, dt, planets, cfg, blastPads, padStates, terrainProvider);
-    return;
-  }
-  // Splat freeze: after a blast-pad landing the player is pinned at impact (zero vel,
-  // no input movement, no pad re-trigger) for the splat cooldown. The squash visual
-  // eases over the same window so the player visibly compresses then pops back up.
-  if ((state.splatCooldownMs ?? 0) > 0 && state.planetId !== "") {
-    state.vel.x = 0;
-    state.vel.y = 0;
-    state.vel.z = 0;
-    state.movementState = PlayerMovementState.Idle;
-    state.skiJumpCharge = 0;
-    state.isCarving = false;
-    state.surfState = PlayerSurfState.None;
     return;
   }
   // Entering a charged pad transitions to PadLoaded; next tick dispatches to

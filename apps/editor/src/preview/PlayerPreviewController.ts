@@ -244,6 +244,7 @@ export class PlayerPreviewController {
       rot: { x: 0, y: 0, z: 0, w: 1 },
       planetId: planet.id,
       slimeGroupId: 0,
+      slimeLevel: GAME_CONFIG.slime.maxLevel,
       movementState: PlayerMovementState.Idle,
       surfState: PlayerSurfState.None,
       isCarving: false,

@@ -1912,4 +1912,81 @@ describe("MatchSimulation", () => {
     expect(target.movementState).toBe(PlayerMovementState.Idle);
     expect(target.respawnTimer).toBe(0);
   });
+
+  it("smashes a free-flight dart into a planet: paints the player's slime and drains the tank", () => {
+    const simulation = new MatchSimulation();
+    const player = simulation.addPlayer("session-1", "Alpha");
+    const planet = DEV_MAP.planets[0]!;
+    const surfaceRadius = getTerrainRadius(0, 1, 0, GAME_CONFIG);
+
+    // Dart diving straight down at the north pole, one tick above the surface.
+    player.planetId = "";
+    player.gravityAnchorPlanetId = "";
+    player.movementState = PlayerMovementState.FreeFlight;
+    player.pos = {
+      x: planet.center.x,
+      y: planet.center.y + surfaceRadius + GAME_CONFIG.movement.standingHeight + 3,
+      z: planet.center.z,
+    };
+    player.vel = { x: 0, y: -60, z: 0 };
+    const slimeBefore = player.slimeLevel;
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    // Committed to the surface.
+    expect(player.movementState).not.toBe(PlayerMovementState.FreeFlight);
+    expect(player.planetId).toBe(planet.id);
+    // Tank drained by ~smashSlimeCost (same-tick recharge adds a sliver back).
+    expect(slimeBefore - player.slimeLevel).toBeGreaterThan(GAME_CONFIG.slime.smashSlimeCost - 5);
+    // Painted a burst of the player's own slime at the contact point.
+    const ownStamps = simulation
+      .getRecentSlimeStamps()
+      .filter((stamp) => stamp.slimeGroupId === player.slimeGroupId);
+    expect(ownStamps.length).toBeGreaterThanOrEqual(GAME_CONFIG.slimeStamp.smashStampCount);
+  });
+
+  it("kills a free-flight dart that crosses the arena boundary into the void", () => {
+    const simulation = new MatchSimulation();
+    const player = simulation.addPlayer("session-1", "Alpha");
+
+    // Far past any plausible kill radius, still flying outward with no planet to
+    // catch it.
+    player.planetId = "";
+    player.gravityAnchorPlanetId = "";
+    player.movementState = PlayerMovementState.FreeFlight;
+    player.pos = { x: 1_000_000, y: 0, z: 0 };
+    player.vel = { x: 50, y: 0, z: 0 };
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(player.movementState).toBe(PlayerMovementState.Dead);
+    // Respawn timer is armed (tickRespawns decrements it once in this same tick).
+    expect(player.respawnTimer).toBeGreaterThan(GAME_CONFIG.respawn.durationSeconds - 0.5);
+  });
+
+  it("does not kill a freshly launched dart cruising just off a planet surface", () => {
+    // Regression: the kill sphere must contain the whole system, so a low-speed
+    // (short-charge) launch that lingers in free flight near its origin planet
+    // is not instantly killed. Launch from the outermost planet's surface — the
+    // worst case for a centroid-anchored boundary.
+    const simulation = new MatchSimulation();
+    const player = simulation.addPlayer("session-1", "Alpha");
+    const outer = DEV_MAP.planets.reduce((a, b) => (b.radius > a.radius ? b : a));
+
+    player.planetId = "";
+    player.gravityAnchorPlanetId = "";
+    player.movementState = PlayerMovementState.FreeFlight;
+    // Just off the outer planet's north pole, drifting slowly outward (so it
+    // stays in free flight rather than landing).
+    player.pos = {
+      x: outer.center.x,
+      y: outer.center.y + outer.radius + 10,
+      z: outer.center.z,
+    };
+    player.vel = { x: 0, y: 28, z: 0 };
+
+    simulation.tick(simulation.tickIntervalMs);
+
+    expect(player.movementState).not.toBe(PlayerMovementState.Dead);
+  });
 });

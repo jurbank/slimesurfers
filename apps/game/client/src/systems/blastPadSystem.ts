@@ -20,6 +20,13 @@ interface PadEntry {
   beaconMaterial: THREE.MeshBasicMaterial;
   hoverRingMaterial: THREE.MeshBasicMaterial;
   arrowMaterial: THREE.MeshStandardMaterial;
+  /** Slime-funded charge overlay ring. Hidden by default; while the local
+   *  player is loaded, scales from 0 to `pad.radius * 0.95` with charge and
+   *  glows in the player's slime color. */
+  chargeOverlay: THREE.Mesh;
+  chargeOverlayMaterial: THREE.MeshBasicMaterial;
+  /** Base ring radius used to scale the overlay torus relative to the pad. */
+  padRadius: number;
 }
 
 export class BlastPadSystem {
@@ -116,6 +123,25 @@ export class BlastPadSystem {
       hoverRing.renderOrder = RENDER_ORDER_MARKER + 4;
       group.add(hoverRing);
 
+      // Charge overlay — sits above the regular ring. Scaled from 0 to 1 with
+      // the local player's padChargeProgress and tinted slime color. Visible
+      // only while the local player is loaded on this pad.
+      const chargeOverlayMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      });
+      const chargeOverlay = new THREE.Mesh(
+        new THREE.TorusGeometry(1, 0.22, 10, 80),
+        chargeOverlayMaterial,
+      );
+      chargeOverlay.rotation.x = Math.PI * 0.5;
+      chargeOverlay.position.y = PAD_THICKNESS + 0.05;
+      chargeOverlay.renderOrder = RENDER_ORDER_MARKER + 5;
+      chargeOverlay.visible = false;
+      group.add(chargeOverlay);
+
       this.scene.add(group);
       this.pads.set(pad.id, {
         group,
@@ -124,7 +150,29 @@ export class BlastPadSystem {
         beaconMaterial,
         hoverRingMaterial,
         arrowMaterial,
+        chargeOverlay,
+        chargeOverlayMaterial,
+        padRadius: pad.radius,
       });
+    }
+  }
+
+  /** Push the local player's loaded-pad state. Call every frame after the
+   *  prediction step. Pass empty padId to hide all overlays. */
+  setLocalLoadedPad(padId: string, chargeProgress: number, slimeColor: number): void {
+    const t = Math.max(0, Math.min(1, chargeProgress));
+    for (const [id, entry] of this.pads) {
+      if (id !== padId) {
+        if (entry.chargeOverlay.visible) entry.chargeOverlay.visible = false;
+        continue;
+      }
+      entry.chargeOverlay.visible = true;
+      entry.chargeOverlayMaterial.color.setHex(slimeColor);
+      // 0.4 minimum so the overlay is visible even at zero charge (just landed).
+      const scale = entry.padRadius * (0.4 + 0.55 * t);
+      entry.chargeOverlay.scale.set(scale, scale, scale);
+      // Brighten with charge — opacity ramps and a slight pulse at full charge.
+      entry.chargeOverlayMaterial.opacity = 0.55 + 0.4 * t;
     }
   }
 

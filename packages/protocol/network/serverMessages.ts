@@ -30,7 +30,6 @@ export interface PlayerSnapshot {
   lastGrindT: number;
   grindSpeed: number;
   grindCooldownMs: number;
-  splatCooldownMs?: number;
   /** Hysteresis hint for the gravity picker (see simulatedMovement.ts). Optional
    *  for backwards compatibility with older snapshots — clients tolerate absence. */
   gravityAnchorPlanetId?: string;
@@ -319,6 +318,5 @@ export interface MapDataMessage {
     cooldownMs?: number;
     launchSpeed: number;
     upwardBias: number;
-    cameraProfile: "planetHop";
   }>;
 }
